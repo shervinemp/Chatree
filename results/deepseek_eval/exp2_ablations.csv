@@ -1,0 +1,11 @@
+ablation,queries_passed,queries_total,pass_rate,pass_ci_low,pass_ci_high,rejected_leakage_rate,stale_contradiction_rate,peak_root_context_tokens,total_tokens,cache_hit_ratio,estimated_cost_usd,shadow_turns,shadow_cache_hits,stale_detections,mcnemar_p_vs_full
+chatree_full,3,7,0.4286,0.1429,0.8571,0.4286,0.1429,936,54832,0.547,0.009765,13,0,1,
+chatree_oracle_routing,2,7,0.2857,0.0,0.7143,0.5714,0.1429,963,37501,0.4011,0.008364,7,0,1,1.0
+no_shadow_turns_folding,0,7,0.0,0.0,0.0,0.0,0.1429,978,20783,0.1048,0.006291,0,0,1,0.25
+no_staleness,3,7,0.4286,0.1429,0.8571,0.4286,0.1429,1209,53488,0.5295,0.009774,12,0,0,1.0
+no_transitive_staleness,2,7,0.2857,0.0,0.7143,0.4286,0.1429,1137,54860,0.5376,0.009923,12,0,0,1.0
+no_materiality_gating,3,7,0.4286,0.1429,0.8571,0.4286,0.1429,935,54421,0.5442,0.009754,13,0,1,1.0
+no_shadow_cache,2,7,0.2857,0.0,0.7143,0.4286,0.1429,935,55670,0.5422,0.010059,13,0,1,1.0
+no_speculative_pointers,4,7,0.5714,0.1429,0.8571,0.2857,0.1429,961,52289,0.5644,0.009096,13,0,1,1.0
+no_subtree_rollups,4,7,0.5714,0.1429,0.8571,0.2857,0.1429,878,54789,0.5449,0.009852,13,0,1,1.0
+no_hybrid_rag_fts_only,2,7,0.2857,0.0,0.5714,0.2857,0.1429,925,56216,0.5574,0.009827,13,0,1,1.0

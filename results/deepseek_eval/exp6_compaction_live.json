@@ -1,0 +1,145 @@
+{
+  "generations": 4,
+  "compactions": [
+    {
+      "event": "branch_compacted",
+      "tree_id": "t_a21f990c",
+      "ok": true,
+      "compacted": true,
+      "from_node_id": "n_859ae8d8",
+      "from_node_title": "Infinite Context Live",
+      "to_node_id": "n_26e3600d",
+      "to_node_title": "Infinite Context Live (cont. 2)",
+      "context_mode": "slice",
+      "keep_recent_turns": 2,
+      "tokens_before": 1077,
+      "tokens_after": 1537,
+      "compression_ratio": 0.7,
+      "source_summary_version": 1,
+      "handoff_preview": "1. OBJECTIVE: Continue branch 'Infinite Context Live' (`n_859ae8d8`, goal 'general'). Two completed turns: (a) record a secret anchor verbatim; (b) outline 6 concrete security hardening controls spanning HTTP/2 ingress, TLS 1.3 cipher suites, mTLS service mesh, and rate-limit headers. Pending offer: convert the 6 controls into a config checklist (nginx/Envoy/Istio snippets).\n\n2. LOCKED DECISIONS &",
+      "switched_head": true
+    },
+    {
+      "event": "branch_compacted",
+      "tree_id": "t_a21f990c",
+      "ok": true,
+      "compacted": true,
+      "from_node_id": "n_26e3600d",
+      "from_node_title": "Infinite Context Live (cont. 2)",
+      "to_node_id": "n_39293238",
+      "to_node_title": "Infinite Context Live (cont. 3)",
+      "context_mode": "slice",
+      "keep_recent_turns": 2,
+      "tokens_before": 2584,
+      "tokens_after": 1593,
+      "compression_ratio": 1.62,
+      "source_summary_version": 1,
+      "handoff_preview": "1. OBJECTIVE: Continue branch 'Infinite Context Live (cont. 2)' (`n_26e3600d`, goal 'Infinite Context Live'), itself a continuation of ancestor `n_859ae8d8` \"Infinite Context Live\". Scope has expanded from security hardening into a full production platform design: (a) 6 security hardening controls (done), (b) observability pipeline \u2014 OTel collector topology, Prometheus cardinality limits, trace sa",
+      "switched_head": true
+    },
+    {
+      "event": "branch_compacted",
+      "tree_id": "t_a21f990c",
+      "ok": true,
+      "compacted": true,
+      "from_node_id": "n_39293238",
+      "from_node_title": "Infinite Context Live (cont. 3)",
+      "to_node_id": "n_d528d996",
+      "to_node_title": "Infinite Context Live (cont. 4)",
+      "context_mode": "slice",
+      "keep_recent_turns": 2,
+      "tokens_before": 2579,
+      "tokens_after": 1588,
+      "compression_ratio": 1.62,
+      "source_summary_version": 1,
+      "handoff_preview": "1. OBJECTIVE: Continue branch 'Infinite Context Live (cont. 3)' (`n_39293238`, goal 'Infinite Context Live'), itself continuing `n_26e3600d` \"Infinite Context Live (cont. 2)\" \u2192 `n_859ae8d8` \"Infinite Context Live\". Scope is a full production platform design: (a) 6 security hardening controls (done), (b) observability pipeline \u2014 OTel collector topology, Prometheus cardinality limits, trace sampling",
+      "switched_head": true
+    }
+  ],
+  "turn_log": [
+    {
+      "turn": 1,
+      "node_id": "n_859ae8d8",
+      "title": "Infinite Context Live",
+      "compacted_from": null,
+      "ctx_tokens": 578,
+      "ms": 7162.1
+    },
+    {
+      "turn": 2,
+      "node_id": "n_859ae8d8",
+      "title": "Infinite Context Live",
+      "compacted_from": null,
+      "ctx_tokens": 1077,
+      "ms": 4610.7
+    },
+    {
+      "turn": 3,
+      "node_id": "n_26e3600d",
+      "title": "Infinite Context Live (cont. 2)",
+      "compacted_from": "n_859ae8d8",
+      "ctx_tokens": 2055,
+      "ms": 8422.8
+    },
+    {
+      "turn": 4,
+      "node_id": "n_26e3600d",
+      "title": "Infinite Context Live (cont. 2)",
+      "compacted_from": null,
+      "ctx_tokens": 2584,
+      "ms": 4410.6
+    },
+    {
+      "turn": 5,
+      "node_id": "n_39293238",
+      "title": "Infinite Context Live (cont. 3)",
+      "compacted_from": "n_26e3600d",
+      "ctx_tokens": 2055,
+      "ms": 8030.6
+    },
+    {
+      "turn": 6,
+      "node_id": "n_39293238",
+      "title": "Infinite Context Live (cont. 3)",
+      "compacted_from": null,
+      "ctx_tokens": 2579,
+      "ms": 5581.3
+    }
+  ],
+  "head_at_recall": {
+    "id": "n_39293238",
+    "title": "Infinite Context Live (cont. 3)",
+    "depth": 2
+  },
+  "b1_preserved_messages": 4,
+  "b1_status": "COMPLETED",
+  "recall_answer": "Retrieved verbatim from the original session (`n_859ae8d8`, first turn):\n\n- **Vault cipher identifier:** `VAULT_CIPHER_AES256_GCM_90D`\n- **S3 audit bucket:** `s3://nebula-audit-eu-west-7`\n\nBoth match the locked anchors carried forward in the current branch's brief.",
+  "recall_hit_cipher": true,
+  "recall_hit_bucket": true,
+  "recall_ms": 7054.7,
+  "metrics": {
+    "tree_id": "t_a21f990c",
+    "node_count": 4,
+    "active_nodes": 1,
+    "completed_nodes": 3,
+    "max_depth": 3,
+    "total_messages": 16,
+    "total_tokens_in": 38816,
+    "total_tokens_out": 4321,
+    "total_cache_read_tokens": 20992,
+    "cache_hit_ratio": 0.5408,
+    "ipc_total": 4,
+    "ipc_by_type": {
+      "request_shadow": 1,
+      "spawn": 3
+    },
+    "shadow_turns": 1,
+    "shadow_cache_hits": 0,
+    "cached_summary_hits": 0,
+    "guardrail_blocks": 0,
+    "stale_edges_count": 0,
+    "reflog_jumps": 0,
+    "artifact_count": 0,
+    "indexed_embeddings": 19
+  }
+}

@@ -1,0 +1,22 @@
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+\textbf{Variant} & \textbf{Pass (95\% CI)} & \textbf{Leakage} & \textbf{Stale Err} & \textbf{Peak Tok} & \textbf{Cost (USD)} & \textbf{p-val} \\
+\midrule
+chatree\_full & 42.9\% [14.3, 85.7] & 42.9\% & 14.3\% & 936 & \$0.00976 & ref \\
+chatree\_oracle\_routing & 28.6\% [0.0, 71.4] & 57.1\% & 14.3\% & 963 & \$0.00836 & 1.0000 \\
+no\_shadow\_turns\_folding & 0.0\% [0.0, 0.0] & 0.0\% & 14.3\% & 978 & \$0.00629 & 0.2500 \\
+no\_staleness & 42.9\% [14.3, 85.7] & 42.9\% & 14.3\% & 1209 & \$0.00977 & 1.0000 \\
+no\_transitive\_staleness & 28.6\% [0.0, 71.4] & 42.9\% & 14.3\% & 1137 & \$0.00992 & 1.0000 \\
+no\_materiality\_gating & 42.9\% [14.3, 85.7] & 42.9\% & 14.3\% & 935 & \$0.00975 & 1.0000 \\
+no\_shadow\_cache & 28.6\% [0.0, 71.4] & 42.9\% & 14.3\% & 935 & \$0.01006 & 1.0000 \\
+no\_speculative\_pointers & 57.1\% [14.3, 85.7] & 28.6\% & 14.3\% & 961 & \$0.00910 & 1.0000 \\
+no\_subtree\_rollups & 57.1\% [14.3, 85.7] & 28.6\% & 14.3\% & 878 & \$0.00985 & 1.0000 \\
+no\_hybrid\_rag\_fts\_only & 28.6\% [0.0, 57.1] & 28.6\% & 14.3\% & 925 & \$0.00983 & 1.0000 \\
+\bottomrule
+\end{tabular}
+\caption{Chatree Systematic Ablation Matrix across Multi-Tangent Stress Scenarios}
+\label{tab:chatree-ablations}
+\end{table}

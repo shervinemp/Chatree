@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chatree"
+version = "0.2.0"
+description = "Hierarchical actor-model LLM dialogue tree framework with bidirectional IPC, read-only shadow turns, Git-style reflog navigation, staleness coherence, and 3-tier hybrid tree RAG."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiosqlite>=0.20.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "python-dotenv>=1.0.1",
+]
+
+[project.optional-dependencies]
+litellm = [
+    "litellm>=1.60.0",
+]
+vec = [
+    "sqlite-vec>=0.1.6",
+]
+server = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+]
+local-rag = [
+    "fastembed>=0.4.0",
+]
+all = [
+    "chatree[litellm,vec,server]",
+]
+
+[project.scripts]
+chatree = "chatree.cli:main"
+chatree-mcp = "chatree.mcp_server:main"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chatree"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true

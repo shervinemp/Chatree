@@ -1,0 +1,16 @@
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrrrrr}
+\toprule
+\textbf{System} & \textbf{Accuracy (95\% CI)} & \textbf{F1} & \textbf{BLEU-1} & \textbf{Peak Tok} & \textbf{Cost (USD)} & \textbf{p50 ms} & \textbf{p-val} \\
+\midrule
+chatree\_two\_tier & 63.3\% [46.7, 80.0] & 0.172 & 0.126 & 6927 & \$0.16181 & 6191.1 & ref \\
+flat\_hybrid\_rag & 40.0\% [23.3, 56.7] & 0.201 & 0.157 & 770 & \$0.00537 & 9173.4 & 0.0654 \\
+full\_context\_linear & 70.0\% [53.3, 86.7] & 0.199 & 0.136 & 108772 & \$0.88222 & 2421.0 & 0.7744 \\
+rlm\_official & 70.0\% [53.3, 86.7] & 0.205 & 0.148 & 21373 & \$0.37519 & 11248.4 & 0.7539 \\
+\bottomrule
+\end{tabular}
+\caption{longmemeval comparison on deepseek/deepseek-chat}
+\label{tab:longmemeval}
+\end{table}
