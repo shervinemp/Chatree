@@ -12,6 +12,10 @@ from chatree.protocols import Embedder
 
 OnnxDevice = Literal["auto", "cuda", "directml", "cpu"]
 
+# Shared across all local ONNX sessions (embedder + cross-encoder reranker) so concurrent
+# async workers never race on a single DirectML/CUDA device or oversubscribe CPU threads.
+GLOBAL_ONNX_INFER_LOCK = threading.Lock()
+
 
 def resolve_onnx_provider_candidates(device: OnnxDevice = "auto") -> list[tuple[list[str], bool]]:
     """
@@ -154,7 +158,7 @@ class FastEmbedEmbedder:
         self.max_chars = max_chars
         self._model: Any = None
         self._init_lock = threading.Lock()
-        self._infer_lock = threading.Lock()
+        self._infer_lock = GLOBAL_ONNX_INFER_LOCK
 
     @property
     def dimensions(self) -> int:
@@ -185,7 +189,8 @@ class FastEmbedEmbedder:
                             candidate = self._build_model_with_providers(provs)
                             # Runtime kernel smoke-test catches missing cuDNN / driver DLL failures immediately
                             if is_gpu:
-                                _ = list(candidate.embed(["ok"], batch_size=1))
+                                with self._infer_lock:
+                                    _ = list(candidate.embed(["ok"], batch_size=1))
                             self.providers = provs
                             self.uses_gpu = is_gpu
                             if not is_gpu:

@@ -1,0 +1,16 @@
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+\textbf{System} & \textbf{Strict Pass} & \textbf{Recall} & \textbf{Leak} & \textbf{Stale} & \textbf{Nav Acc} & \textbf{Peak Tok} & \textbf{Cache \%} & \textbf{USD} & \textbf{p50 ms} \\
+\midrule
+chatree\_live & 67\textbackslash{}\% & 100.0\textbackslash{}\% & 0\textbackslash{}\% & 33\textbackslash{}\% & 78\textbackslash{}\% & 7291 & 82.7\textbackslash{}\% & \textbackslash{}\$0.0339 & 7031 \\
+linear & 100\textbackslash{}\% & 100.0\textbackslash{}\% & 0\textbackslash{}\% & 0\textbackslash{}\% & -- & 8525 & 95.5\textbackslash{}\% & \textbackslash{}\$0.0063 & 3646 \\
+sliding\_window & 67\textbackslash{}\% & 94.4\textbackslash{}\% & 0\textbackslash{}\% & 0\textbackslash{}\% & -- & 2210 & 9.1\textbackslash{}\% & \textbackslash{}\$0.0115 & 3799 \\
+flat\_rag & 0\textbackslash{}\% & 0.0\textbackslash{}\% & 0\textbackslash{}\% & 0\textbackslash{}\% & -- & 648 & 12.4\textbackslash{}\% & \textbackslash{}\$0.0028 & 1341 \\
+\bottomrule
+\end{tabular}
+\caption{Track 5: Live 18-turn jump-around chatbot benchmark (natural-jump-around-18t, deepseek/deepseek-chat).}
+\label{tab:jump_around_live}
+\end{table}

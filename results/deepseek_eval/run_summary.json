@@ -1,4 +1,7 @@
 {
-  "track4_cost_usd": 2.05408,
-  "track4_seconds": 421.2
+  "model": "deepseek/deepseek-chat",
+  "judge_model": "deepseek/deepseek-chat",
+  "provider": "auto",
+  "track5_seconds": 327.8,
+  "track6_seconds": 173.7
 }

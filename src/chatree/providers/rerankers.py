@@ -9,6 +9,7 @@ from typing import Any
 
 from chatree.protocols import LLMProvider
 from chatree.providers.embeddings import (
+    GLOBAL_ONNX_INFER_LOCK,
     OnnxDevice,
     resolve_onnx_provider_candidates,
     resolve_onnx_providers,
@@ -38,7 +39,7 @@ class FastEmbedCrossEncoderReranker:
         self.threads = threads if threads is not None else min(4, os.cpu_count() or 2)
         self._encoder: Any = None
         self._init_lock = threading.Lock()
-        self._infer_lock = threading.Lock()
+        self._infer_lock = GLOBAL_ONNX_INFER_LOCK
 
     def _build_encoder_with_providers(self, providers: list[str]) -> Any:
         try:
@@ -67,7 +68,8 @@ class FastEmbedCrossEncoderReranker:
                             candidate = self._build_encoder_with_providers(provs)
                             # Runtime smoke-test catches missing cuDNN/GPU kernel DLLs at init time
                             if is_gpu:
-                                _ = list(candidate.rerank("ok", ["ok"], batch_size=1))
+                                with self._infer_lock:
+                                    _ = list(candidate.rerank("ok", ["ok"], batch_size=1))
                             self.providers = provs
                             self.uses_gpu = is_gpu
                             if not is_gpu:

@@ -1,0 +1,19 @@
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrrrrr}
+\toprule
+\textbf{System} & \textbf{Accuracy (95\% CI)} & \textbf{F1} & \textbf{BLEU-1} & \textbf{Peak Tok} & \textbf{Cost (USD)} & \textbf{p50 ms} & \textbf{p-val} \\
+\midrule
+chatree\_two\_tier\_v3 & 77.1\% [71.8, 82.5] & 0.096 & 0.058 & 6390 & \$0.84198 & 4937.5 & ref \\
+chatree\_two\_tier & 64.5\% [58.8, 70.6] & 0.118 & 0.080 & 4250 & \$0.57013 & 5734.8 & 0.0001* \\
+mem0\_official & 73.5\% [68.2, 79.2] & 0.138 & 0.088 & 874 & \$0.05135 & 1275.2 & 0.2225 \\
+full\_context\_linear & 76.3\% [71.4, 82.0] & 0.122 & 0.075 & 35097 & \$0.29979 & 1627.7 & 0.8744 \\
+rlm\_official & 70.9\% [62.4, 78.6] & 0.108 & 0.067 & 28166 & \$1.38104 & 12126.7 & 0.4725 \\
+flat\_hybrid\_rag & 48.2\% [42.0, 54.3] & 0.114 & 0.079 & 725 & \$0.04595 & 1702.9 & 0.0000* \\
+tree\_summary\_only & 41.2\% [35.5, 47.3] & 0.090 & 0.061 & 1480 & \$0.06230 & 1408.3 & 0.0000* \\
+\bottomrule
+\end{tabular}
+\caption{locomo comparison on deepseek/deepseek-chat}
+\label{tab:locomo}
+\end{table}

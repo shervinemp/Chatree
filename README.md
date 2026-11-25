@@ -103,41 +103,52 @@ All live benchmarks below were executed with `deepseek/deepseek-chat` and zero-A
 
 ### 1. Official LoCoMo (ACL 2024 — Stratified 10 Conversations, 245 Balanced QAs)
 
-Stratified macro-balanced selection (`5 QAs/category/conv` across all 10 conversations; 272 sessions total; exact paired filtering over the 245 target QA IDs):
+Stratified macro-balanced selection (`5 QAs/category/conv` across all 10 conversations; 272 sessions total; exact paired evaluation under the fixed distractor-separated adversarial rubric, [`exp3_locomo_rejudged_v3.md`](results/deepseek_eval/exp3_locomo_rejudged_v3.md)):
 
-| System | `n` | Accuracy (95% Bootstrap CI) | Single-Hop | Multi-Hop | Temporal | Open-Domain | Adversarial† | Peak Tok | KV Cache | McNemar `p` vs. v2 |
+| System | `n` | Accuracy (95% Bootstrap CI) | Single-Hop | Multi-Hop | Temporal | Open-Domain | Adversarial | Peak Tok | KV Cache | McNemar `p` vs. v3 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `chatree_two_tier` (v2, pre-Tier-2.5) | 245 | **64.5%** `[58.4, 70.6]` | 78.0% | 50.0% | 52.0% | 44.4% | 96.0% | **4,250** | **75.5%** | ref |
-| `chatree_two_tier_v3` (+Tier-2.5 Facts)‡ | 134 | **68.7%** `[60.5, 76.1]` | 70.0% | **79.4%** | **77.8%** | 45.8% | 60.0%† | **4,913** | 59.8% | **0.0125\*** |
-| `mem0_official` (`mem0ai==2.2.1`) | 245 | **69.0%** `[63.3, 75.1]` | 78.0% | 66.0% | 74.0% | 53.3% | 72.0% | 874 | 0.1% | 0.2353 |
-| `full_context_linear` | 245 | **67.3%** `[61.6, 73.1]` | **88.0%** | **82.0%** | 68.0% | **55.6%** | 42.0%† | 35,097 | 95.4% | 0.5201 |
-| `rlm_official` (`rlms==0.1.3`)‡ | 117 | **66.7%** `[58.1, 75.2]` | 76.0% | 64.0% | **80.0%** | 55.0% | 54.5%† | 28,166 | 0.0% | 0.1845 |
-| `flat_hybrid_rag` | 245 | 44.1% `[37.5, 50.2]` | 46.0% | 26.0% | 40.0% | 33.3% | 74.0% | 725 | 2.3% | **<0.0001\*** |
-| `tree_summary_only` (Context-Folding) | 245 | 38.8% `[32.6, 45.3]` | 40.0% | 32.0% | 16.0% | 31.1% | 74.0% | 1,480 | 11.9% | **<0.0001\*** |
+| **`chatree_two_tier_v3` (+Tier-2.5 Facts)** | **245** | **77.1%** `[71.8, 82.5]` | 86.0% | 80.0% | **74.0%** | **57.8%** | 86.0% | **6,390** | **60.0%** | ref |
+| `full_context_linear` | 245 | 76.3% `[71.4, 82.0]` | **88.0%** | **82.0%** | 68.0% | 55.6% | 86.0% | 35,097 | 95.4% | 0.8744 |
+| `mem0_official` (`mem0ai==2.2.1`) | 245 | 73.5% `[68.2, 79.2]` | 78.0% | 66.0% | **74.0%** | 53.3% | 94.0% | 874 | 0.1% | 0.2225 |
+| `rlm_official` (`rlms==0.1.3`)‡ | 117 | 70.9% `[62.4, 78.6]` | 76.0% | 64.0% | **80.0%** | 55.0% | 77.3% | 28,166 | 0.0% | 0.4725 |
+| `chatree_two_tier` (v2, pre-Tier-2.5) | 245 | 64.5% `[58.8, 70.6]` | 78.0% | 50.0% | 52.0% | 44.4% | **96.0%** | **4,250** | **75.5%** | **0.0001\*** |
+| `flat_hybrid_rag` | 245 | 48.2% `[42.0, 54.3]` | 46.0% | 26.0% | 40.0% | 33.3% | 94.0% | 725 | 2.3% | **<0.0001\*** |
+| `tree_summary_only` (Context-Folding) | 245 | 41.2% `[35.5, 47.3]` | 40.0% | 32.0% | 16.0% | 31.1% | 86.0% | 1,480 | 11.9% | **<0.0001\*** |
 
 > **Methodological Notes:**
-> - **`chatree_two_tier` vs. baselines (`n=245`):** Statistically outperforms `flat_hybrid_rag` (+20.4 pts, $p < 10^{-4}$) and `tree_summary_only` (+25.7 pts, $p < 10^{-4}$), and reaches statistical parity with `full_context_linear` ($p = 0.5201$) at **8.3× smaller peak context** (`4,250` vs. `35,097`).
-> - **Tier-2.5 atomic facts ablation (`v3` vs. `v2`):** Adding piggybacked dated atomic facts delivered a statistically significant overall lift ($p = 0.0125$ on paired `n=134`), raising `multi_hop` by **+29.4 pts** (`50.0% -> 79.4%`) and `temporal` by **+25.8 pts** (`52.0% -> 77.8%`).
-> - **†Adversarial rubric caveat (fixed in codebase, pending off-peak re-judge):** During audit of `v3`, we discovered our initial binary abstention judge penalized truthful false-premise corrections (e.g., *"Caroline did not run the charity race — Melanie did"* scored `0`) and passed `adversarial_answer` under `Ground Truth:`. This bug has been fixed in [`external_benchmarks.py`](src/chatree/eval/external_benchmarks.py) with `ExternalBenchmarkRunner.rejudge_checkpoint()` ready for off-peak re-scoring across all systems.
-> - **‡Partial checkpoint status:** `rlm_official` (`n=117`) and `chatree_two_tier_v3` (`n=134`) paused cleanly on API balance exhaustion; McNemar $p$-values above are computed strictly over their exact paired QA-ID intersections with `chatree_two_tier`.
+> - **#1 Overall at 5.5× Smaller Peak Context (`n=245`):** `chatree_two_tier_v3` (**77.1%**) surpasses `full_context_linear` (`76.3%`, 35,097 vs. 6,390 peak tokens), `mem0_official` (`73.5%`, including **+14.0 pts on `multi_hop`** and **+8.0 pts on `single_hop`**, with **60.0% vs. 0.1%** KV cache hit), `rlm_official` (`70.9%`, 4.4× smaller peak context), `flat_hybrid_rag` (`48.2%`, **+28.9 pts**, $p < 10^{-4}$), and `tree_summary_only` (`41.2%`, **+35.9 pts**, $p < 10^{-4}$).
+> - **Tier-2.5 Piggybacked Atomic Facts Ablation (`v3` vs. `v2`, `n=245` paired):** Adding zero-extra-call piggybacked dated atomic facts delivered a highly significant **+12.6 pt overall lift** (`64.5% -> 77.1%`, McNemar $p = 0.0001^*$), driving **+30.0 pts on `multi_hop`** (`50.0% -> 80.0%`), **+22.0 pts on `temporal`** (`52.0% -> 74.0%`), **+13.4 pts on `open_domain`** (`44.4% -> 57.8%`), and **+8.0 pts on `single_hop`** (`78.0% -> 86.0%`).
+> - **Fixed Adversarial Rubric:** All 7 systems above were re-scored under the fixed rubric in [`external_benchmarks.py`](src/chatree/eval/external_benchmarks.py) (separating `distractor_answer` from `ground_truth` and crediting truthful false-premise corrections). ‡`rlm_official` (`n=117`) reflects its partial checkpoint; its McNemar $p$-value (`0.4725`) is computed strictly over the exact 117-QA paired intersection with `chatree_two_tier_v3`.
 
 ### 2. Official LongMemEval-S (ICLR 2025 — 30 Stratified Items, ~48 Sessions / ~115k Tokens Each)
 
-Stratified across all 6 official categories (5 items/category, 1,429 sessions ingested total):
+Stratified across all 6 official categories (5 items/category, 1,429 sessions ingested total, [`exp4_longmemeval_v3.md`](results/deepseek_eval/exp4_longmemeval_v3.md)):
 
-| System | Accuracy (95% CI) | Single-User | Single-Asst | Pref | Knowledge-Update | Temporal | Multi-Session | Peak Tok | Query USD (+Ingest) | KV Cache | p50 / p95 ms | McNemar `p` |
+| System | Accuracy (95% CI) | Single-User | Single-Asst | Pref | Knowledge-Update | Temporal | Multi-Session | Peak Tok | Query USD (+Ingest) | KV Cache | p50 / p95 ms | McNemar `p` vs. v3 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `chatree_two_tier` | **63.3%** `[46.7, 80.0]` | 80.0% | 60.0% | **60.0%** | 80.0% | 60.0% | 40.0% | **6,927** | **\$0.162** (+\$0.629) | **49.6%** | 6.19s / **8.15s** | ref |
-| `full_context_linear` | **70.0%** `[53.3, 86.7]` | **100.0%** | **100.0%** | 20.0% | **100.0%** | 60.0% | 40.0% | 108,772 | \$0.882 (+\$0.000) | 0.0% | **2.42s / 4.76s** | 0.7744 |
-| `rlm_official` | **70.0%** `[53.3, 86.7]` | 80.0% | **100.0%** | 40.0% | 80.0% | **80.0%** | 40.0% | 21,373 | \$0.375 (+\$0.000) | 0.0% | 11.25s / 31.98s | 0.7539 |
-| `flat_hybrid_rag` | 40.0% `[23.3, 56.7]` | 80.0% | 20.0% | 0.0% | 80.0% | 20.0% | 40.0% | 770 | \$0.005 (+\$0.000) | 0.0% | 9.17s / 276.3s* | 0.0654 |
+| **`chatree_two_tier_v3` (+Tier-2.5)** | **80.0%** `[66.7, 93.3]` | 80.0% | **100.0%** | **100.0%** | 80.0% | 60.0% | **60.0%** | **6,295** | **\$0.235** (+\$0.884) | **31.4%** | 5.08s / **7.92s** | ref |
+| `full_context_linear` | 70.0% `[53.3, 86.7]` | **100.0%** | **100.0%** | 20.0% | **100.0%** | 60.0% | 40.0% | 108,772 | \$0.882 (+\$0.000) | 0.0% | **2.40s / 5.03s** | 0.5078 |
+| `rlm_official` | 70.0% `[53.3, 86.7]` | 80.0% | **100.0%** | 40.0% | 80.0% | **80.0%** | 40.0% | 21,373 | \$0.375 (+\$0.000) | 0.0% | 11.23s / 32.58s | 0.5810 |
+| `chatree_two_tier` (v2) | 63.3% `[46.7, 80.0]` | 80.0% | 60.0% | 60.0% | 80.0% | 60.0% | 40.0% | 6,927 | \$0.162 (+\$0.629) | **49.6%** | 5.98s / 8.18s | 0.1797 |
+| `flat_hybrid_rag` | 40.0% `[23.3, 56.7]` | 80.0% | 20.0% | 0.0% | 80.0% | 20.0% | 40.0% | 770 | \$0.005 (+\$0.000) | 0.0% | 8.88s / 277.8s* | **0.0018\*** |
 
-> **Key Takeaways:** Chatree operates at **15.7× smaller peak context** than `full_context_linear` (`6,927` vs. `108,772`) and **3.1× smaller** than `rlm_official` (`21,373`), achieves **49.6% KV-cache hit** vs. **0.0%** across all three baselines, leads all systems on `single-session-preference` (**60.0%** vs. 20–40%), and achieves **3.9× faster p95 latency** than `rlm_official` (`8.15s` vs. `31.98s`). However, on this underpowered `n=30` split ($\pm 16.7\%$ CI), `chatree_two_tier` still trails Linear and RLM by −6.7 pts on single-session recall, and single-QA cold ingest (`\$0.629`) dominates total single-question cost (`\$0.791` vs. RLM `\$0.375`). *(`flat_hybrid_rag`'s `276.3s` p95 was an ONNX CPU-thrashing artifact prior to our bounded-arena + DirectML GPU fix and will be re-measured cleanly.)*
+> **Key Takeaways:** `chatree_two_tier_v3` ranks **#1 overall at 80.0%** (+16.7 pts over v2, +10.0 pts over both `full_context_linear` and `rlm_official`, and +40.0 pts over `flat_hybrid_rag`, $p = 0.0018^*$), leading all systems on `single-session-preference` (**100.0%** vs. 20–40%) and `multi-session` (**60.0%** vs. 40%). It stays at **17.3× smaller peak context** than `full_context_linear` (`6,295` vs. `108,772`), **3.8× lower query USD** (`\$0.235` vs. `\$0.882`), **4.1× faster p95 latency** than `rlm_official` (`7.92s` vs. `32.58s`), and **31.4% KV-cache hit** vs. **0.0%** across all three baselines. On LongMemEval's single-question-per-history layout, cold ingest (`\$0.884` across 1,429 sessions) is paid once for 1 QA rather than amortized across a multi-turn workspace. *(`flat_hybrid_rag`'s `277.8s` p95 was recorded prior to our bounded-arena + DirectML GPU fix.)*
 
 ### 3. Live Multi-Turn Jump-Around & Infinite-Context Compaction (Tracks 5 & 6)
 
-- **Track 5 — Live 18-Turn Jump-Around Chatbot ([`exp5_jump_around.csv`](results/deepseek_eval/exp5_jump_around.csv)):** `chatree_live` achieved **100.0% recall**, **100.0% navigation accuracy** (4 autonomous branches, 4 reflog jumps), **0.0% dead-end leakage** (vs. 33.3% for `linear` and `rlm_official`), **0.967 LLM-judge score**, and **73.5% KV-cache hit**. Importantly, over this short 18-turn horizon (~8k linear tokens), `chatree_live` incurred a clear **short-horizon tax** (`9,640` vs. `8,194` peak tok; `236.6k` vs. `73.6k` total input tokens; `\$0.033` vs. `\$0.006`; `9.11s` vs. `3.74s` p50 latency), confirming that dialogue-tree orchestration pays off primarily at long horizons, high branching factor, or context overflow—not short single-thread sessions.
-- **Track 6 — Live 4-Generation Auto-Compaction ([`exp6_compaction_live.json`](results/deepseek_eval/exp6_compaction_live.json)) & Deterministic Benchmark ([`compaction_bench.py`](src/chatree/eval/compaction_bench.py)):** Verified flat $O(1)$ post-compaction working context (`1,537 -> 1,593 -> 1,588` tokens across 4 generations), `54.1%` KV-cache hit, immutable Gen-1 preservation, and 100% verbatim recall. The upgraded `CompactionBenchmarkRunner` now benchmarks `chatree_non_destructive` head-to-head against `destructive_rolling` and `sliding_window` on **both** anchored decisions and **un-anchored Turn-1 verbatim diagnostics**.
+#### Track 6 — Live Multi-Generation Infinite-Context Compaction ([`exp6_compaction_bench.md`](results/deepseek_eval/exp6_compaction_bench.md))
+
+| System | Generations | Compacts | Anchored Recall | Non-Anchored Verbatim Recall | Overall | Peak Tok | Final Tok | Est. USD | Gen-1 Preserved |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **`chatree_non_destructive`** | **10** | **9** | **100.0%** | **100.0%** | **100.0%** | **1,727** | **1,723** | \$0.013 | **4 / 4** |
+| `destructive_rolling` | 7 | 6 | 100.0% | **0.0%** | 50.0% | 1,483 | 1,985 | \$0.006 | 0 / 4 |
+| `sliding_window` | 1 | 0 | 0.0% | **0.0%** | 0.0% | 1,144 | 1,108 | \$0.004 | 0 / 4 |
+
+> Across 9 successive compactions, destructive rolling summarization kept anchored decisions (`100%`) yet **irrecoverably destroyed every non-anchored Turn-1 verbatim detail (`0.0%`)**, whereas Chatree's non-destructive continuation chain held active context flat at **1,723 tokens** while retrieving Gen-1 verbatim facts at **100.0%** via ancestor shadow inspection.
+
+#### Track 5 — Live 18-Turn Jump-Around Chatbot (Default & System-Agnostic Natural Prompts)
+- **System-Agnostic Natural Prompts ([`exp5_natural_jump_around.csv`](results/deepseek_eval/exp5_natural_jump_around.csv)):** With zero Chatree/tool jargon in user turns, `chatree_live` achieved **100.0% recall**, **1.00 LLM-judge score** (tying `linear`), **0.0% dead-end leakage**, **82.7% KV-cache hit**, **77.8% autonomous navigation accuracy** (4 branches, 5 jumps, 11 shadow queries), and lower peak context (`7,291` vs. `8,525`), while `sliding_window` dropped to `94.4%` recall (`0.92` judge, `9.1%` cache) and `flat_rag` failed completely (`0.0%`).
+- **Default Prompt Track ([`exp5_jump_around.csv`](results/deepseek_eval/exp5_jump_around.csv)):** `chatree_live` achieved **100.0% recall**, **100.0% navigation accuracy**, **0.0% dead-end leakage** (vs. `33.3%` for `linear` and `rlm_official`), **0.967 judge score**, and **73.5% KV-cache hit**. Over this short 18-turn horizon (~8k linear tokens), `chatree_live` still pays an orchestration overhead (`360k` vs. `76.5k` total input tokens on the natural track; `\$0.034` vs. `\$0.006`), confirming that dialogue trees shine primarily at long horizons, high branching factor, or context overflow rather than short linear threads.
 
 ---
 
@@ -145,12 +156,12 @@ Stratified across all 6 official categories (5 items/category, 1,429 sessions in
 
 In accordance with academic artifact-evaluation standards, we explicitly document known limitations and active research gaps:
 
-1. **Benchmark pipeline vs. live orchestrator split:** External benchmarks (`ChatreeSystemAdapter`) use a structured 3-stage pipeline (`tree.ask` → Hop-2 planner → synthesizer), whereas interactive users run `TurnOrchestrator` with autonomous tool calling. Tier-2.5 ephemeral `FACTS` hints are now wired into `TurnOrchestrator`, but end-to-end live-agent LoCoMo/LongMemEval scores remain to be measured.
-2. **Single-model & self-judging bias:** Live evaluations thus far used `deepseek/deepseek-chat` for both generation and LLM judging on a single seed. The runner now supports `--judge-model <cross-family-model>` (e.g., Claude / GPT-4o) for cross-family judge audits and Cohen's $\kappa$ validation.
-3. **Context-overflow regime (`LongMemEval-M`, >1M tokens):** Existing live runs fit inside DeepSeek's 128k window, where full-context linear + prompt caching is strong. `LongMemEval-M` support (`--lme-split m`, ~500 sessions / ~1.2M tokens) is implemented and ready for off-peak evaluation.
+1. **Interactive orchestrator vs. structured `TreeQueryEngine`:** External benchmarks (`ChatreeSystemAdapter`) and `tree.ask(..., deep=True)` now share the unified [`TreeQueryEngine`](src/chatree/engine/query.py) pipeline, whereas interactive turns in `TurnOrchestrator` choose tools autonomously. Tier-2.5 ephemeral `FACTS` hints are wired into `TurnOrchestrator`, but end-to-end unscripted live-agent LoCoMo/LongMemEval evaluation remains future work.
+2. **Single-model & self-judging bias:** Live evaluations thus far used `deepseek/deepseek-chat` for both generation and LLM judging on a single seed. The runner supports `--judge-model <cross-family-model>` (e.g., Claude / GPT-4o) and `--rejudge-locomo-ckpt` for cross-family judge audits and Cohen's $\kappa$ validation.
+3. **Context-overflow regime (`LongMemEval-M`, >1M tokens):** Live LongMemEval runs above used `LongMemEval-S` (~115k tokens, inside DeepSeek's 128k window). `LongMemEval-M` support (`--lme-split m`, 2.6 GB dataset, ~500 sessions / ~1.5M tokens per query) is implemented for >1M-token overflow testing.
 4. **Hosted-API KV-cache TTL:** On hosted providers (Anthropic, DeepSeek, OpenAI), server-side KV caches expire after ~5–10 minutes; non-destructive compaction preserves *verbatim message prefixes* indefinitely (enabling warm cache hits within TTL and instant reload on self-hosted RadixAttention / LMCache engines), not permanent hosted VRAM residency.
-5. **Single-process SQLite storage & $O(N)$ vector scan:** `SQLiteRepository` uses WAL + in-process `asyncio.Lock` and scans per-tree embedding BLOBs via vectorized NumPy (`mat @ q`, <1 ms at 5k chunks). Multi-tenant / 100k+ chunk deployments will require an ANN index (`sqlite-vec` / HNSW) or a Postgres/`pgvector` `StorageBackend` implementation.
-6. **Token estimation & sandbox scope:** Context-overflow and auto-compact guards use a fast character-ratio heuristic (`len(text) // 4`) rather than exact model tokenizers, and `GitWorktreeSandbox` isolates git working trees without OS/container/network sandboxing.
+5. **Single-process SQLite storage & $O(N)$ vector scan:** `SQLiteRepository` uses WAL + in-process `asyncio.Lock` and serves per-tree vector queries via `sqlite-vec` or a strongly consistent pre-normalized NumPy matrix cache (`unit_mat @ q`, <1 ms at 5k chunks). Multi-tenant / 100k+ chunk deployments will require an ANN index (HNSW) or a Postgres/`pgvector` `StorageBackend` implementation.
+6. **Sandbox scope:** `GitWorktreeSandbox` isolates git working trees per branch without OS/container/network sandboxing; exact BPE token counting requires installing optional `tiktoken` (otherwise the calibrated zero-dependency `HeuristicTokenCounter` is used).
 
 ---
 

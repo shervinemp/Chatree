@@ -513,9 +513,10 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
         if args.paper_baselines:
             ja_systems.append("rlm_official")
         ja_rep = await ja_runner.run(scenario=sc, systems=ja_systems)  # type: ignore[arg-type]
-        ja_rep.save_csv(out_dir / "exp5_jump_around.csv")
-        ja_rep.save_json(out_dir / "exp5_jump_around.json")
-        (out_dir / "exp5_jump_around.tex").write_text(ja_rep.to_latex_table(), encoding="utf-8")
+        pfx5 = "exp5_natural_jump_around" if args.natural_prompts else "exp5_jump_around"
+        ja_rep.save_csv(out_dir / f"{pfx5}.csv")
+        ja_rep.save_json(out_dir / f"{pfx5}.json")
+        (out_dir / f"{pfx5}.tex").write_text(ja_rep.to_latex_table(), encoding="utf-8")
         print(ja_rep.to_markdown_table(), flush=True)
         totals["track5_seconds"] = round(time.perf_counter() - t5, 1)
     if "6" in tracks:

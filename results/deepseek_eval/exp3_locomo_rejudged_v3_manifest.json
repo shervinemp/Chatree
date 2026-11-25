@@ -1,0 +1,29 @@
+{
+  "timestamp_utc": "2026-11-25T05:59:25.704969+00:00",
+  "chatree_version": "0.2.0",
+  "git_sha": "9d77dcb",
+  "benchmark": "locomo",
+  "model": "deepseek/deepseek-chat",
+  "judge_model": "deepseek/deepseek-chat",
+  "embed_model": "local/BAAI/bge-small-en-v1.5",
+  "reranker": "Xenova/ms-marco-MiniLM-L-6-v2",
+  "systems": [
+    "chatree_two_tier_v3",
+    "chatree_two_tier",
+    "mem0_official",
+    "full_context_linear",
+    "rlm_official",
+    "flat_hybrid_rag",
+    "tree_summary_only"
+  ],
+  "total_tokens_in": 24989298,
+  "total_tokens_out": 349853,
+  "total_estimated_cost_usd": 3.252546,
+  "extra": {
+    "per_category_per_conv": 5,
+    "n_questions": 245,
+    "rejudged_categories": [
+      "adversarial"
+    ]
+  }
+}

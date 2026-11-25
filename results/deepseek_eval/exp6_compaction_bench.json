@@ -1,0 +1,63 @@
+{
+  "scenario_name": "infinite-context-compaction-8t",
+  "model": "deepseek/deepseek-chat",
+  "results": [
+    {
+      "system": "chatree_non_destructive",
+      "generations": 10,
+      "compactions": 9,
+      "anchored_recall": 1.0,
+      "non_anchored_recall": 1.0,
+      "overall_recall": 1.0,
+      "anchored_answer_preview": "Locked anchors, verbatim:\n\n- Vault cipher: `VAULT_CIPHER_AES256_GCM_90D`\n- S3 audit bucket URI: `s3://nebula-audit-eu-west-7`",
+      "non_anchored_answer_preview": "Verbatim from the Turn-1 lab bring-up footnote:\n\n- Debug listener port token: `DIAG_METRICS_PORT_9481`\n- Exponential backoff jitter constant: `FALLBACK_RETRY_JITTER_37MS`\n- Legacy checksum offset: `LEGACY_CRC32_OFFSET_0X4F`\n\n(Recorded as in",
+      "peak_context_tokens": 1727,
+      "final_working_context_tokens": 1723,
+      "mean_compression_ratio": 1.37,
+      "total_tokens_in": 40440,
+      "total_tokens_out": 8969,
+      "cache_hit_ratio": 0.2057,
+      "estimated_cost_usd": 0.012994,
+      "recall_latency_ms": 9815.76,
+      "gen1_messages_preserved": 4
+    },
+    {
+      "system": "destructive_rolling",
+      "generations": 7,
+      "compactions": 6,
+      "anchored_recall": 1.0,
+      "non_anchored_recall": 0.0,
+      "overall_recall": 0.5,
+      "anchored_answer_preview": "The two locked security decisions, verbatim:\n\n- Vault cipher: `VAULT_CIPHER_AES256_GCM_90D`\n- Immutable audit sink: `s3://nebula-audit-eu-west-7`",
+      "non_anchored_answer_preview": "I don't have that information. There is no \"Turn-1 lab bring-up footnote\" in the conversation history I have access to — the compacted summary begins at Phase #1 (HTTP/2 ingress / TLS 1.3 / mTLS) and the visible turns cover phases #6, #7, a",
+      "peak_context_tokens": 1483,
+      "final_working_context_tokens": 1985,
+      "mean_compression_ratio": 1.31,
+      "total_tokens_in": 25337,
+      "total_tokens_out": 6066,
+      "cache_hit_ratio": 0.586,
+      "estimated_cost_usd": 0.0059,
+      "recall_latency_ms": 3813.8,
+      "gen1_messages_preserved": 0
+    },
+    {
+      "system": "sliding_window",
+      "generations": 1,
+      "compactions": 0,
+      "anchored_recall": 0.0,
+      "non_anchored_recall": 0.0,
+      "overall_recall": 0.0,
+      "anchored_answer_preview": "I don't have those values. My first turn in this conversation was the phase #7 CI/CD design (SLSA provenance, reproducible builds, SBOM scanning, artifact signing) — it contained no vault cipher identifier or S3 audit bucket URI, and nothin",
+      "non_anchored_answer_preview": "I don't have that information. There's no Turn-1 lab bring-up footnote in this conversation — the thread starts with the phase #7 CI/CD design, and nothing in it (or the phase #8 draft) mentions an internal debug listener port, a backoff ji",
+      "peak_context_tokens": 1144,
+      "final_working_context_tokens": 1108,
+      "mean_compression_ratio": 1.0,
+      "total_tokens_in": 10489,
+      "total_tokens_out": 4398,
+      "cache_hit_ratio": 0.1586,
+      "estimated_cost_usd": 0.004365,
+      "recall_latency_ms": 3191.65,
+      "gen1_messages_preserved": 0
+    }
+  ]
+}
