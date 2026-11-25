@@ -120,6 +120,7 @@ async def spawn_child(
         tool_permission=body.tool_permission,
         switch_head=body.switch_head,
         session_id=body.session_id,
+        import_branch_ids=body.import_branch_ids or None,
     )
     child_id = res.tool_output.get("child_id")
     child = await c.repo.get_node(child_id) if child_id else None

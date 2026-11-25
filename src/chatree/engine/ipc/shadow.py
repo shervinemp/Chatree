@@ -40,6 +40,29 @@ class IpcShadowMixin:
     ablations: Any
     sandbox: Any
 
+    async def _collect_compaction_ancestors(
+        self, node: NodeModel, *, max_depth: int = 16
+    ) -> list[NodeModel]:
+        """
+        Walk upward along `parent_id` while the current node is a compacted continuation
+        (`[Compacted from ancestor ...]` in `summary_brief`). Requires zero schema changes
+        and stops cleanly at the root of the compaction chain.
+        """
+        ancestors: list[NodeModel] = []
+        curr = node
+        seen: set[str] = {node.id}
+        for _ in range(max_depth):
+            if "[Compacted from ancestor " not in (curr.summary_brief or "") or not curr.parent_id:
+                break
+            parent = await self.repo.get_node(curr.parent_id)
+            if parent is None or parent.id in seen:
+                break
+            seen.add(parent.id)
+            if parent.status != "ARCHIVED":
+                ancestors.append(parent)
+            curr = parent
+        return ancestors
+
     # ------------------------------------------------------------------
     # 3. request (cached summary OR read-only shadow turn)
     # ------------------------------------------------------------------
@@ -442,6 +465,66 @@ class IpcShadowMixin:
 
         latency_ms = int((time.perf_counter() - t0) * 1000)
         found_in_branch = not final_answer.strip().upper().startswith("NOT_FOUND_IN_BRANCH")
+        resolved_via_ancestor: str | None = None
+
+        # Compaction-Chain Transparent Shadow Lookup: if `target` is a compacted continuation
+        # and returned NOT_FOUND_IN_BRANCH, transparently resolve against the top matching
+        # verbatim ancestor in its compaction chain (`B1..Bk-1`) in 1 bounded hop.
+        if (
+            not mutate
+            and not found_in_branch
+            and next_trace.hop_depth <= next_trace.max_hop_depth
+            and self.rag is not None
+            and "[Compacted from ancestor " in (target.summary_brief or "")
+        ):
+            chain_ancestors = await self._collect_compaction_ancestors(target)
+            chain_ids = {a.id for a in chain_ancestors if a.id not in next_trace.call_stack}
+            if chain_ids:
+                chain_hits = await self.rag.search(
+                    tree_id=tree.id,
+                    query=effective_prompt,
+                    scope="ancestors",
+                    current_node=target,
+                    top_k=8,
+                    granularities={"chunk", "fact", "summary"},
+                    use_reranker=False,
+                )
+                best_anc = next(
+                    (
+                        h.node_id
+                        for h in chain_hits
+                        if h.node_id in chain_ids
+                        and h.score >= self.rag.cfg.speculative_pointer_min_score
+                    ),
+                    None,
+                )
+                if best_anc is not None:
+                    anc_res = await self.request(
+                        tree=tree,
+                        caller=target,
+                        target_id=best_anc,
+                        prompt=effective_prompt,
+                        mutate=False,
+                        trace_ctx=next_trace,
+                    )
+                    anc_out = anc_res.tool_output
+                    if anc_out.get("found_in_branch") and not anc_out.get("error"):
+                        final_answer = str(anc_out.get("answer") or final_answer)
+                        found_in_branch = True
+                        resolved_via_ancestor = best_anc
+                        latency_ms = int((time.perf_counter() - t0) * 1000)
+                        if self.ablations.enable_shadow_cache and final_answer.strip():
+                            await self.repo.put_cached_shadow_answer(
+                                tree_id=tree.id,
+                                target_node_id=target.id,
+                                target_msg_seq=target.last_msg_seq,
+                                model=shadow_model,
+                                prompt=effective_prompt,
+                                answer=final_answer,
+                                summary_version=target.summary_version,
+                                max_entries=self.guardrails.max_shadow_cache_entries,
+                            )
+
         out = {
             "target_id": target.id,
             "target_title": target.title,
@@ -455,6 +538,8 @@ class IpcShadowMixin:
             "artifacts": art_labels,
             "model_used": shadow_model,
         }
+        if resolved_via_ancestor is not None:
+            out["resolved_via_compaction_ancestor"] = resolved_via_ancestor
         if nested_guardrail_error:
             out["nested_guardrail_warning"] = nested_guardrail_error
 
@@ -482,6 +567,17 @@ class IpcShadowMixin:
             seen_msg_seq=target.last_msg_seq,
             last_ipc_event_id=ev.id,
         )
+        if resolved_via_ancestor is not None:
+            anc_node = await self.repo.get_node(resolved_via_ancestor)
+            if anc_node is not None:
+                await self.repo.upsert_dependency(
+                    tree_id=tree.id,
+                    consumer_node_id=caller.id,
+                    source_node_id=anc_node.id,
+                    seen_summary_version=anc_node.summary_version,
+                    seen_msg_seq=anc_node.last_msg_seq,
+                    last_ipc_event_id=ev.id,
+                )
         return IpcExecutionResult(
             tool_output=out, ipc_event=ev, stale_node_ids=stale_node_ids
         )

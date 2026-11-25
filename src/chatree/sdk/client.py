@@ -155,6 +155,7 @@ class Chatree:
             self.router,
             ablations=self.config.ablations,
         )
+        self.ipc.query_engine = self.query_engine
         self.orchestrator = TurnOrchestrator(
             self.repo,
             self.context,
@@ -229,7 +230,12 @@ class Chatree:
             try:
                 tree = await self.repo.get_tree(tree_id)
                 node = await self.repo.get_node(node_id)
-                if tree is None or node is None or not node.is_dirty:
+                if (
+                    tree is None
+                    or node is None
+                    or not node.is_dirty
+                    or node.last_msg_seq < self.config.guardrails.bg_summary_min_dirty_messages
+                ):
                     return node.summary or "" if node else ""
                 updated, *_ = await self.staleness.ensure_fresh_summary(
                     tree, node, force=False, new_status=node.status

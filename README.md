@@ -5,7 +5,7 @@
 [![CI](https://github.com/shervinemp/Chatree/actions/workflows/ci.yml/badge.svg)](https://github.com/shervinemp/Chatree/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 101 Passing](https://img.shields.io/badge/tests-101%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
+[![Tests: 105 Passing](https://img.shields.io/badge/tests-105%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
 [![Paper: LaTeX + Markdown](https://img.shields.io/badge/paper-LaTeX%20%2B%20MD-blue.svg)](paper/chatree_paper.md)
 [![Local-First SQLite](https://img.shields.io/badge/storage-SQLite%20WAL%20%2B%20FTS5-lightgrey.svg)](#architecture)
 [![MCP Compatible](https://img.shields.io/badge/protocol-MCP%20JSON--RPC%202.0-purple.svg)](#cli-mcp-server--optional-demo-ui)
@@ -73,11 +73,11 @@ All built-in primitives are namespaced under `dialogue_tree_*` to guarantee zero
 
 | Tool | Purpose | Allowed in Shadow? | State Effect |
 |---|---|:---:|---|
-| `dialogue_tree_create_branch` | Spawn child branch (`fork`, `slice`, or `clean`) with optional `autonomous=True` sub-turn | No | Creates node, optionally switches `HEAD` |
+| `dialogue_tree_create_branch` | Spawn child branch (`fork`, `slice`, or `clean`) with optional `autonomous=True` sub-turn or frozen `import_branch_ids` snapshots (auto-staleness) | No | Creates node, optionally switches `HEAD` |
 | `dialogue_tree_send_to_branch` | Deliver message/versioned artifacts (`slug@vN`) to mailbox; `finish=True` squash-merges to parent | No | Writes mailbox / completes child |
-| `dialogue_tree_query_branch` | Known-ID inspection: omit `prompt` for 0-token cached summary; pass `prompt` for read-only shadow Q&A | Yes | Read-only (records dependency edge) |
+| `dialogue_tree_query_branch` | Known-ID inspection: omit `prompt` for 0-token cached summary; pass `prompt` for read-only shadow Q&A (transparently resolves compaction chains `B1..Bk`) | Yes | Read-only (records dependency edge) |
 | `dialogue_tree_search_branches` | 4-tier hybrid BM25 + vector RRF search across `all`, `ancestors`, `subtree`, or `siblings` | Yes | Read-only |
-| `dialogue_tree_search_and_query` | Single-hop compound search + parallel read-only shadow fan-out for unknown branch IDs | No | Read-only |
+| `dialogue_tree_search_and_query` | Single-hop compound search + parallel read-only shadow fan-out (optional `deep=True` invokes full `TreeQueryEngine`) | No | Read-only |
 | `dialogue_tree_switch_branch` | Git-style `HEAD@{k}` / `back` / `forward` navigation with destination preview & 1-turn `follow_up_prompt` | No | Updates `HEAD` & reflog |
 | `dialogue_tree_compact_branch` | Non-destructive 5-section anchor compaction into linked continuation child (source kept verbatim) | No | Spawns continuation, completes source |
 | `dialogue_tree_pin_invariant` | Pin/update/unpin up to 8 tree-wide invariants (`read_write` only; auto-flagged `[STALE]` on source edit) | No | Updates `tree_invariants` |
@@ -262,7 +262,7 @@ Runnable examples: [`examples/01_quickstart_sdk.py`](examples/01_quickstart_sdk.
 ## Artifact Evaluation & Reproducibility
 
 ### Step 1: Zero-Key Functional Verification (~55s)
-Runs all **101 unit and integration tests** covering IPC guardrails, copy-on-write forks, shadow memoization (with normalized prompt hashing), materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, `chat` vs. promotable `subagent` node kinds, strict `HEAD`-only `reflog` + MRU envelope + supervisor worker cancellation cascade, multi-session `TreeSession` visitors with independent `HEAD`/reflog/cues, KV-cache-safe Turn-1 & piggybacked-exit semantic auto-titling (`title_source` + frozen `brief_title`), deterministic weekday date anchoring, selective Hop-2 escalation, hybrid summary-map directory scaling, parallel batch ingest, conservative steady-state ephemeral envelopes, Track 7 non-monotonic engineering benchmark & Total Lifecycle Cost reporting, cross-family `judge_llm` wiring, GPU runtime fallback, provider-agnostic HTTP/SSE & callable adapters, unified `TreeQueryEngine`, cached NumPy vector index, pluggable `TokenCounter`, Tier-2.5 atomic facts, `PINNED` staleness, portable v3 `.dialogue/` round-trips, CLI/MCP/REST API parity, non-destructive compaction savings guards, negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
+Runs all **105 unit and integration tests** covering IPC guardrails, copy-on-write forks, multi-branch `imports` with automatic staleness edges, shadow memoization (with normalized prompt hashing), compaction-chain transparent shadow lookup, materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, `chat` vs. promotable `subagent` node kinds, strict `HEAD`-only `reflog` + MRU envelope + supervisor worker cancellation cascade, multi-session `TreeSession` visitors with independent `HEAD`/reflog/cues, KV-cache-safe Turn-1 & piggybacked-exit semantic auto-titling (`title_source` + frozen `brief_title`), deterministic weekday date anchoring, selective Hop-2 escalation, `deep=True` agent tool dispatch, hybrid summary-map directory scaling, parallel batch ingest, conservative steady-state ephemeral envelopes, Track 7 non-monotonic engineering benchmark & Total Lifecycle Cost reporting, cross-family `judge_llm` wiring, GPU runtime fallback, provider-agnostic HTTP/SSE & callable adapters, unified `TreeQueryEngine`, cached NumPy vector index, pluggable `TokenCounter`, Tier-2.5 atomic facts, `PINNED` staleness, portable v3 `.dialogue/` round-trips, CLI/MCP/REST API parity, non-destructive compaction savings guards, negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
 
 ```bash
 uv run pytest -v
@@ -372,7 +372,7 @@ Chatree/
 ├── paper/                         # Camera-ready LaTeX paper (chatree_paper.tex), Markdown report, BibTeX & PDF/PNG/SVG figures
 ├── scripts/                       # Provider-agnostic evaluation runner & reproducible figure generator
 ├── results/deepseek_eval/         # Reproducible benchmark tables, LaTeX exports, checkpoints & manifests
-└── tests/                         # 101 automated unit & integration tests (zero API keys required)
+└── tests/                         # 105 automated unit & integration tests (zero API keys required)
 ```
 
 ---

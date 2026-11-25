@@ -168,7 +168,7 @@ On **Track 5 (`natural-jump-around-18t`)**, with zero tool jargon in user prompt
 ## 6. Reproducibility
 
 ```bash
-# 1. Zero-key test suite (101 tests)
+# 1. Zero-key test suite (105 tests)
 uv run pytest -v
 
 # 2. Regenerate all 5 publication figures directly from results/deepseek_eval/

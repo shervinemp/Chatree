@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, AsyncIterator
+from typing import TYPE_CHECKING, Any, AsyncIterator, Sequence
 
 from chatree.config import ToolPermission
 from chatree.engine.guardrails import TraceContext
@@ -183,6 +183,7 @@ class DialogueTree:
         node_kind: NodeKind | None = None,
         switch_head: bool = True,
         session_id: str = DEFAULT_SESSION_ID,
+        imports: Sequence[str] | None = None,
     ) -> NodeHandle:
         t = await self.model()
         if parent_id is None:
@@ -208,6 +209,7 @@ class DialogueTree:
             node_kind=node_kind,
             switch_head=switch_head,
             session_id=session_id,
+            import_branch_ids=list(imports) if imports else None,
         )
         if res.tool_output.get("error"):
             raise RuntimeError(f"{res.tool_output['error']}: {res.tool_output.get('detail')}")

@@ -93,6 +93,7 @@ class IPCRouter(
         self.sandbox = sandbox
         self.on_branch_switch_away = on_branch_switch_away
         self.on_branch_archived = on_branch_archived
+        self.query_engine: Any = None
         self._node_last_llm_at: dict[str, float] = {}
 
     def mark_node_llm_warm(self, node_id: str) -> None:
@@ -287,6 +288,12 @@ class IPCRouter(
             perm = arguments.get("permission")
             if perm not in ("read_only", "read_write"):
                 perm = None
+            raw_imports = arguments.get("import_branch_ids")
+            imp_ids = (
+                [str(x) for x in raw_imports if str(x).strip()]
+                if isinstance(raw_imports, list)
+                else None
+            )
             return await self.spawn_child(
                 tree=tree,
                 parent=caller,
@@ -301,15 +308,45 @@ class IPCRouter(
                 initiated_by_model=True,
                 session_id=session_id,
                 trace_ctx=trace_ctx,
+                import_branch_ids=imp_ids,
             )
 
         if tool_name == TOOL_ASK_TREE:
+            q_str = str(arguments.get("query") or "")
+            sc_val = arguments.get("scope", "all")
+            mt_val = int(arguments.get("max_targets") or 2)
+            if bool(arguments.get("deep", False)) and self.query_engine is not None:
+                t0 = time.perf_counter()
+                deep_out = await self.query_engine.deep_ask(
+                    tree=tree,
+                    caller=caller,
+                    query=q_str,
+                    scope=sc_val,
+                    max_targets=max(2, min(mt_val, 5)),
+                    trace_ctx=trace_ctx,
+                )
+                ev = await self.repo.create_ipc_event(
+                    tree_id=tree.id,
+                    trace_id=trace_ctx.trace_id,
+                    hop_depth=trace_ctx.hop_depth,
+                    from_node_id=caller.id,
+                    to_node_id=None,
+                    event_type="search",
+                    payload={"compound_ask": True, "deep": True, "query": q_str, "scope": sc_val},
+                    response={
+                        "targets_queried": deep_out.get("targets_queried") or [],
+                        "facts_used": deep_out.get("facts_used", 0),
+                    },
+                    status="ok",
+                    latency_ms=int((time.perf_counter() - t0) * 1000),
+                )
+                return IpcExecutionResult(tool_output=deep_out, ipc_event=ev)
             return await self.ask_tree(
                 tree=tree,
                 caller=caller,
-                query=str(arguments.get("query") or ""),
-                scope=arguments.get("scope", "all"),
-                max_targets=int(arguments.get("max_targets") or 2),
+                query=q_str,
+                scope=sc_val,
+                max_targets=mt_val,
                 trace_ctx=trace_ctx,
             )
 

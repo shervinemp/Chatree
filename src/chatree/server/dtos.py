@@ -78,6 +78,7 @@ class SpawnNodeRequest(BaseModel):
     tool_permission: ToolPermission | None = None
     switch_head: bool = True
     session_id: str = DEFAULT_SESSION_ID
+    import_branch_ids: list[str] = Field(default_factory=list)
 
 
 class FinishNodeRequest(BaseModel):

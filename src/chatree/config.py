@@ -44,6 +44,7 @@ class GuardrailPolicy(BaseModel):
     enable_compound_ask_tool: bool = True
     auto_title_enabled: bool = True
     compact_steady_state_envelope: bool = True
+    bg_summary_min_dirty_messages: int = Field(default=2, ge=1, le=50)
 
 
 class RagConfig(BaseModel):

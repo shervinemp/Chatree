@@ -116,6 +116,15 @@ COMPOUND_ASK_TOOL_DEFINITION: dict[str, Any] = {
                     "default": "all",
                 },
                 "max_targets": {"type": "integer", "default": 2, "minimum": 1, "maximum": 5},
+                "deep": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": (
+                        "Set deep=true ONLY for hard multi-branch counting, timeline comparisons, or "
+                        "cross-tree synthesis (adds Tier-2.5 dated facts + selective Hop-2 + synthesis). "
+                        "Leave false for fast 1-hop lookups."
+                    ),
+                },
             },
             "required": ["query"],
         },
@@ -156,6 +165,15 @@ CORE_TOOL_DEFINITIONS: list[dict[str, Any]] = [
                         "type": "string",
                         "enum": ["read_only", "read_write"],
                         "description": "External tool permission scope for the child (defaults to read_only).",
+                    },
+                    "import_branch_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "maxItems": 4,
+                        "description": (
+                            "Optional up to 4 sibling/other branch IDs whose settled summaries & artifact refs "
+                            "to freeze into this child's brief with automatic staleness tracking."
+                        ),
                     },
                 },
                 "required": ["goal"],

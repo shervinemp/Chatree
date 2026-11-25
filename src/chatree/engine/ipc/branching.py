@@ -52,6 +52,7 @@ class IpcBranchingMixin:
         initiated_by_model: bool = False,
         session_id: str = DEFAULT_SESSION_ID,
         trace_ctx: TraceContext | None = None,
+        import_branch_ids: list[str] | None = None,
     ) -> IpcExecutionResult:
         ctx = trace_ctx or TraceContext.start(
             parent.id, self.guardrails.max_hop_depth, self.guardrails.token_budget
@@ -173,12 +174,63 @@ class IpcBranchingMixin:
         )
         safe_fork_seq = await self.repo.get_last_safe_fork_seq(parent.id)
 
+        # Multi-branch context imports: freeze bounded read-only summary/artifact snapshots from
+        # up to 4 sibling/ancestor branches into `summary_brief` (0% KV invalidation) and record
+        # automatic causal dependency edges so staleness propagates from every imported branch.
+        imported_nodes: list[NodeModel] = []
+        skipped_imports: list[str] = []
+        effective_brief = summary_brief
+        if import_branch_ids:
+            dedup_ids = list(dict.fromkeys(str(bid).strip() for bid in import_branch_ids if str(bid).strip()))
+            import_lines: list[str] = []
+            for bid in dedup_ids:
+                if len(imported_nodes) >= 4:
+                    skipped_imports.append(f"{bid} (cap=4)")
+                    continue
+                if bid == parent.id and context_mode == "fork":
+                    skipped_imports.append(f"{bid} (already inherited by fork)")
+                    continue
+                imp = await self.repo.get_node(bid)
+                if imp is None or imp.tree_id != tree.id:
+                    skipped_imports.append(f"{bid} (not found)")
+                    continue
+                if imp.status == "ARCHIVED":
+                    skipped_imports.append(f"{bid} (archived)")
+                    continue
+                imp_summary = (imp.summary or "").strip()
+                if not imp_summary:
+                    imp_msgs = await self.repo.list_messages(imp.id)
+                    imp_summary = " | ".join(
+                        f"{m.role}: {' '.join(m.content.split())[:140]}"
+                        for m in imp_msgs[-2:]
+                        if m.role in ("user", "assistant") and m.content.strip()
+                    ) or imp.goal or imp.title
+                imp_summary = " ".join(imp_summary.split())[:400]
+                imp_arts = await self.repo.list_artifacts_by_node(imp.id)
+                art_tag = (
+                    " | artifacts: " + ", ".join(f"{a.slug}@v{a.version}" for a in imp_arts[:5])
+                    if imp_arts
+                    else ""
+                )
+                import_lines.append(
+                    f'- {imp.id} "{imp.title}" (v{imp.summary_version}, {imp.status}): {imp_summary}{art_tag}'
+                )
+                imported_nodes.append(imp)
+            if import_lines:
+                import_block = (
+                    "[Imported Context Snapshots (frozen at spawn — query branch IDs if flagged STALE)]\n"
+                    + "\n".join(import_lines)
+                )
+                effective_brief = (
+                    f"{summary_brief.strip()}\n\n{import_block}" if summary_brief.strip() else import_block
+                )
+
         child = await self.repo.create_child_node(
             parent=parent,
             title=short_title,
             goal=goal,
             context_mode=context_mode,
-            summary_brief=summary_brief,
+            summary_brief=effective_brief,
             spawn_msg_seq=safe_fork_seq,
             slice_turn_count=slice_turns,
             model_override=model_override,
@@ -260,6 +312,10 @@ class IpcBranchingMixin:
         if autonomous_result is not None:
             out["autonomous_result"] = autonomous_result
             out["summary_version"] = child.summary_version
+        if imported_nodes:
+            out["imported_branch_ids"] = [imp.id for imp in imported_nodes]
+        if skipped_imports:
+            out["skipped_imports"] = skipped_imports
 
         ev = await self.repo.create_ipc_event(
             tree_id=tree.id,
@@ -274,8 +330,9 @@ class IpcBranchingMixin:
                 "node_kind": child.node_kind,
                 "context_mode": context_mode,
                 "tool_permission": child.tool_permission,
-                "summary_brief": summary_brief,
+                "summary_brief": effective_brief,
                 "autonomous": autonomous,
+                "imported_branch_ids": [imp.id for imp in imported_nodes],
             },
             response=out,
             status="ok",
@@ -285,6 +342,16 @@ class IpcBranchingMixin:
             tokens_out=tokens_out,
             latency_ms=latency_ms,
         )
+
+        for imp in imported_nodes:
+            await self.repo.upsert_dependency(
+                tree_id=tree.id,
+                consumer_node_id=child.id,
+                source_node_id=imp.id,
+                seen_summary_version=imp.summary_version,
+                seen_msg_seq=imp.last_msg_seq,
+                last_ipc_event_id=ev.id,
+            )
 
         if autonomous:
             await self.repo.upsert_dependency(
