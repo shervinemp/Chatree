@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     path TEXT NOT NULL,
     depth INTEGER NOT NULL DEFAULT 0,
     title TEXT NOT NULL,
+    title_source TEXT NOT NULL DEFAULT 'user' CHECK(title_source IN ('placeholder', 'auto', 'user')),
+    brief_title TEXT NOT NULL DEFAULT '',
     goal TEXT NOT NULL DEFAULT '',
     summary_brief TEXT NOT NULL DEFAULT '',
     context_mode TEXT NOT NULL CHECK(context_mode IN ('root', 'fork', 'slice', 'clean')),

@@ -19,8 +19,10 @@ from chatree.types import (
     NodeStatus,
     ReflogEntryModel,
     StaleDependencyInfo,
+    TitleSource,
     ToolPermission,
     TreeModel,
+    is_placeholder_title,
 )
 
 
@@ -64,11 +66,18 @@ class TreesNodesMessagesMixin:
         shadow_model: str,
         summary_model: str,
         auto_commit_handoffs: bool,
+        *,
+        title_source: TitleSource | None = None,
     ) -> tuple[TreeModel, NodeModel, ReflogEntryModel]:
         now = utc_now()
         tree_id = new_id("t")
         root_id = new_id("n")
         root_path = f"/{root_id}/"
+        eff_title_source: TitleSource = (
+            title_source
+            if title_source is not None
+            else ("placeholder" if is_placeholder_title(title) else "user")
+        )
 
         async with self.db.write_transaction():
             await self.conn.execute(
@@ -96,14 +105,14 @@ class TreesNodesMessagesMixin:
             await self.conn.execute(
                 """
                 INSERT INTO nodes (
-                    id, tree_id, parent_id, path, depth, title, goal, summary_brief,
+                    id, tree_id, parent_id, path, depth, title, title_source, brief_title, goal, summary_brief,
                     context_mode, spawn_msg_seq, slice_turn_count, status, tool_permission,
                     model_override, summary, summary_version, rollup_summary, is_dirty,
                     last_msg_seq, tokens_in, tokens_out, cache_read_tokens, created_at, updated_at
-                ) VALUES (?, ?, NULL, ?, 0, ?, ?, '', 'root', 0, 6, 'ACTIVE', 'read_write',
+                ) VALUES (?, ?, NULL, ?, 0, ?, ?, ?, ?, '', 'root', 0, 6, 'ACTIVE', 'read_write',
                           NULL, NULL, 0, NULL, 0, 0, 0, 0, 0, ?, ?)
                 """,
-                (root_id, tree_id, root_path, title, goal, now, now),
+                (root_id, tree_id, root_path, title, eff_title_source, title, goal, now, now),
             )
             await self._upsert_node_fts(root_id, tree_id, title, goal, "", "")
 
@@ -193,21 +202,27 @@ class TreesNodesMessagesMixin:
         model_override: str | None = None,
         tool_permission: ToolPermission = "read_only",
         node_kind: NodeKind = "chat",
+        title_source: TitleSource | None = None,
     ) -> NodeModel:
         now = utc_now()
         node_id = new_id("n")
         path = f"{parent.path}{node_id}/"
         depth = parent.depth + 1
+        eff_title_source: TitleSource = (
+            title_source
+            if title_source is not None
+            else ("placeholder" if is_placeholder_title(title) else "user")
+        )
 
         async with self.db.write_transaction():
             await self.conn.execute(
                 """
                 INSERT INTO nodes (
-                    id, tree_id, parent_id, path, depth, title, goal, summary_brief,
+                    id, tree_id, parent_id, path, depth, title, title_source, brief_title, goal, summary_brief,
                     context_mode, spawn_msg_seq, slice_turn_count, status, node_kind, tool_permission,
                     model_override, summary, summary_version, rollup_summary, is_dirty,
                     last_msg_seq, tokens_in, tokens_out, cache_read_tokens, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?,
                           ?, NULL, 0, NULL, 0, 0, 0, 0, 0, ?, ?)
                 """,
                 (
@@ -216,6 +231,8 @@ class TreesNodesMessagesMixin:
                     parent.id,
                     path,
                     depth,
+                    title,
+                    eff_title_source,
                     title,
                     goal,
                     summary_brief,
@@ -318,6 +335,8 @@ class TreesNodesMessagesMixin:
     async def update_node(self, node_id: str, **fields: Any) -> NodeModel | None:
         allowed = {
             "title",
+            "title_source",
+            "brief_title",
             "goal",
             "summary_brief",
             "status",

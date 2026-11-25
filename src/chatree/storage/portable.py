@@ -240,12 +240,12 @@ class DialogueDirectoryStore:
             await repo.conn.execute(
                 """
                 INSERT INTO nodes (
-                    id, tree_id, parent_id, path, depth, title, goal, summary_brief,
+                    id, tree_id, parent_id, path, depth, title, title_source, brief_title, goal, summary_brief,
                     context_mode, spawn_msg_seq, slice_turn_count, status, node_kind, tool_permission,
                     model_override, summary, summary_version, summary_minor_version,
                     last_change_severity, last_change_delta, rollup_summary, is_dirty,
                     last_msg_seq, tokens_in, tokens_out, cache_read_tokens, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     n.id,
@@ -254,6 +254,8 @@ class DialogueDirectoryStore:
                     n.path,
                     n.depth,
                     n.title,
+                    n.title_source,
+                    n.brief_title or n.title,
                     n.goal,
                     n.summary_brief,
                     n.context_mode,

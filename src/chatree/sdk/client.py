@@ -188,6 +188,7 @@ class Chatree:
             self.tools,
             hooks=self.hooks,
             guardrails=self.config.guardrails,
+            on_first_turn_title=self._schedule_bg_title,
         )
         self.ops = BranchOperations(
             self.repo, self.reflog, self.staleness, self.rag, hooks=self.hooks
@@ -268,6 +269,48 @@ class Chatree:
             _worker(), name=f"chatree-bg-summary-{node_id}"
         )
         self._bg_summary_tasks[node_id] = task
+        return task
+
+    def _schedule_bg_title(self, tree_id: str, node_id: str) -> asyncio.Task[str]:
+        """Schedule a non-blocking Turn-1 semantic title generation for a placeholder node."""
+        task_key = f"title:{node_id}"
+        existing = self._bg_summary_tasks.get(task_key)
+        if existing is not None and not existing.done():
+            return existing
+
+        async def _worker() -> str:
+            try:
+                tree = await self.repo.get_tree(tree_id)
+                node = await self.repo.get_node(node_id)
+                if tree is None or node is None or node.title_source != "placeholder":
+                    return node.title if node else ""
+                prev_title = node.title
+                updated = await self.staleness.maybe_generate_initial_title(tree, node)
+                if updated.title != prev_title and self.hooks:
+                    await self.hooks.emit(
+                        "node_titled",
+                        {
+                            "tree_id": tree_id,
+                            "node_id": node_id,
+                            "old_title": prev_title,
+                            "title": updated.title,
+                            "title_source": updated.title_source,
+                        },
+                    )
+                return updated.title
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                return ""
+            finally:
+                cur = self._bg_summary_tasks.get(task_key)
+                if cur is asyncio.current_task():
+                    self._bg_summary_tasks.pop(task_key, None)
+
+        task: asyncio.Task[str] = asyncio.create_task(
+            _worker(), name=f"chatree-bg-title-{node_id}"
+        )
+        self._bg_summary_tasks[task_key] = task
         return task
 
     async def wait_background_summaries(self, *, timeout: float | None = 15.0) -> int:

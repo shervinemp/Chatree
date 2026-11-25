@@ -12,7 +12,14 @@ from chatree.engine.rag import TreeRAGService, extract_key_identifiers
 from chatree.protocols import Embedder, LLMProvider, ModelRouter
 from chatree.storage.repository import SQLiteRepository, cosine_similarity
 from chatree.tools import ToolRegistry
-from chatree.types import ChangeSeverity, NodeModel, NodeStatus, TreeModel
+from chatree.types import (
+    ChangeSeverity,
+    NodeModel,
+    NodeStatus,
+    TreeModel,
+    is_placeholder_title,
+    sanitize_branch_title,
+)
 
 _POLARITY_TOKENS: frozenset[str] = frozenset(
     {
@@ -59,23 +66,52 @@ def _extract_polarity_tokens(text: str) -> set[str]:
     return {w.lower() for w in re.findall(r"\b[A-Za-z]+\b", text) if w.lower() in _POLARITY_TOKENS}
 
 
-def parse_summary_and_facts(raw_text: str) -> tuple[str, list[dict[str, Any]]]:
+def parse_title_summary_and_facts(raw_text: str) -> tuple[str | None, str, list[dict[str, Any]]]:
     """
-    Gracefully extract `(clean_summary, atomic_facts)` from a piggybacked summary response.
-    Supports either:
-      1) Prose summary followed by `FACTS_JSON: [...]` (preferred: zero JSON noise in summary!)
-      2) Full JSON object `{"summary": "...", "facts": [...]}`
-      3) Plain prose fallback (returns `(raw_text.strip(), [])` — never drops a summary on malformed JSON).
+    Gracefully extract `(proposed_title, clean_summary, atomic_facts)` from a piggybacked
+    summary response. Supports:
+      1) Optional leading `TITLE: <4-8 word title>` line + optional `SUMMARY:` label + prose + `FACTS_JSON: [...]`
+      2) Full JSON object `{"title": "...", "summary": "...", "facts": [...]}`
+      3) Plain prose fallback (never drops a summary on malformed output).
     """
     txt = (raw_text or "").strip()
     if not txt:
-        return "", []
+        return None, "", []
+
+    # Format 2: JSON object `{"summary": "...", ...}`
+    obj_start = txt.find("{")
+    if obj_start != -1 and '"summary"' in txt[obj_start : obj_start + 120]:
+        try:
+            parsed_obj, _ = json.JSONDecoder().raw_decode(txt[obj_start:])
+            if isinstance(parsed_obj, dict) and isinstance(parsed_obj.get("summary"), str):
+                raw_title = parsed_obj.get("title")
+                title = sanitize_branch_title(str(raw_title)) if isinstance(raw_title, str) else None
+                raw_facts = parsed_obj.get("facts") or []
+                facts = [
+                    f
+                    for f in raw_facts
+                    if isinstance(f, dict) and (f.get("fact") or f.get("fact_text"))
+                ]
+                return (title or None), parsed_obj["summary"].strip(), facts
+        except Exception:
+            pass
+
+    # Optional leading `TITLE: ...` line before prose/SUMMARY/FACTS_JSON
+    proposed_title: str | None = None
+    body = txt
+    title_m = re.match(r"^\s*TITLE\s*:\s*([^\r\n]+)(?:\r?\n|$)", body, flags=re.IGNORECASE)
+    if title_m:
+        cand = sanitize_branch_title(title_m.group(1))
+        if cand:
+            proposed_title = cand
+        body = body[title_m.end() :].strip()
+        body = re.sub(r"^\s*SUMMARY\s*:\s*", "", body, flags=re.IGNORECASE).strip()
 
     # Format 1: Prose + `FACTS_JSON: [...]`
-    marker_m = re.search(r"FACTS_JSON\s*:\s*", txt, flags=re.IGNORECASE)
+    marker_m = re.search(r"FACTS_JSON\s*:\s*", body, flags=re.IGNORECASE)
     if marker_m:
-        summary_part = txt[: marker_m.start()].strip()
-        tail = txt[marker_m.end() :].strip()
+        summary_part = body[: marker_m.start()].strip()
+        tail = body[marker_m.end() :].strip()
         tail = re.sub(r"^```(?:json)?\s*", "", tail, flags=re.IGNORECASE)
         arr_start = tail.find("[")
         if arr_start != -1:
@@ -83,10 +119,11 @@ def parse_summary_and_facts(raw_text: str) -> tuple[str, list[dict[str, Any]]]:
             try:
                 parsed, _ = decoder.raw_decode(tail[arr_start:])
                 if isinstance(parsed, list):
-                    facts = [f for f in parsed if isinstance(f, dict) and (f.get("fact") or f.get("fact_text"))]
-                    return summary_part or txt, facts
+                    facts = [
+                        f for f in parsed if isinstance(f, dict) and (f.get("fact") or f.get("fact_text"))
+                    ]
+                    return proposed_title, summary_part or body, facts
             except Exception:
-                # Truncation-tolerant fallback: salvage every complete `{...}` fact object before cutoff
                 salvaged: list[dict[str, Any]] = []
                 idx = arr_start + 1
                 n = len(tail)
@@ -102,26 +139,16 @@ def parse_summary_and_facts(raw_text: str) -> tuple[str, list[dict[str, Any]]]:
                     except Exception:
                         break
                 if salvaged:
-                    return summary_part or txt, salvaged
-        return summary_part or txt, []
+                    return proposed_title, summary_part or body, salvaged
+        return proposed_title, summary_part or body, []
 
-    # Format 2: JSON object `{"summary": "...", "facts": [...]}`
-    obj_start = txt.find("{")
-    if obj_start != -1 and '"summary"' in txt[obj_start : obj_start + 80]:
-        try:
-            parsed_obj, _ = json.JSONDecoder().raw_decode(txt[obj_start:])
-            if isinstance(parsed_obj, dict) and isinstance(parsed_obj.get("summary"), str):
-                raw_facts = parsed_obj.get("facts") or []
-                facts = [
-                    f
-                    for f in raw_facts
-                    if isinstance(f, dict) and (f.get("fact") or f.get("fact_text"))
-                ]
-                return parsed_obj["summary"].strip(), facts
-        except Exception:
-            pass
+    return proposed_title, body or txt, []
 
-    return txt, []
+
+def parse_summary_and_facts(raw_text: str) -> tuple[str, list[dict[str, Any]]]:
+    """Backwards-compatible helper returning `(clean_summary, atomic_facts)`."""
+    _, summary, facts = parse_title_summary_and_facts(raw_text)
+    return summary, facts
 
 
 class StalenessService:
@@ -225,6 +252,106 @@ class StalenessService:
             await self.rag.propagate_rollups_upward(updated.id)
         return updated
 
+    async def apply_auto_title(
+        self,
+        tree: TreeModel,
+        node: NodeModel,
+        proposed_title: str | None,
+        *,
+        allow_refine: bool = False,
+        reindex_chunks: bool = False,
+    ) -> NodeModel:
+        """
+        Safely apply a model-generated semantic title without violating user sovereignty
+        or invalidating KV-cache static prefixes (`brief_title` remains frozen).
+        """
+        if not self.guardrails.auto_title_enabled or not proposed_title:
+            return node
+        fresh = await self.repo.get_node(node.id) or node
+        if fresh.title_source == "user":
+            return fresh
+        if fresh.title_source == "auto" and not allow_refine:
+            return fresh
+        clean = sanitize_branch_title(proposed_title)
+        if not clean or is_placeholder_title(clean) or clean == fresh.title:
+            return fresh
+
+        prev_title = fresh.title
+        updated = await self.repo.update_node(
+            fresh.id,
+            title=clean,
+            title_source="auto",
+        )
+        if updated is None:
+            return fresh
+        # Mirror root title onto the tree when the tree itself still carries the root placeholder
+        if fresh.parent_id is None and tree.title == prev_title:
+            await self.repo.update_tree(tree.id, title=clean)
+        if self.rag is not None:
+            if reindex_chunks:
+                await self.rag.index_node_chunks(updated.id)
+            await self.rag.index_node_summary(updated.id)
+            await self.rag.propagate_rollups_upward(updated.id)
+        return updated
+
+    async def maybe_generate_initial_title(
+        self,
+        tree: TreeModel,
+        node: NodeModel,
+    ) -> NodeModel:
+        """
+        Generate a crisp 4-8 word Entity + Topic title right after Turn 1 completes on a
+        placeholder-titled branch (`title_source == "placeholder"`). Designed to run as a
+        non-blocking background task with 0ms user latency and 0% KV-cache impact.
+        """
+        if not self.guardrails.auto_title_enabled:
+            return node
+        fresh = await self.repo.get_node(node.id) or node
+        if fresh.title_source != "placeholder":
+            return fresh
+
+        msgs = await self.repo.list_messages(fresh.id)
+        first_user = next((m.content.strip() for m in msgs if m.role == "user" and m.content.strip()), "")
+        first_asst = next((m.content.strip() for m in msgs if m.role == "assistant" and m.content.strip()), "")
+        if not first_user and not first_asst:
+            return fresh
+
+        prompt = (
+            "[Chatree Title] Generate ONE concise 4-8 word noun-phrase title for this conversation "
+            "branch naming the key entity/subsystem and concrete topic (no quotes, no trailing period, "
+            "no filler words like 'Discussion about'). Reply with ONLY the title.\n\n"
+            f"User: {first_user[:500]}\n"
+            f"Assistant: {first_asst[:600]}"
+        )
+        model = self.router.resolve_model(tree, fresh, "summary")
+        complete_params = inspect.signature(self.llm.complete).parameters
+        extra_kw: dict[str, Any] = {}
+        if "max_tokens" in complete_params:
+            extra_kw["max_tokens"] = 32
+        resp = await self.llm.complete(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You generate ultra-concise 4-8 word technical/topic branch titles. Output ONLY the title.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            tools=None,
+            temperature=0.0,
+            **extra_kw,
+        )
+        await self.repo.increment_node_usage(
+            fresh.id, resp.tokens_in, resp.tokens_out, resp.cache_read_tokens
+        )
+        return await self.apply_auto_title(
+            tree,
+            fresh,
+            resp.content,
+            allow_refine=False,
+            reindex_chunks=True,
+        )
+
     async def ensure_fresh_summary(
         self,
         tree: TreeModel,
@@ -242,6 +369,13 @@ class StalenessService:
             return node, False, 0, 0, 0
 
         prefix = await self.context.build_static_prefix(node)
+        should_piggyback_title = self.guardrails.auto_title_enabled and node.title_source != "user"
+        title_prefix = (
+            "Start with one first line `TITLE: <4-8 word canonical noun-phrase naming key "
+            "entities/subsystem and concrete topic, no quotes>` before the summary. "
+            if should_piggyback_title
+            else ""
+        )
         facts_suffix = (
             '\nOptionally append one final line `FACTS_JSON: [{"fact": "atomic dated fact", '
             '"entities": ["Entity"], "resolved_date": "YYYY-MM-DD"}]` with up to 8 key atomic facts '
@@ -252,6 +386,7 @@ class StalenessService:
         summarizer_prompt = (
             "[Chatree Summarizer] Produce a concise, high-signal summary of this branch "
             f"('{node.title}', goal: '{node.goal or 'general discussion'}'). "
+            f"{title_prefix}"
             "Preserve exact decisions, constraints, file paths, schemas, and open questions. "
             f"Reply in plain text only (do not call any tools).{facts_suffix}"
         )
@@ -313,10 +448,21 @@ class StalenessService:
         await self.repo.increment_node_usage(
             node.id, resp.tokens_in, resp.tokens_out, resp.cache_read_tokens
         )
-        clean_summary, extracted_facts = parse_summary_and_facts(resp.content)
+        proposed_title, clean_summary, extracted_facts = parse_title_summary_and_facts(resp.content)
+        had_prior_summary = node.summary is not None
+        prev_title_source = node.title_source
         updated = await self.commit_summary_with_materiality(
             node, clean_summary or resp.content, status=new_status
         )
+        if should_piggyback_title and proposed_title:
+            allow_refine = (not had_prior_summary) or (updated.last_change_severity == "material")
+            updated = await self.apply_auto_title(
+                tree,
+                updated,
+                proposed_title,
+                allow_refine=allow_refine,
+                reindex_chunks=(prev_title_source == "placeholder" and updated.last_msg_seq <= 6),
+            )
         if extracted_facts and self.ablations.enable_atomic_facts:
             await self.repo.replace_branch_facts(
                 tree.id, updated.id, extracted_facts, source_msg_seq=updated.last_msg_seq

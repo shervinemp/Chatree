@@ -18,6 +18,7 @@ HookEventName = Literal[
     "branch_promoted",
     "branch_compacted",
     "branch_archived",
+    "node_titled",
     "subagent_promoted",
     "background_started",
     "background_completed",

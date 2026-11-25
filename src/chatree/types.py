@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -11,7 +12,51 @@ ContextMode = Literal["root", "fork", "slice", "clean"]
 ChildContextMode = Literal["fork", "slice", "clean"]
 NodeStatus = Literal["ACTIVE", "COMPLETED", "ARCHIVED"]
 NodeKind = Literal["chat", "subagent"]
+TitleSource = Literal["placeholder", "auto", "user"]
 SessionKind = Literal["human", "agent"]
+
+_PLACEHOLDER_TITLE_RE = re.compile(
+    r"^(?:|new\s+chat|untitled(?:\s+(?:chat|tree|branch|thread))?|chat|main|root|"
+    r"child\s+branch|sub-?agent(?:\s+worker)?|"
+    r"(?:session|branch|thread|chat|conv(?:ersation)?)\s*[#_-]?\s*\d+(?:\s*\([^)]*\))?)$",
+    flags=re.IGNORECASE,
+)
+_TITLE_LEADIN_RE = re.compile(
+    r"^(?:title\s*:\s*|#+\s*|discussion\s+(?:about|of|on)\s+|summary\s+of\s+|"
+    r"help\s+with\s+|working\s+on\s+|branch\s*:\s*)",
+    flags=re.IGNORECASE,
+)
+
+
+def is_placeholder_title(title: str | None) -> bool:
+    """Return True when `title` is an empty or generic non-semantic placeholder."""
+    cleaned = " ".join((title or "").strip().split())
+    return bool(_PLACEHOLDER_TITLE_RE.fullmatch(cleaned))
+
+
+def sanitize_branch_title(raw: str, *, max_words: int = 8, max_chars: int = 64) -> str:
+    """
+    Normalize a model-proposed title into a compact 4-8 word noun-phrase suitable
+    for UI outlines, REFLOG orientation, and `[Path: ...]` RAG headers.
+    """
+    first_line = next((ln.strip() for ln in (raw or "").splitlines() if ln.strip()), "")
+    if not first_line:
+        return ""
+    cleaned = first_line
+    for _ in range(3):
+        prev = cleaned
+        cleaned = cleaned.strip("\"'`*_[]() ")
+        cleaned = _TITLE_LEADIN_RE.sub("", cleaned).strip()
+        if cleaned == prev:
+            break
+    cleaned = cleaned.strip("\"'`*_[]() ")
+    cleaned = re.sub(r"\s+", " ", cleaned).rstrip(".,;:!? ")
+    words = cleaned.split()
+    if len(words) > max_words:
+        cleaned = " ".join(words[:max_words]).rstrip(".,;:!?—- ")
+    if len(cleaned) > max_chars:
+        cleaned = cleaned[:max_chars].rsplit(" ", 1)[0].rstrip(".,;:!?—- ") or cleaned[:max_chars]
+    return cleaned.strip()
 DEFAULT_SESSION_ID = "default"
 ReflogAction = Literal[
     "init",
@@ -128,6 +173,8 @@ class NodeModel(BaseModel):
     path: str
     depth: int
     title: str
+    title_source: TitleSource = "user"
+    brief_title: str = ""
     goal: str
     summary_brief: str
     context_mode: ContextMode

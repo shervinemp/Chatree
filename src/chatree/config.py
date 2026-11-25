@@ -42,6 +42,7 @@ class GuardrailPolicy(BaseModel):
     max_pinned_value_chars: int = Field(default=120, ge=20, le=500)
     preserve_kv_cache_tool_schemas: bool = True
     enable_compound_ask_tool: bool = True
+    auto_title_enabled: bool = True
 
 
 class RagConfig(BaseModel):

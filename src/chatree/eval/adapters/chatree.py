@@ -178,7 +178,7 @@ class ChatreeSystemAdapter:
         elif self.generate_session_summaries and not self.model.startswith("mock/"):
             import inspect
 
-            from chatree.engine.staleness import parse_summary_and_facts
+            from chatree.engine.staleness import parse_title_summary_and_facts
 
             msgs = await self._ct.repo.list_messages(nid)
             sess_date = self._node_dates.get(nid, "")
@@ -193,7 +193,9 @@ class ChatreeSystemAdapter:
                     {
                         "role": "system",
                         "content": (
-                            "Write a crisp 2-3 sentence summary of this conversation session preserving "
+                            "Start with one first line `TITLE: <4-8 word canonical noun-phrase naming key "
+                            "people/entities/subsystem and main topic, no quotes>`.\n"
+                            "Then write a crisp 2-3 sentence summary of this conversation session preserving "
                             "key people, events, dates, plans, preferences, and concrete facts.\n"
                             "Then on a new final line output `FACTS_JSON:` followed by a compact JSON array of "
                             "up to 8 atomic facts: "
@@ -211,9 +213,19 @@ class ChatreeSystemAdapter:
             )
             self._ingest_tokens_in += sresp.tokens_in
             self._ingest_tokens_out += sresp.tokens_out
-            sum_text, extracted_facts = parse_summary_and_facts(sresp.content)
+            proposed_title, sum_text, extracted_facts = parse_title_summary_and_facts(sresp.content)
             sum_text = sum_text.strip() or sresp.content.strip()
-            await self._ct.repo.commit_node_summary(nid, sum_text, status="COMPLETED")
+            updated = await self._ct.repo.commit_node_summary(nid, sum_text, status="COMPLETED")
+            tree_model = await self._ct.repo.get_tree(self._tree.id)
+            if proposed_title and tree_model is not None:
+                updated = await self._ct.staleness.apply_auto_title(
+                    tree_model,
+                    updated,
+                    proposed_title,
+                    allow_refine=False,
+                    reindex_chunks=False,
+                )
+                self._node_titles[nid] = updated.title
             await self._ct.rag.index_node_summary(nid)
             if extracted_facts and self.ablations.enable_atomic_facts:
                 await self._ct.repo.replace_branch_facts(
@@ -227,6 +239,8 @@ class ChatreeSystemAdapter:
                 summary=None, auto_commit=True, return_to_parent=False
             )
             nm = await self._ct.repo.get_node(nid)
+            if nm is not None:
+                self._node_titles[nid] = nm.title
             self._node_summaries[nid] = (nm.summary if nm else "") or session_id
         else:
             # Index lightweight local header + first/last snippet without burning an extra LLM call

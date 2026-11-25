@@ -5,7 +5,7 @@
 [![CI](https://github.com/shervinemp/Chatree/actions/workflows/ci.yml/badge.svg)](https://github.com/shervinemp/Chatree/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 92 Passing](https://img.shields.io/badge/tests-92%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
+[![Tests: 96 Passing](https://img.shields.io/badge/tests-96%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
 [![Paper: LaTeX + Markdown](https://img.shields.io/badge/paper-LaTeX%20%2B%20MD-blue.svg)](paper/chatree_paper.md)
 [![Local-First SQLite](https://img.shields.io/badge/storage-SQLite%20WAL%20%2B%20FTS5-lightgrey.svg)](#architecture)
 [![MCP Compatible](https://img.shields.io/badge/protocol-MCP%20JSON--RPC%202.0-purple.svg)](#cli-mcp-server--optional-demo-ui)
@@ -262,7 +262,7 @@ Runnable examples: [`examples/01_quickstart_sdk.py`](examples/01_quickstart_sdk.
 ## Artifact Evaluation & Reproducibility
 
 ### Step 1: Zero-Key Functional Verification (~45s)
-Runs all **92 unit and integration tests** covering IPC guardrails, copy-on-write forks, shadow memoization, materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, `chat` vs. promotable `subagent` node kinds, strict `HEAD`-only `reflog` + MRU envelope + supervisor worker cancellation cascade, multi-session `TreeSession` visitors with independent `HEAD`/reflog/cues, Track 7 non-monotonic engineering benchmark & Total Lifecycle Cost reporting, cross-family `judge_llm` wiring, GPU runtime fallback, provider-agnostic HTTP/SSE & callable adapters, unified `TreeQueryEngine`, cached NumPy vector index, pluggable `TokenCounter`, Tier-2.5 atomic facts, `PINNED` staleness, portable v3 `.dialogue/` round-trips, CLI/MCP/REST API parity, non-destructive compaction savings guards, negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
+Runs all **96 unit and integration tests** covering IPC guardrails, copy-on-write forks, shadow memoization, materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, `chat` vs. promotable `subagent` node kinds, strict `HEAD`-only `reflog` + MRU envelope + supervisor worker cancellation cascade, multi-session `TreeSession` visitors with independent `HEAD`/reflog/cues, KV-cache-safe Turn-1 & piggybacked-exit semantic auto-titling (`title_source` + frozen `brief_title`), Track 7 non-monotonic engineering benchmark & Total Lifecycle Cost reporting, cross-family `judge_llm` wiring, GPU runtime fallback, provider-agnostic HTTP/SSE & callable adapters, unified `TreeQueryEngine`, cached NumPy vector index, pluggable `TokenCounter`, Tier-2.5 atomic facts, `PINNED` staleness, portable v3 `.dialogue/` round-trips, CLI/MCP/REST API parity, non-destructive compaction savings guards, negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
 
 ```bash
 uv run pytest -v
@@ -372,7 +372,7 @@ Chatree/
 ├── paper/                         # Camera-ready LaTeX paper (chatree_paper.tex), Markdown report, BibTeX & PDF/PNG/SVG figures
 ├── scripts/                       # Provider-agnostic evaluation runner & reproducible figure generator
 ├── results/deepseek_eval/         # Reproducible benchmark tables, LaTeX exports, checkpoints & manifests
-└── tests/                         # 92 automated unit & integration tests (zero API keys required)
+└── tests/                         # 96 automated unit & integration tests (zero API keys required)
 ```
 
 ---

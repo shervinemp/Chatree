@@ -84,6 +84,17 @@ class Database:
             await conn.execute(
                 "ALTER TABLE nodes ADD COLUMN node_kind TEXT NOT NULL DEFAULT 'chat'"
             )
+        if "title_source" not in cols:
+            await conn.execute(
+                "ALTER TABLE nodes ADD COLUMN title_source TEXT NOT NULL DEFAULT 'user'"
+            )
+        if "brief_title" not in cols:
+            await conn.execute(
+                "ALTER TABLE nodes ADD COLUMN brief_title TEXT NOT NULL DEFAULT ''"
+            )
+            await conn.execute(
+                "UPDATE nodes SET brief_title = title WHERE brief_title = ''"
+            )
         if "rollup_summary" not in cols:
             await conn.execute("ALTER TABLE nodes ADD COLUMN rollup_summary TEXT")
         if "summary_minor_version" not in cols:

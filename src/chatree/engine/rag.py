@@ -212,7 +212,12 @@ class TreeRAGService:
         node = await self.repo.get_node(node_id)
         if node is None:
             return 0
-        summary_body = node.summary or node.summary_brief or node.goal
+        summary_body = (
+            node.summary
+            or node.summary_brief
+            or node.goal
+            or (node.title if node.title_source != "placeholder" else "")
+        )
         if not summary_body.strip():
             return 0
         header = await self._build_branch_header(node)

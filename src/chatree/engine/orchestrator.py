@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Callable
 
 from chatree.config import GuardrailPolicy
 from chatree.engine.context import ContextAssembler, _message_to_openai
@@ -52,6 +52,7 @@ class TurnOrchestrator:
         *,
         hooks: HookBus | None = None,
         guardrails: GuardrailPolicy | None = None,
+        on_first_turn_title: Callable[[str, str], Any] | None = None,
     ) -> None:
         self.repo = repo
         self.context = context
@@ -64,6 +65,7 @@ class TurnOrchestrator:
         self.tools = tool_registry
         self.hooks = hooks
         self.guardrails = guardrails or GuardrailPolicy()
+        self.on_first_turn_title = on_first_turn_title
 
     async def run_turn(
         self,
@@ -641,6 +643,17 @@ class TurnOrchestrator:
         await self.rag.index_node_chunks(node.id)
 
         updated_node = await self.repo.get_node(node.id)
+        # Non-blocking Turn-1 auto-title when branch still has a generic placeholder title
+        if (
+            self.on_first_turn_title is not None
+            and self.guardrails.auto_title_enabled
+            and updated_node is not None
+            and updated_node.title_source == "placeholder"
+        ):
+            own_msgs = await self.repo.list_messages(updated_node.id)
+            user_turns = sum(1 for m in own_msgs if m.role == "user")
+            if user_turns == 1:
+                self.on_first_turn_title(tree.id, updated_node.id)
         updated_session = await self.repo.get_session(tree.id, session_id)
         updated_tree = await self.repo.get_tree(tree.id)
         final_head_id = (

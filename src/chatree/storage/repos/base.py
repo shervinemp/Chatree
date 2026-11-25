@@ -112,6 +112,16 @@ def _row_to_node(
         path=row["path"],
         depth=row["depth"],
         title=row["title"],
+        title_source=(
+            row["title_source"]
+            if "title_source" in row.keys() and row["title_source"] in ("placeholder", "auto", "user")
+            else "user"
+        ),
+        brief_title=(
+            row["brief_title"]
+            if "brief_title" in row.keys() and row["brief_title"]
+            else row["title"]
+        ),
         goal=row["goal"],
         summary_brief=row["summary_brief"],
         context_mode=row["context_mode"],

@@ -106,9 +106,47 @@ class MockLLMProvider:
                 latency_ms=max(8, int((time.perf_counter() - t0) * 1000)),
             )
 
+        # 1a-title. Internal Turn-1 semantic branch title prompt
+        if "[Chatree Title]" in last_content:
+            body_m = re.search(r"User:\s*(.*)", last_content, re.DOTALL)
+            sample = body_m.group(1) if body_m else last_content
+            # Extract domain identifiers or salient content words for a deterministic 4-6 word title
+            ident_hits = re.findall(
+                r"\b[A-Z][A-Z0-9_]{2,}\b|\b[A-Za-z]+[0-9][A-Za-z0-9._-]*\b",
+                sample,
+            )
+            stop = {
+                "user", "assistant", "the", "and", "for", "with", "that", "this", "from",
+                "into", "have", "what", "when", "where", "should", "would", "could", "about",
+                "please", "need", "want", "help", "let", "lets", "our", "are", "was", "were",
+                "not", "but", "you", "your", "can", "all", "its", "use", "using", "mock",
+                "demo", "mode", "chatree", "branch", "node", "tree", "reply",
+            }
+            words: list[str] = []
+            for tok in ident_hits:
+                if tok.lower() not in stop and tok not in words:
+                    words.append(tok)
+            if len(words) < 4:
+                for tok in re.findall(r"\b[A-Za-z][A-Za-z0-9_-]{2,}\b", sample):
+                    low = tok.lower()
+                    if low not in stop and all(w.lower() != low for w in words):
+                        words.append(tok.capitalize() if tok.islower() else tok)
+                    if len(words) >= 5:
+                        break
+            title_out = " ".join(words[:5]) or "Technical Branch Investigation"
+            return LLMResponse(
+                content=title_out,
+                model_used=model,
+                tokens_in=tokens_in,
+                tokens_out=estimate_tokens(title_out),
+                cache_read_tokens=cache_read,
+                latency_ms=max(4, int((time.perf_counter() - t0) * 1000)),
+            )
+
         # 1. Internal summarizer / subtree rollup prompt
         if "[Chatree Summarizer]" in last_content:
             history_snippets: list[str] = []
+            combined_hist: list[str] = []
             for m in messages:
                 if (
                     m.get("role") in ("user", "assistant")
@@ -117,11 +155,37 @@ class MockLLMProvider:
                 ):
                     raw_line = " ".join(str(m.get("content", "")).split())
                     raw_line = raw_line.replace("**", "").replace("*", "")
+                    combined_hist.append(raw_line)
                     if len(raw_line) > 150:
                         raw_line = raw_line[:150].rsplit(" ", 1)[0] + "…"
                     history_snippets.append(f"- {m['role']}: {raw_line}")
             bullets = "\n".join(history_snippets[-6:]) or "- No dialogue turns recorded yet."
-            summary = f"Concise branch summary of key points and conclusions:\n{bullets}"
+            title_header = ""
+            if "TITLE:" in last_content:
+                hist_blob = " ".join(combined_hist[-4:])
+                ident_hits = re.findall(
+                    r"\b[A-Z][A-Z0-9_]{2,}\b|\b[A-Za-z]+[0-9][A-Za-z0-9._-]*\b",
+                    hist_blob,
+                )
+                stop_s = {
+                    "the", "and", "for", "with", "that", "this", "from", "into", "have", "what",
+                    "please", "need", "want", "mock", "demo", "mode", "chatree", "branch", "under",
+                    "understood", "ready", "work", "starting", "clean", "slice", "brief", "goal",
+                }
+                twords: list[str] = []
+                for tok in ident_hits:
+                    if tok.lower() not in stop_s and tok not in twords:
+                        twords.append(tok)
+                if len(twords) < 4:
+                    for tok in re.findall(r"\b[A-Za-z][A-Za-z0-9_-]{2,}\b", hist_blob):
+                        low = tok.lower()
+                        if low not in stop_s and all(w.lower() != low for w in twords):
+                            twords.append(tok.capitalize() if tok.islower() else tok)
+                        if len(twords) >= 5:
+                            break
+                if twords:
+                    title_header = f"TITLE: {' '.join(twords[:5])}\n"
+            summary = f"{title_header}Concise branch summary of key points and conclusions:\n{bullets}"
             return LLMResponse(
                 content=summary,
                 model_used=model,

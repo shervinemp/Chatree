@@ -118,13 +118,14 @@ class ContextAssembler:
         ]
 
         inherited = await self.collect_inherited_messages(node)
+        frozen_title = node.brief_title or node.title
         if node.context_mode == "fork":
             if inherited:
                 payload.extend(
                     _strip_dangling_tool_calls([_message_to_openai(m) for m in inherited])
                 )
         elif node.context_mode == "slice":
-            brief_lines = [f"[Branch Slice Brief] Goal: {node.goal or node.title}"]
+            brief_lines = [f"[Branch Slice Brief] Goal: {node.goal or frozen_title}"]
             if node.summary_brief:
                 brief_lines.append(f"Brief: {node.summary_brief}")
             if inherited:
@@ -134,16 +135,16 @@ class ContextAssembler:
                         brief_lines.append(f"- {m.role}: {m.content}")
             payload.append({"role": "user", "content": "\n".join(brief_lines)})
             payload.append(
-                {"role": "assistant", "content": f"Understood. Ready to work on branch '{node.title}'."}
+                {"role": "assistant", "content": f"Understood. Ready to work on branch '{frozen_title}'."}
             )
         elif node.context_mode == "clean":
             if node.goal or node.summary_brief:
-                brief_lines = [f"[Clean Branch Brief] Goal: {node.goal or node.title}"]
+                brief_lines = [f"[Clean Branch Brief] Goal: {node.goal or frozen_title}"]
                 if node.summary_brief:
                     brief_lines.append(f"Brief: {node.summary_brief}")
                 payload.append({"role": "user", "content": "\n".join(brief_lines)})
                 payload.append(
-                    {"role": "assistant", "content": f"Understood. Starting clean branch '{node.title}'."}
+                    {"role": "assistant", "content": f"Understood. Starting clean branch '{frozen_title}'."}
                 )
 
         own_msgs = await self.repo.list_messages(node.id)

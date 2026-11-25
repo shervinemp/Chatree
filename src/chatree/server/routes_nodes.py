@@ -53,18 +53,23 @@ async def update_node(
     if node is None:
         raise HTTPException(status_code=404, detail="Node not found")
     data = body.model_dump(exclude_unset=True)
+    if "title" in data and data["title"] is not None:
+        data["title_source"] = "user"
     if "summary" in data and data["summary"] is not None:
         updated = await c.repo.commit_node_summary(
             node_id, summary=data["summary"], status=data.get("status")
         )
-        await c.rag.index_node_summary(node_id)
-        await c.rag.propagate_rollups_upward(node_id)
         other = {k: v for k, v in data.items() if k not in ("summary", "status")}
         if other:
             updated = await c.repo.update_node(node_id, **other) or updated
+        await c.rag.index_node_summary(node_id)
+        await c.rag.propagate_rollups_upward(node_id)
         return updated
     updated_node = await c.repo.update_node(node_id, **data)
     assert updated_node is not None
+    if "title" in data and data["title"] is not None:
+        await c.rag.index_node_summary(node_id)
+        await c.rag.propagate_rollups_upward(node_id)
     return updated_node
 
 

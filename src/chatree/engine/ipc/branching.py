@@ -164,10 +164,18 @@ class IpcBranchingMixin:
             if node_kind in ("chat", "subagent")
             else ("subagent" if autonomous else "chat")
         )
+        explicit_title = (title or "").strip()
         short_title = (
-            (title or "").strip()
+            explicit_title
             or " ".join(goal.split()[:5]).rstrip(".,?!")
             or ("Sub-Agent Worker" if resolved_kind == "subagent" else "Child Branch")
+        )
+        from chatree.types import TitleSource, is_placeholder_title
+
+        resolved_title_source: TitleSource = (
+            "placeholder"
+            if is_placeholder_title(short_title)
+            else ("user" if explicit_title else "auto")
         )
         safe_fork_seq = await self.repo.get_last_safe_fork_seq(parent.id)
 
@@ -182,6 +190,7 @@ class IpcBranchingMixin:
             model_override=model_override,
             tool_permission=resolved_perm,
             node_kind=resolved_kind,
+            title_source=resolved_title_source,
         )
 
         head_changed = None
