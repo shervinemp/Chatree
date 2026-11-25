@@ -262,7 +262,16 @@ export function App() {
       if (nextHeadId && nextHeadId !== activeNode.id) {
         setEphemeralNotices([])
       }
-      await loadTreeAndHead(activeTree.id, nextHeadId || activeNode.id)
+      const targetId = nextHeadId || activeNode.id
+      const wasPlaceholder = activeNode.title_source === 'placeholder'
+      await loadTreeAndHead(activeTree.id, targetId)
+      if (wasPlaceholder) {
+        const treeIdForRefresh = activeTree.id
+        window.setTimeout(() => {
+          void loadTreeAndHead(treeIdForRefresh, targetId)
+          void api.listTrees().then(setTrees).catch(() => {})
+        }, 900)
+      }
     }
   }
 

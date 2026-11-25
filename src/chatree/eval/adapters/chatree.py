@@ -167,8 +167,8 @@ class ChatreeSystemAdapter:
         nid = self._session_nodes.get(session_id)
         if not nid or nid == self._root_id:
             return
-        await self._ct.rag.index_node_chunks(nid)
         if self.use_provided_summaries and summary and summary.strip():
+            await self._ct.rag.index_node_chunks(nid)
             sum_text = summary.strip()
             await self._tree.node(nid).finish(
                 summary=sum_text, auto_commit=True, return_to_parent=False
@@ -192,7 +192,10 @@ class ChatreeSystemAdapter:
                 self._node_summaries[nid] = updated.summary or session_id
             else:
                 self._node_summaries[nid] = session_id
+            # Index Tier-1 chunks once AFTER exit-titling so chunk headers carry the semantic title
+            await self._ct.rag.index_node_chunks(nid)
         else:
+            await self._ct.rag.index_node_chunks(nid)
             # Index lightweight local header + first/last snippet without burning an extra LLM call
             msgs = await self._ct.repo.list_messages(nid)
             excerpt = " | ".join(m.content[:140] for m in msgs[:2] + msgs[-2:]) if msgs else session_id

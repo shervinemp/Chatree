@@ -2,6 +2,7 @@ export type ContextMode = 'root' | 'fork' | 'slice' | 'clean'
 export type ChildContextMode = 'fork' | 'slice' | 'clean'
 export type NodeStatus = 'ACTIVE' | 'COMPLETED' | 'ARCHIVED'
 export type NodeKind = 'chat' | 'subagent'
+export type TitleSource = 'placeholder' | 'auto' | 'user'
 export type SessionKind = 'human' | 'agent'
 export type ToolPermission = 'read_only' | 'read_write'
 export type LLMBackendKind = 'auto' | 'litellm' | 'openai_compat' | 'mock'
@@ -85,6 +86,8 @@ export interface NodeModel {
   path: string
   depth: number
   title: string
+  title_source?: TitleSource
+  brief_title?: string
   goal: string
   summary_brief: string
   context_mode: ContextMode

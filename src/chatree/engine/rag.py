@@ -114,15 +114,16 @@ def _chunk_messages(
 
 class TreeRAGService:
     """
-    3-Tier Hybrid Tree RAG:
+    4-Tier Hybrid Tree RAG:
       Tier 1 (`chunk`): Sliding-window blocks (~300-500 tokens) with turn seq ranges.
       Tier 2 (`summary`): Lazy node-level summary + title/goal embedding.
+      Tier 2.5 (`fact`): Piggybacked provenance-linked branch-scoped dated atomic facts.
       Tier 3 (`rollup`): Subtree rollup on parents folding in descendant summaries so
                          high-level queries locate the right branch even 3+ levels deep.
 
-    Retrieval fuses SQLite FTS5 BM25 + vector cosine similarity (`sqlite-vec` or exact
-    float32 fallback) via weighted Reciprocal Rank Fusion (RRF) with tree scope, status,
-    granularity, and recency filtering.
+    Retrieval fuses SQLite FTS5 BM25 + vector cosine similarity (`sqlite-vec` or cached
+    NumPy float32 matrix scan) via weighted Reciprocal Rank Fusion (RRF) with tree scope,
+    status (quarantining `ARCHIVED` dead-ends by default), granularity, and recency filtering.
     """
 
     def __init__(

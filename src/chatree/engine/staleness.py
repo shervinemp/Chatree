@@ -238,6 +238,7 @@ class StalenessService:
         new_summary: str,
         *,
         status: NodeStatus | None = None,
+        reindex_rag: bool = True,
     ) -> NodeModel:
         severity, delta = await self.classify_change_materiality(node.summary, new_summary)
         updated = await self.repo.commit_node_summary(
@@ -247,7 +248,7 @@ class StalenessService:
             severity=severity,
             change_delta=delta,
         )
-        if self.rag is not None:
+        if reindex_rag and self.rag is not None:
             await self.rag.index_node_summary(updated.id)
             await self.rag.propagate_rollups_upward(updated.id)
         return updated
@@ -460,18 +461,31 @@ class StalenessService:
         proposed_title, clean_summary, extracted_facts = parse_title_summary_and_facts(resp.content)
         had_prior_summary = node.summary is not None
         prev_title_source = node.title_source
-        updated = await self.commit_summary_with_materiality(
-            node, clean_summary or resp.content, status=new_status
+        clean_proposed = sanitize_branch_title(proposed_title or "") if should_piggyback_title else ""
+        might_retitle = bool(
+            should_piggyback_title
+            and clean_proposed
+            and not is_placeholder_title(clean_proposed)
+            and clean_proposed != node.title
         )
-        if should_piggyback_title and proposed_title:
+        updated = await self.commit_summary_with_materiality(
+            node, clean_summary or resp.content, status=new_status, reindex_rag=not might_retitle
+        )
+        retitled = False
+        if might_retitle:
             allow_refine = (not had_prior_summary) or (updated.last_change_severity == "material")
+            before_title = updated.title
             updated = await self.apply_auto_title(
                 tree,
                 updated,
-                proposed_title,
+                clean_proposed,
                 allow_refine=allow_refine,
                 reindex_chunks=(prev_title_source == "placeholder" and updated.last_msg_seq <= 6),
             )
+            retitled = updated.title != before_title
+        if might_retitle and not retitled and self.rag is not None:
+            await self.rag.index_node_summary(updated.id)
+            await self.rag.propagate_rollups_upward(updated.id)
         if extracted_facts and self.ablations.enable_atomic_facts:
             await self.repo.replace_branch_facts(
                 tree.id, updated.id, extracted_facts, source_msg_seq=updated.last_msg_seq
