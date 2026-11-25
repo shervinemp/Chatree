@@ -359,6 +359,8 @@ class StalenessService:
         trace_ctx: TraceContext | None = None,
         force: bool = False,
         new_status: NodeStatus | None = None,
+        *,
+        session_date: str = "",
     ) -> tuple[NodeModel, bool, int, int, int]:
         """Return `(node, was_regenerated, tokens_in, tokens_out, latency_ms)`."""
         if not force and node.summary is not None and not node.is_dirty:
@@ -376,10 +378,17 @@ class StalenessService:
             if should_piggyback_title
             else ""
         )
+        date_anchor = (
+            f" Session date: {session_date} — CRITICAL: resolve relative time words "
+            "('yesterday', 'last Saturday', 'two weeks ago', 'next month') into explicit "
+            "absolute calendar dates using this Session date!"
+            if session_date
+            else " (resolving any relative dates to absolute calendar dates when session dates are present)."
+        )
         facts_suffix = (
             '\nOptionally append one final line `FACTS_JSON: [{"fact": "atomic dated fact", '
-            '"entities": ["Entity"], "resolved_date": "YYYY-MM-DD"}]` with up to 8 key atomic facts '
-            "(resolving any relative dates to absolute calendar dates when session dates are present)."
+            '"entities": ["Entity"], "resolved_date": "YYYY-MM-DD"}]` with up to 8 key atomic facts'
+            f"{date_anchor}"
             if self.ablations.enable_atomic_facts
             else ""
         )

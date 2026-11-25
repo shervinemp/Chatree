@@ -348,7 +348,7 @@ Chatree/
 │   ├── engine/
 │   │   ├── orchestrator.py        # TurnOrchestrator (auto-compact, pre-turn hints, frozen envelope, grace synthesis)
 │   │   ├── context.py             # Static prefix builder + ephemeral <dialogue_tree_context>
-│   │   ├── ipc/                   # Modular IPCRouter (branching, shadow turns, lifecycle compact/archive/pin, router)
+│   │   ├── ipc/                   # Modular IPCRouter (branching, handoffs, navigation, shadow, lifecycle, router)
 │   │   ├── query.py               # Unified TreeQueryEngine (Hop-1 shadow + Tier-2.5 facts + Hop-2 + synthesis)
 │   │   ├── rag.py                 # 4-tier hybrid Tree RAG (chunks, summaries, atomic facts, rollups)
 │   │   ├── staleness.py           # Materiality gating, piggybacked FACTS_JSON, 5-section compactor
@@ -361,7 +361,7 @@ Chatree/
 │   │   ├── repository.py          # Thin SQLiteRepository facade composing storage/repos/* mixins
 │   │   ├── repos/                 # Modular storage mixins (trees, ipc_deps, artifacts_mailbox, search_vectors, memory_facts)
 │   │   └── portable.py            # Portable git-greppable .dialogue/ v3 export/import (incl. facts & invariants)
-│   ├── sdk/client.py              # High-level Chatree / DialogueTree / NodeHandle async SDK
+│   ├── sdk/                       # Modular async SDK (client.py, tree.py, session.py, node.py)
 │   ├── eval/
 │   │   ├── adapters/              # Modular adapters (base, chatree, baselines, sota Mem0/RLM/Letta/Graphiti)
 │   │   └── *.py                   # Tracks 1-7 runners (incl. Track 7 non-monotonic bench), LoCoMo/LongMemEval loaders, stats

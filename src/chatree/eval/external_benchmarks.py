@@ -15,7 +15,6 @@ from urllib.request import urlretrieve
 from pydantic import BaseModel, Field
 
 from chatree.eval.adapters import MemorySystemAdapter
-from chatree.eval.runner import _percentile
 from chatree.eval.scoring import CostModel
 from chatree.eval.stats import (
     BootstrapCI,
@@ -26,6 +25,7 @@ from chatree.eval.stats import (
     format_latex_table,
     mcnemar_test,
     paired_bootstrap_test,
+    percentile,
     token_f1,
 )
 from chatree.protocols import LLMProvider
@@ -839,6 +839,84 @@ class ExternalBenchmarkRunner:
                 continue
         return cache
 
+    def _aggregate_system_result(
+        self,
+        *,
+        system_name: str,
+        benchmark_name: str,
+        item_results: list[ExternalQAResult],
+    ) -> SystemExternalResult:
+        acc_vals = [1.0 if r.correct else 0.0 for r in item_results]
+        f1_vals = [r.f1 for r in item_results]
+        b1_vals = [r.bleu1 for r in item_results]
+        lat_vals = [r.latency_ms for r in item_results]
+
+        cat_buckets: dict[str, list[float]] = {}
+        for r in item_results:
+            cat_buckets.setdefault(r.category, []).append(1.0 if r.correct else 0.0)
+        cat_acc = {k: round(sum(v) / len(v), 4) for k, v in cat_buckets.items() if v}
+
+        t_in = sum(r.tokens_in for r in item_results)
+        t_out = sum(r.tokens_out for r in item_results)
+        t_cache = sum(r.cache_read_tokens for r in item_results)
+        peak_tok = max((r.peak_context_tokens for r in item_results), default=0)
+        ing_t_in = sum(r.ingest_tokens_in for r in item_results)
+        ing_t_out = sum(r.ingest_tokens_out for r in item_results)
+        ing_ms_tot = round(sum(r.ingest_latency_ms for r in item_results), 2)
+        ing_usd = self.cost_model.estimate_usd(
+            self.model, tokens_in=ing_t_in, tokens_out=ing_t_out, cache_read_tokens=0
+        )
+        return SystemExternalResult(
+            system_name=system_name,
+            benchmark=benchmark_name,
+            n_questions=len(item_results),
+            accuracy=round(sum(acc_vals) / len(acc_vals), 4) if acc_vals else 0.0,
+            accuracy_ci=bootstrap_ci(acc_vals),
+            mean_f1=round(sum(f1_vals) / len(f1_vals), 4) if f1_vals else 0.0,
+            f1_ci=bootstrap_ci(f1_vals),
+            mean_bleu1=round(sum(b1_vals) / len(b1_vals), 4) if b1_vals else 0.0,
+            category_accuracy=cat_acc,
+            total_tokens_in=t_in,
+            total_tokens_out=t_out,
+            cache_hit_ratio=round(t_cache / t_in, 4) if t_in > 0 else 0.0,
+            peak_context_tokens=peak_tok,
+            estimated_cost_usd=self.cost_model.estimate_usd(
+                self.model, tokens_in=t_in, tokens_out=t_out, cache_read_tokens=t_cache
+            ),
+            ingest_tokens_in=ing_t_in,
+            ingest_tokens_out=ing_t_out,
+            ingest_cost_usd=ing_usd,
+            ingest_latency_ms=ing_ms_tot,
+            latency_p50_ms=percentile(lat_vals, 0.50),
+            latency_p95_ms=percentile(lat_vals, 0.95),
+            item_results=item_results,
+        )
+
+    @staticmethod
+    def _attach_paired_significance(
+        system_results: list[SystemExternalResult], ref_name: str
+    ) -> None:
+        """Compute exact paired McNemar & paired bootstrap F1 strictly over shared `(conv, qid)` pairs."""
+        ref_res = next((r for r in system_results if r.system_name == ref_name), None)
+        if ref_res is None or not ref_res.item_results:
+            return
+        ref_by_id = {(q.conversation_id, q.question_id): q for q in ref_res.item_results}
+        for sys_res in system_results:
+            if sys_res.system_name == ref_name:
+                continue
+            paired = [
+                (ref_by_id[(q.conversation_id, q.question_id)], q)
+                for q in sys_res.item_results
+                if (q.conversation_id, q.question_id) in ref_by_id
+            ]
+            if paired:
+                sys_res.mcnemar_vs_ref = mcnemar_test(
+                    [a.correct for a, _ in paired], [b.correct for _, b in paired]
+                )
+                sys_res.paired_f1_vs_ref = paired_bootstrap_test(
+                    [a.f1 for a, _ in paired], [b.f1 for _, b in paired]
+                )
+
     async def evaluate(
         self,
         conversations: Sequence[ExternalConversation],
@@ -961,67 +1039,15 @@ class ExternalBenchmarkRunner:
                 conv_batches = [await _eval_conversation(c) for c in conversations]
 
             item_results: list[ExternalQAResult] = [r for batch in conv_batches for r in batch]
-
-            acc_vals = [1.0 if r.correct else 0.0 for r in item_results]
-            f1_vals = [r.f1 for r in item_results]
-            b1_vals = [r.bleu1 for r in item_results]
-            lat_vals = [r.latency_ms for r in item_results]
-
-            cat_buckets: dict[str, list[float]] = {}
-            for r in item_results:
-                cat_buckets.setdefault(r.category, []).append(1.0 if r.correct else 0.0)
-            cat_acc = {k: round(sum(v) / len(v), 4) for k, v in cat_buckets.items() if v}
-
-            t_in = sum(r.tokens_in for r in item_results)
-            t_out = sum(r.tokens_out for r in item_results)
-            t_cache = sum(r.cache_read_tokens for r in item_results)
-            peak_tok = max((r.peak_context_tokens for r in item_results), default=0)
-            ing_t_in = sum(r.ingest_tokens_in for r in item_results)
-            ing_t_out = sum(r.ingest_tokens_out for r in item_results)
-            ing_ms_tot = round(sum(r.ingest_latency_ms for r in item_results), 2)
-            ing_usd = self.cost_model.estimate_usd(
-                self.model, tokens_in=ing_t_in, tokens_out=ing_t_out, cache_read_tokens=0
-            )
-
             system_results.append(
-                SystemExternalResult(
+                self._aggregate_system_result(
                     system_name=adapter.name,
-                    benchmark=benchmark_name,
-                    n_questions=len(item_results),
-                    accuracy=round(sum(acc_vals) / len(acc_vals), 4) if acc_vals else 0.0,
-                    accuracy_ci=bootstrap_ci(acc_vals),
-                    mean_f1=round(sum(f1_vals) / len(f1_vals), 4) if f1_vals else 0.0,
-                    f1_ci=bootstrap_ci(f1_vals),
-                    mean_bleu1=round(sum(b1_vals) / len(b1_vals), 4) if b1_vals else 0.0,
-                    category_accuracy=cat_acc,
-                    total_tokens_in=t_in,
-                    total_tokens_out=t_out,
-                    cache_hit_ratio=round(t_cache / t_in, 4) if t_in > 0 else 0.0,
-                    peak_context_tokens=peak_tok,
-                    estimated_cost_usd=self.cost_model.estimate_usd(
-                        self.model, tokens_in=t_in, tokens_out=t_out, cache_read_tokens=t_cache
-                    ),
-                    ingest_tokens_in=ing_t_in,
-                    ingest_tokens_out=ing_t_out,
-                    ingest_cost_usd=ing_usd,
-                    ingest_latency_ms=ing_ms_tot,
-                    latency_p50_ms=_percentile(lat_vals, 0.50),
-                    latency_p95_ms=_percentile(lat_vals, 0.95),
+                    benchmark_name=benchmark_name,
                     item_results=item_results,
                 )
             )
 
-        # Compute paired statistical significance (McNemar + Paired Bootstrap F1) vs reference system
-        ref_res = next((r for r in system_results if r.system_name == ref_name), None)
-        if ref_res is not None and ref_res.item_results:
-            ref_correct = [q.correct for q in ref_res.item_results]
-            ref_f1 = [q.f1 for q in ref_res.item_results]
-            for sys_res in system_results:
-                if sys_res.system_name == ref_name or len(sys_res.item_results) != len(ref_correct):
-                    continue
-                sys_res.mcnemar_vs_ref = mcnemar_test(ref_correct, [q.correct for q in sys_res.item_results])
-                sys_res.paired_f1_vs_ref = paired_bootstrap_test(ref_f1, [q.f1 for q in sys_res.item_results])
-
+        self._attach_paired_significance(system_results, ref_name)
         return ExternalBenchmarkReport(
             benchmark=benchmark_name,
             model=self.model,
@@ -1106,72 +1132,15 @@ class ExternalBenchmarkRunner:
                             json.dumps({"system_name": sys_name, "result": qres.model_dump()}) + "\n"
                         )
 
-            acc_vals = [1.0 if r.correct else 0.0 for r in item_results]
-            f1_vals = [r.f1 for r in item_results]
-            b1_vals = [r.bleu1 for r in item_results]
-            lat_vals = [r.latency_ms for r in item_results]
-            cat_buckets: dict[str, list[float]] = {}
-            for r in item_results:
-                cat_buckets.setdefault(r.category, []).append(1.0 if r.correct else 0.0)
-            cat_acc = {k: round(sum(v) / len(v), 4) for k, v in cat_buckets.items() if v}
-
-            t_in = sum(r.tokens_in for r in item_results)
-            t_out = sum(r.tokens_out for r in item_results)
-            t_cache = sum(r.cache_read_tokens for r in item_results)
-            peak_tok = max((r.peak_context_tokens for r in item_results), default=0)
-            ing_t_in = sum(r.ingest_tokens_in for r in item_results)
-            ing_t_out = sum(r.ingest_tokens_out for r in item_results)
-            ing_ms_tot = round(sum(r.ingest_latency_ms for r in item_results), 2)
-            ing_usd = self.cost_model.estimate_usd(
-                self.model, tokens_in=ing_t_in, tokens_out=ing_t_out, cache_read_tokens=0
-            )
             system_results.append(
-                SystemExternalResult(
+                self._aggregate_system_result(
                     system_name=sys_name,
-                    benchmark=benchmark_name,
-                    n_questions=len(item_results),
-                    accuracy=round(sum(acc_vals) / len(acc_vals), 4) if acc_vals else 0.0,
-                    accuracy_ci=bootstrap_ci(acc_vals),
-                    mean_f1=round(sum(f1_vals) / len(f1_vals), 4) if f1_vals else 0.0,
-                    f1_ci=bootstrap_ci(f1_vals),
-                    mean_bleu1=round(sum(b1_vals) / len(b1_vals), 4) if b1_vals else 0.0,
-                    category_accuracy=cat_acc,
-                    total_tokens_in=t_in,
-                    total_tokens_out=t_out,
-                    cache_hit_ratio=round(t_cache / t_in, 4) if t_in > 0 else 0.0,
-                    peak_context_tokens=peak_tok,
-                    estimated_cost_usd=self.cost_model.estimate_usd(
-                        self.model, tokens_in=t_in, tokens_out=t_out, cache_read_tokens=t_cache
-                    ),
-                    ingest_tokens_in=ing_t_in,
-                    ingest_tokens_out=ing_t_out,
-                    ingest_cost_usd=ing_usd,
-                    ingest_latency_ms=ing_ms_tot,
-                    latency_p50_ms=_percentile(lat_vals, 0.50),
-                    latency_p95_ms=_percentile(lat_vals, 0.95),
+                    benchmark_name=benchmark_name,
                     item_results=item_results,
                 )
             )
 
-        ref_res = next((r for r in system_results if r.system_name == ref_name), None)
-        if ref_res is not None and ref_res.item_results:
-            ref_by_id = {(q.conversation_id, q.question_id): q for q in ref_res.item_results}
-            for sys_res in system_results:
-                if sys_res.system_name == ref_name:
-                    continue
-                paired = [
-                    (ref_by_id[(q.conversation_id, q.question_id)], q)
-                    for q in sys_res.item_results
-                    if (q.conversation_id, q.question_id) in ref_by_id
-                ]
-                if paired:
-                    sys_res.mcnemar_vs_ref = mcnemar_test(
-                        [a.correct for a, _ in paired], [b.correct for _, b in paired]
-                    )
-                    sys_res.paired_f1_vs_ref = paired_bootstrap_test(
-                        [a.f1 for a, _ in paired], [b.f1 for _, b in paired]
-                    )
-
+        self._attach_paired_significance(system_results, ref_name)
         return ExternalBenchmarkReport(
             benchmark=benchmark_name,
             model=self.model,

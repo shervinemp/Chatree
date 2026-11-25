@@ -1,6 +1,9 @@
 from typing import Any
 
-from chatree.sdk.client import Chatree, DialogueTree, NodeHandle
+from chatree.sdk.client import Chatree
+from chatree.sdk.node import NodeHandle
+from chatree.sdk.session import TreeSession
+from chatree.sdk.tree import DialogueTree
 
 _EVAL_EXPORTS = {
     "BaselineMode",
@@ -31,5 +34,6 @@ __all__ = [
     "MultiTangentScenario",
     "NodeHandle",
     "ScenarioStep",
+    "TreeSession",
     "default_multi_tangent_scenario",
 ]

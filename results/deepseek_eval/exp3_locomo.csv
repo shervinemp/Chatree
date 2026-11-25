@@ -1,7 +1,0 @@
-benchmark,system,n_questions,accuracy,acc_ci_low,acc_ci_high,mean_f1,mean_bleu1,peak_context_tokens,total_tokens_in,total_tokens_out,cache_hit_ratio,estimated_cost_usd,ingest_tokens_in,ingest_tokens_out,ingest_cost_usd,ingest_latency_ms,latency_p50_ms,latency_p95_ms,mcnemar_p_vs_ref
-locomo,chatree_two_tier,54,0.7593,0.6481,0.8704,0.1226,0.0751,318,1138999,15551,0.817,0.09095,41961,3422,0.013186,77548.94,4893.62,7976.78,
-locomo,flat_hybrid_rag,54,0.5185,0.3889,0.6481,0.1491,0.1011,696,33566,1920,0.0305,0.009947,0,0,0.0,0.0,2696.95,3353.74,0.0164
-locomo,full_context_linear,54,0.6852,0.5556,0.7963,0.1603,0.0966,22955,1132006,3046,0.9556,0.045646,0,0,0.0,0.0,1271.15,1738.78,0.48068
-locomo,tree_summary_only,54,0.5556,0.4259,0.6852,0.1363,0.0964,1575,62628,2073,0.186,0.015471,0,0,0.0,3192.53,1478.84,1792.78,0.00739
-locomo,mem0_official,54,0.6852,0.5556,0.7963,0.1632,0.104,816,36495,3481,0.0035,0.011648,48753,18351,0.021358,132302.84,938.78,1725.84,0.4545
-locomo,rlm_official,54,0.7407,0.6111,0.8519,0.1361,0.0804,16309,1647789,69404,0.0,0.490531,0,0,0.0,0.71,9881.4,25347.81,1.0

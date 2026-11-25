@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from chatree.config import AblationConfig, ChatreeConfig
 from chatree.eval.scenarios import MultiTangentScenario, TaskFamily
 from chatree.eval.scoring import CostModel, ExactFactScorer, LLMJudgeScorer, QueryEvalResult
+from chatree.eval.stats import percentile as _percentile
 from chatree.protocols import Embedder, LLMProvider, Reranker
 from chatree.providers.litellm import LiteLLMProvider
 from chatree.providers.mock import MockLLMProvider
@@ -44,17 +45,6 @@ ALL_BASELINE_MODES: list[BaselineMode] = [
     "tree_ipc_no_staleness",
     "tree_ipc_full",
 ]
-
-
-def _percentile(values: list[float], pct: float) -> float:
-    if not values:
-        return 0.0
-    ordered = sorted(values)
-    idx = (len(ordered) - 1) * pct
-    lo = int(idx)
-    hi = min(lo + 1, len(ordered) - 1)
-    frac = idx - lo
-    return round(ordered[lo] * (1.0 - frac) + ordered[hi] * frac, 2)
 
 
 class ModeBenchmarkResult(BaseModel):

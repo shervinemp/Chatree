@@ -95,6 +95,18 @@ class McNemarResult(BaseModel):
     significant_05: bool
 
 
+def percentile(values: Sequence[float], pct: float) -> float:
+    """Linear-interpolated percentile helper shared across evaluation runners."""
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    idx = (len(ordered) - 1) * pct
+    lo = int(idx)
+    hi = min(lo + 1, len(ordered) - 1)
+    frac = idx - lo
+    return round(ordered[lo] * (1.0 - frac) + ordered[hi] * frac, 2)
+
+
 def bootstrap_ci(
     values: Sequence[float],
     *,

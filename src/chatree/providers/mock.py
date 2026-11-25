@@ -74,7 +74,42 @@ class MockLLMProvider:
             last_content,
             flags=re.DOTALL,
         ).strip()
+        # Short-circuit dispatch for specialized internal / structured prompts
+        if (res := self._handle_compactor(model, messages, last_content, tokens_in, cache_read, t0)) is not None:
+            return res
+        if (res := self._handle_title(model, last_content, tokens_in, cache_read, t0)) is not None:
+            return res
+        if (res := self._handle_summarizer(model, messages, last_content, tokens_in, cache_read, t0)) is not None:
+            return res
+        if (res := self._handle_eval_judge(model, last_content, tokens_in, cache_read)) is not None:
+            return res
+        if (res := self._handle_shadow_query(model, messages, tools, last_content, tokens_in, cache_read)) is not None:
+            return res
+        if (res := self._handle_context_synthesis(model, messages, last_content, tokens_in, cache_read)) is not None:
+            return res
+        if (res := self._handle_tool_result_synthesis(model, messages, last_role, tokens_in, cache_read)) is not None:
+            return res
 
+        return self._handle_interactive_turn(
+            model=model,
+            messages=messages,
+            tools=tools,
+            ctx_block=ctx_block,
+            user_text=user_text,
+            tokens_in=tokens_in,
+            cache_read=cache_read,
+            t0=t0,
+        )
+
+    def _handle_compactor(
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        last_content: str,
+        tokens_in: int,
+        cache_read: int,
+        t0: float,
+    ) -> LLMResponse | None:
         # 1a. Internal Structured Compactor prompt (non-destructive continuation handoff)
         if "[Chatree Compactor]" in last_content:
             anchors: list[str] = []
@@ -105,7 +140,16 @@ class MockLLMProvider:
                 cache_read_tokens=cache_read,
                 latency_ms=max(8, int((time.perf_counter() - t0) * 1000)),
             )
+        return None
 
+    def _handle_title(
+        self,
+        model: str,
+        last_content: str,
+        tokens_in: int,
+        cache_read: int,
+        t0: float,
+    ) -> LLMResponse | None:
         # 1a-title. Internal Turn-1 semantic branch title prompt
         if "[Chatree Title]" in last_content:
             body_m = re.search(r"User:\s*(.*)", last_content, re.DOTALL)
@@ -142,7 +186,17 @@ class MockLLMProvider:
                 cache_read_tokens=cache_read,
                 latency_ms=max(4, int((time.perf_counter() - t0) * 1000)),
             )
+        return None
 
+    def _handle_summarizer(
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        last_content: str,
+        tokens_in: int,
+        cache_read: int,
+        t0: float,
+    ) -> LLMResponse | None:
         # 1. Internal summarizer / subtree rollup prompt
         if "[Chatree Summarizer]" in last_content:
             history_snippets: list[str] = []
@@ -194,7 +248,15 @@ class MockLLMProvider:
                 cache_read_tokens=cache_read,
                 latency_ms=max(8, int((time.perf_counter() - t0) * 1000)),
             )
+        return None
 
+    def _handle_eval_judge(
+        self,
+        model: str,
+        last_content: str,
+        tokens_in: int,
+        cache_read: int,
+    ) -> LLMResponse | None:
         # 1b. Internal Eval Judge prompt (offline deterministic judge fallback)
         if "[Chatree Eval Judge]" in last_content:
             exp_m = re.search(r"EXPECTED_FACTS:\s*(.*)", last_content)
@@ -222,7 +284,17 @@ class MockLLMProvider:
                 cache_read_tokens=cache_read,
                 latency_ms=8,
             )
+        return None
 
+    def _handle_shadow_query(
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        last_content: str,
+        tokens_in: int,
+        cache_read: int,
+    ) -> LLMResponse | None:
         # 2. Read-only shadow turn
         if "[Shadow Query |" in last_content or "[IPC Shadow Query" in last_content:
             q_match = re.search(r"Query:\s*(.*)", last_content, re.DOTALL)
@@ -330,7 +402,16 @@ class MockLLMProvider:
                 cache_read_tokens=cache_read,
                 latency_ms=12,
             )
+        return None
 
+    def _handle_context_synthesis(
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        last_content: str,
+        tokens_in: int,
+        cache_read: int,
+    ) -> LLMResponse | None:
         # 2b. Flat-RAG / Sliding-Window / Multi-Branch Evidence synthesis from provided prompt
         if "[Branch Evidence]" in last_content or "[Verified Shadow Evidence]" in last_content:
             q_match = re.search(r"Question:\s*(.+)", last_content, re.DOTALL)
@@ -403,7 +484,16 @@ class MockLLMProvider:
                 cache_read_tokens=cache_read,
                 latency_ms=10,
             )
+        return None
 
+    def _handle_tool_result_synthesis(
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        last_role: str,
+        tokens_in: int,
+        cache_read: int,
+    ) -> LLMResponse | None:
         # 3. Tool-result synthesis (supports one or multiple parallel tool results!)
         if last_role == "tool":
             recent_tool_msgs: list[dict[str, Any]] = []
@@ -517,7 +607,20 @@ class MockLLMProvider:
                 cache_read_tokens=cache_read,
                 latency_ms=10,
             )
+        return None
 
+    def _handle_interactive_turn(
+        self,
+        *,
+        model: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        ctx_block: str,
+        user_text: str,
+        tokens_in: int,
+        cache_read: int,
+        t0: float,
+    ) -> LLMResponse:
         # 4. Interactive user turn -> emit tool call(s) when requested
         low = user_text.lower()
         available_names = {
@@ -877,6 +980,7 @@ class MockLLMProvider:
             cache_read_tokens=cache_read,
             latency_ms=max(10, int((time.perf_counter() - t0) * 1000)),
         )
+
 
     async def stream_complete(
         self,

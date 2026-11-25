@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from typing import Any
 
 from chatree.config import AblationConfig, ChatreeConfig
 from chatree.eval.adapters.base import AdapterAnswer
@@ -175,73 +174,24 @@ class ChatreeSystemAdapter:
                 summary=sum_text, auto_commit=True, return_to_parent=False
             )
             self._node_summaries[nid] = sum_text
-        elif self.generate_session_summaries and not self.model.startswith("mock/"):
-            import inspect
-
-            from chatree.engine.staleness import parse_title_summary_and_facts
-
-            msgs = await self._ct.repo.list_messages(nid)
-            sess_date = self._node_dates.get(nid, "")
-            date_ctx = f"Session date: {sess_date}\n" if sess_date else ""
-            transcript = "\n".join(f"{m.role}: {m.content}" for m in msgs)[:7000]
-            sum_kwargs: dict[str, Any] = {}
-            if "max_tokens" in inspect.signature(self._ct.llm.complete).parameters:
-                sum_kwargs["max_tokens"] = 900
-            sresp = await self._ct.llm.complete(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Start with one first line `TITLE: <4-8 word canonical noun-phrase naming key "
-                            "people/entities/subsystem and main topic, no quotes>`.\n"
-                            "Then write a crisp 2-3 sentence summary of this conversation session preserving "
-                            "key people, events, dates, plans, preferences, and concrete facts.\n"
-                            "Then on a new final line output `FACTS_JSON:` followed by a compact JSON array of "
-                            "up to 8 atomic facts: "
-                            '[{"fact": "short 1-sentence fact naming exact speaker/person and resolved absolute date if applicable", '
-                            '"entities": ["PersonOrTopic"], "resolved_date": "YYYY-MM-DD or empty"}]. '
-                            "CRITICAL: resolve relative time words ('yesterday', 'last Saturday', 'two weeks ago', "
-                            "'next month') into explicit absolute calendar dates using the Session date!"
-                        ),
-                    },
-                    {"role": "user", "content": f"{date_ctx}{transcript}"},
-                ],
-                tools=None,
-                temperature=0.0,
-                **sum_kwargs,
-            )
-            self._ingest_tokens_in += sresp.tokens_in
-            self._ingest_tokens_out += sresp.tokens_out
-            proposed_title, sum_text, extracted_facts = parse_title_summary_and_facts(sresp.content)
-            sum_text = sum_text.strip() or sresp.content.strip()
-            updated = await self._ct.repo.commit_node_summary(nid, sum_text, status="COMPLETED")
-            tree_model = await self._ct.repo.get_tree(self._tree.id)
-            if proposed_title and tree_model is not None:
-                updated = await self._ct.staleness.apply_auto_title(
-                    tree_model,
-                    updated,
-                    proposed_title,
-                    allow_refine=False,
-                    reindex_chunks=False,
-                )
-                self._node_titles[nid] = updated.title
-            await self._ct.rag.index_node_summary(nid)
-            if extracted_facts and self.ablations.enable_atomic_facts:
-                await self._ct.repo.replace_branch_facts(
-                    self._tree.id, nid, extracted_facts, source_msg_seq=len(msgs) or None
-                )
-                await self._ct.rag.index_node_facts(nid)
-            await self._ct.rag.propagate_rollups_upward(nid)
-            self._node_summaries[nid] = sum_text
         elif self.generate_session_summaries:
-            await self._tree.node(nid).finish(
-                summary=None, auto_commit=True, return_to_parent=False
-            )
-            nm = await self._ct.repo.get_node(nid)
-            if nm is not None:
-                self._node_titles[nid] = nm.title
-            self._node_summaries[nid] = (nm.summary if nm else "") or session_id
+            tree_model = await self._ct.repo.get_tree(self._tree.id)
+            node_model = await self._ct.repo.get_node(nid)
+            if tree_model is not None and node_model is not None:
+                sess_date = self._node_dates.get(nid, "")
+                updated, _regen, tin, tout, _lat = await self._ct.staleness.ensure_fresh_summary(
+                    tree_model,
+                    node_model,
+                    force=True,
+                    new_status="COMPLETED",
+                    session_date=sess_date,
+                )
+                self._ingest_tokens_in += tin
+                self._ingest_tokens_out += tout
+                self._node_titles[nid] = updated.title
+                self._node_summaries[nid] = updated.summary or session_id
+            else:
+                self._node_summaries[nid] = session_id
         else:
             # Index lightweight local header + first/last snippet without burning an extra LLM call
             msgs = await self._ct.repo.list_messages(nid)

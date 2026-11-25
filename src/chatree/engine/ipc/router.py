@@ -10,7 +10,9 @@ from chatree.config import AblationConfig, GuardrailPolicy
 from chatree.engine.context import ContextAssembler
 from chatree.engine.guardrails import TraceContext
 from chatree.engine.ipc.branching import IpcBranchingMixin
+from chatree.engine.ipc.handoffs import IpcHandoffsMixin
 from chatree.engine.ipc.lifecycle import IpcLifecycleMixin
+from chatree.engine.ipc.navigation import IpcNavigationMixin
 from chatree.engine.ipc.shadow import IpcShadowMixin
 from chatree.engine.ipc.types import IpcExecutionResult
 from chatree.engine.rag import TreeRAGService
@@ -43,7 +45,13 @@ from chatree.types import (
 )
 
 
-class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
+class IPCRouter(
+    IpcBranchingMixin,
+    IpcHandoffsMixin,
+    IpcNavigationMixin,
+    IpcShadowMixin,
+    IpcLifecycleMixin,
+):
     """
     Executes the 5 core tree IPC primitives + custom domain tools with:
       - Deterministic cycle, hop-depth, and shared token-budget guardrails
