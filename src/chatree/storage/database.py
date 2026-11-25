@@ -4,8 +4,8 @@ import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
-import aiosqlite
 
+import aiosqlite
 
 SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 
@@ -79,6 +79,10 @@ class Database:
         if "tool_permission" not in cols:
             await conn.execute(
                 "ALTER TABLE nodes ADD COLUMN tool_permission TEXT NOT NULL DEFAULT 'read_only'"
+            )
+        if "node_kind" not in cols:
+            await conn.execute(
+                "ALTER TABLE nodes ADD COLUMN node_kind TEXT NOT NULL DEFAULT 'chat'"
             )
         if "rollup_summary" not in cols:
             await conn.execute("ALTER TABLE nodes ADD COLUMN rollup_summary TEXT")

@@ -4,9 +4,10 @@ import asyncio
 import csv
 import io
 import json
-from pathlib import Path
 import time
+from pathlib import Path
 from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from chatree.config import AblationConfig, ChatreeConfig
@@ -25,7 +26,6 @@ from chatree.tools import (
     TOOL_SPAWN_CHILD,
 )
 from chatree.types import TreeMetrics
-
 
 BaselineMode = Literal[
     "linear",
@@ -539,9 +539,9 @@ class BenchmarkRunner:
                     await _record_root_tokens()
 
                 elif step.kind == "finish":
-                    nid = branch_map.get(step.branch)
-                    if nid and nid != root.id:
-                        await tree.node(nid).finish(
+                    finish_nid = branch_map.get(step.branch)
+                    if finish_nid and finish_nid != root.id:
+                        await tree.node(finish_nid).finish(
                             summary=step.content or None, auto_commit=True, return_to_parent=True
                         )
                         await _record_root_tokens()

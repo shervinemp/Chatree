@@ -10,7 +10,6 @@ from chatree import (
     ArtifactInput,
     BenchmarkRunner,
     Chatree,
-    ChatreeConfig,
     DialogueDirectoryStore,
     MockLLMProvider,
     StorageBackend,

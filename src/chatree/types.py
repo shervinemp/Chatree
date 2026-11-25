@@ -2,14 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 from chatree.config import ToolPermission
 
-
 ContextMode = Literal["root", "fork", "slice", "clean"]
 ChildContextMode = Literal["fork", "slice", "clean"]
 NodeStatus = Literal["ACTIVE", "COMPLETED", "ARCHIVED"]
+NodeKind = Literal["chat", "subagent"]
 ReflogAction = Literal[
     "init",
     "spawn",
@@ -117,6 +118,7 @@ class NodeModel(BaseModel):
     spawn_msg_seq: int
     slice_turn_count: int
     status: NodeStatus
+    node_kind: NodeKind = "chat"
     tool_permission: ToolPermission = "read_only"
     model_override: str | None = None
     summary: str | None = None
@@ -265,6 +267,7 @@ class SearchHit(BaseModel):
     node_id: str
     node_title: str
     node_status: NodeStatus
+    node_kind: NodeKind = "chat"
     path: str
     summary_version: int
     summary: str | None = None

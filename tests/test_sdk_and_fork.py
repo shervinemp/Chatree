@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chatree import Chatree, DefaultModelRouter, STATIC_SYSTEM_PROMPT
+from chatree import STATIC_SYSTEM_PROMPT, Chatree, DefaultModelRouter
 
 
 async def test_sdk_cow_fork_prefix_and_isolation():

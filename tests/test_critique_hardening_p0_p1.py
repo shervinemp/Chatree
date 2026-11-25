@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from chatree import (
+    TOOL_ARCHIVE_BRANCH,
     Chatree,
     ChatreeConfig,
     CompactionBenchmarkRunner,
@@ -19,7 +20,6 @@ from chatree import (
     MockLLMProvider,
     RagConfig,
     SearchHit,
-    TOOL_ARCHIVE_BRANCH,
     default_compaction_scenario,
     is_token_asserted_as_active,
     natural_jump_around_scenario,

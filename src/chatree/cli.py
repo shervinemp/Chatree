@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Sequence
 
 from chatree.config import ChatreeConfig
@@ -28,6 +28,8 @@ from chatree.eval import (
     unscripted_agentic_scenario,
     write_run_manifest,
 )
+from chatree.eval.external_benchmarks import MemorySystemAdapter
+from chatree.protocols import Reranker
 from chatree.providers.embeddings import build_embedder
 from chatree.providers.factory import build_llm_provider
 from chatree.providers.rerankers import FastEmbedCrossEncoderReranker, LLMReranker
@@ -221,7 +223,7 @@ async def run_cli_async(argv: Sequence[str] | None = None) -> int:
             if args.model.startswith("mock/") and args.provider in ("auto", "mock")
             else build_llm_provider(args.provider, model=args.model, api_base=args.api_base)
         )
-        reranker = None
+        reranker: Reranker | None = None
         if args.reranker == "local":
             reranker = FastEmbedCrossEncoderReranker()
         elif args.reranker == "llm":
@@ -235,7 +237,7 @@ async def run_cli_async(argv: Sequence[str] | None = None) -> int:
                 if args.locomo
                 else LongMemEvalDataset.from_file(args.longmemeval, max_items=args.max_items)
             )
-            adapters = [
+            adapters: list[MemorySystemAdapter] = [
                 ChatreeSystemAdapter(
                     model=args.model,
                     shadow_model=args.shadow_model,

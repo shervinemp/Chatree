@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from collections import Counter
 import math
 import random
 import re
 import string
+from collections import Counter
 from typing import Sequence
 
 from pydantic import BaseModel
-
 
 # ---------------------------------------------------------------------------
 # Official QA Text Metrics (SQuAD / LoCoMo Token F1, BLEU-1, Exact Match)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 import hmac
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator
 
@@ -100,7 +100,7 @@ def create_app(
         return {
             "status": "ok",
             "service": "chatree",
-            "sqlite_vec": ct.db.has_sqlite_vec,
+            "sqlite_vec": bool(ct.db.has_sqlite_vec) if ct.db is not None else False,
         }
 
     app.include_router(trees_router)

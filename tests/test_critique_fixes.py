@@ -9,27 +9,25 @@ import httpx
 import pytest
 
 from chatree import (
-    ArtifactInput,
     BenchmarkRunner,
     Chatree,
     ChatreeConfig,
     DefaultModelRouter,
     GitWorktreeSandbox,
     GuardrailPolicy,
+    LiteLLMProvider,
     LLMResponse,
     LLMStreamEvent,
     LLMToolCall,
-    LiteLLMProvider,
     MockLLMProvider,
     StorageBackend,
     ToolCallContext,
     TrajectoryExporter,
-    default_multi_tangent_scenario,
     multihop_revision_scenario,
 )
 from chatree.engine.guardrails import BudgetLedger
 from chatree.server.app import create_app
-from chatree.storage.repository import SQLiteRepository, normalize_bm25
+from chatree.storage.repository import normalize_bm25
 
 
 async def _git(cwd: Path, *args: str) -> str:

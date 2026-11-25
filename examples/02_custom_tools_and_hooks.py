@@ -1,6 +1,7 @@
 """Registering custom domain tools with per-branch read_only / write scoping + lifecycle hooks."""
 
 import asyncio
+
 from chatree import Chatree, ToolCallContext
 
 

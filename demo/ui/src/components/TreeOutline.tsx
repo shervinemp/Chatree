@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import {
   AlertTriangle,
   Archive,
+  Bot,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -140,6 +141,15 @@ export function TreeOutline({
               {isHead && (
                 <span className="px-1 py-0.2 rounded bg-indigo-500/25 text-indigo-300 font-mono text-[9px] uppercase tracking-wider shrink-0">
                   HEAD
+                </span>
+              )}
+              {node.node_kind === 'subagent' && (
+                <span
+                  title="Isolated sub-agent worker node (queryable via shadow turn; auto-promotes if you chat inside it)"
+                  className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-cyan-500/15 text-cyan-300 font-mono text-[9px] uppercase tracking-wider shrink-0"
+                >
+                  <Bot className="w-2.5 h-2.5" />
+                  BOT
                 </span>
               )}
               {isArchived && (

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chatree import ArtifactInput, Chatree
+from chatree import Chatree
 
 
 async def test_extract_to_child_refactors_turns_into_stub_and_child():

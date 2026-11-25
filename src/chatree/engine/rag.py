@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import re
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, Literal
 
 from chatree.config import AblationConfig, RagConfig
 from chatree.protocols import Embedder, Reranker
@@ -457,24 +457,24 @@ class TreeRAGService:
         allow_archived_facts = bool(status_filter and "ARCHIVED" in status_filter)
         hits: list[SearchHit] = []
         for entry in fused.values():
-            rec: EmbeddingRecord = entry["rec"]
-            node = node_by_id.get(rec.node_id)
+            emb_rec: EmbeddingRecord = entry["rec"]
+            node = node_by_id.get(emb_rec.node_id)
             if node is None:
                 continue
             # Dead-end quarantine: facts from ARCHIVED branches never surface unless explicitly requested
-            if rec.granularity == "fact" and node.status == "ARCHIVED" and not allow_archived_facts:
+            if emb_rec.granularity == "fact" and node.status == "ARCHIVED" and not allow_archived_facts:
                 continue
             recency_bonus = 0.0
             try:
                 age_hours = max(
-                    0.0, (now_ts - datetime.fromisoformat(rec.updated_at).timestamp()) / 3600.0
+                    0.0, (now_ts - datetime.fromisoformat(emb_rec.updated_at).timestamp()) / 3600.0
                 )
                 recency_bonus = self.cfg.recency_boost * (1.0 / (1.0 + age_hours / 24.0)) * 0.02
             except Exception:
                 pass
             entity_bonus = 0.0
-            if rec.granularity == "fact" and q_tokens:
-                ent_m = re.search(r"\[Entities:\s*([^\]]+)\]", rec.content)
+            if emb_rec.granularity == "fact" and q_tokens:
+                ent_m = re.search(r"\[Entities:\s*([^\]]+)\]", emb_rec.content)
                 if ent_m:
                     ent_words = {
                         w.lower() for w in re.findall(r"[A-Za-z0-9_]{3,}", ent_m.group(1))
@@ -483,14 +483,14 @@ class TreeRAGService:
                     if matched_ents > 0:
                         entity_bonus = min(0.05, 0.02 * matched_ents)
             score = round(entry["rrf"] + recency_bonus + entity_bonus, 6)
-            src = (
+            src: Literal["hybrid", "vector", "bm25"] = (
                 "hybrid"
                 if (entry["vec"] > 0 and entry["bm25"] > 0)
                 else ("vector" if entry["vec"] > 0 else "bm25")
             )
             seq_range = (
-                (rec.seq_start, rec.seq_end)
-                if rec.seq_start is not None and rec.seq_end is not None
+                (emb_rec.seq_start, emb_rec.seq_end)
+                if emb_rec.seq_start is not None and emb_rec.seq_end is not None
                 else None
             )
             hits.append(
@@ -498,15 +498,16 @@ class TreeRAGService:
                     node_id=node.id,
                     node_title=node.title,
                     node_status=node.status,
+                    node_kind=node.node_kind,
                     path=node.path,
                     summary_version=node.summary_version,
                     summary=node.summary,
-                    snippet=rec.content[:380],
+                    snippet=emb_rec.content[:380],
                     score=score,
                     bm25_score=round(entry["bm25"], 4),
                     vector_score=round(entry["vec"], 4),
-                    granularity=rec.granularity,
-                    matched_seq=rec.seq_start,
+                    granularity=emb_rec.granularity,
+                    matched_seq=emb_rec.seq_start,
                     seq_range=seq_range,
                     source=src,
                 )

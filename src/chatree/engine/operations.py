@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections import Counter
 import re
+from collections import Counter
 
 from chatree.engine.rag import TreeRAGService
 from chatree.engine.reflog import ReflogService
@@ -14,7 +14,6 @@ from chatree.types import (
     NodeModel,
     SiblingDiffEntry,
 )
-
 
 _STOPWORDS = frozenset(
     {
@@ -165,15 +164,6 @@ class BranchOperations:
         await self.rag.index_node_chunks(parent.id)
         await self.rag.propagate_rollups_upward(child_done.id)
 
-        await self.reflog.record_transition(
-            tree_id=tree.id,
-            from_node=parent,
-            to_node=parent,
-            action="extract",
-            note=f"Extracted turns {seq_start}..{seq_end} into child '{child_done.title}' ({child_done.id})",
-            update_head=False,
-        )
-
         updated_parent = await self.repo.get_node(parent.id)
         assert updated_parent is not None
         if self.hooks is not None:
@@ -218,14 +208,15 @@ class BranchOperations:
             model_override=node.model_override,
             tool_permission=node.tool_permission,
         )
-        await self.reflog.record_transition(
-            tree_id=node.tree_id,
-            from_node=node,
-            to_node=forked,
-            action="fork_edit",
-            note=f"Forked '{node.title}' before turn #{at_seq} into '{forked.title}'",
-            update_head=switch_head,
-        )
+        if switch_head:
+            await self.reflog.record_transition(
+                tree_id=node.tree_id,
+                from_node=node,
+                to_node=forked,
+                action="fork_edit",
+                note=f"Forked '{node.title}' before turn #{at_seq} into '{forked.title}'",
+                update_head=True,
+            )
         return forked
 
     async def compare_siblings(
@@ -378,14 +369,15 @@ class BranchOperations:
         await self.rag.index_node_chunks(parent.id)
         await self.rag.propagate_rollups_upward(fresh_child.id)
 
-        await self.reflog.record_transition(
-            tree_id=tree.id,
-            from_node=fresh_child,
-            to_node=parent,
-            action="promote",
-            note=f"Promoted winning branch '{fresh_child.title}' into '{parent.title}'",
-            update_head=switch_head_to_parent,
-        )
+        if switch_head_to_parent:
+            await self.reflog.record_transition(
+                tree_id=tree.id,
+                from_node=fresh_child,
+                to_node=parent,
+                action="promote",
+                note=f"Promoted winning branch '{fresh_child.title}' into '{parent.title}'",
+                update_head=True,
+            )
 
         updated_parent = await self.repo.get_node(parent.id)
         assert updated_parent is not None

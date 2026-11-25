@@ -1,25 +1,13 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from typing import Any
 
 from chatree.storage.repos.base import (
-    _np,
     _row_to_artifact,
-    _row_to_ipc,
     _row_to_mailbox,
-    _row_to_message,
-    _row_to_node,
-    _row_to_tree,
-    cosine_similarity,
-    eligible_node_ids_safe,
     new_id,
-    normalize_bm25,
-    pack_vector,
-    sanitize_fts_query,
-    unpack_vector,
     utc_now,
 )
 from chatree.types import (
@@ -27,26 +15,10 @@ from chatree.types import (
     ArtifactModel,
     ArtifactRef,
     BackgroundJobModel,
-    BranchFactModel,
-    ChangeSeverity,
-    ChildContextMode,
-    EmbeddingRecord,
-    IpcEventModel,
-    IpcEventType,
     MailboxItemModel,
     MailboxStatus,
-    MessageModel,
-    NodeModel,
-    NodeStatus,
-    RagGranularity,
     ReflogAction,
     ReflogEntryModel,
-    SearchHit,
-    SearchScope,
-    StaleDependencyInfo,
-    ToolPermission,
-    TreeInvariantModel,
-    TreeModel,
 )
 
 
@@ -397,15 +369,18 @@ class ReflogArtifactsMailboxMixin:
         r = await cur.fetchone()
         return BackgroundJobModel(**dict(r)) if r else None
 
-    async def list_background_jobs(self, tree_id: str | None = None) -> list[BackgroundJobModel]:
+    async def list_background_jobs(
+        self, tree_id: str | None = None, *, limit: int | None = None
+    ) -> list[BackgroundJobModel]:
+        lim_clause = f" LIMIT {int(limit)}" if limit is not None and limit > 0 else ""
         if tree_id is not None:
             cur = await self.conn.execute(
-                "SELECT * FROM background_jobs WHERE tree_id = ? ORDER BY created_at DESC",
+                f"SELECT * FROM background_jobs WHERE tree_id = ? ORDER BY created_at DESC{lim_clause}",
                 (tree_id,),
             )
         else:
             cur = await self.conn.execute(
-                "SELECT * FROM background_jobs ORDER BY created_at DESC"
+                f"SELECT * FROM background_jobs ORDER BY created_at DESC{lim_clause}"
             )
         return [BackgroundJobModel(**dict(r)) for r in await cur.fetchall()]
 

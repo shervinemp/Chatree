@@ -18,12 +18,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from collections import Counter
 import gc
 import json
-from pathlib import Path
 import re
 import time
+from collections import Counter
+from pathlib import Path
 from typing import Sequence
 
 from chatree import (
@@ -51,7 +51,6 @@ from chatree import (
     natural_jump_around_scenario,
     write_run_manifest,
 )
-
 
 DEFAULT_MODEL = "deepseek/deepseek-chat"
 DEFAULT_EMBED_MODEL = "local/BAAI/bge-small-en-v1.5"

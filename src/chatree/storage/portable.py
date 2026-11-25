@@ -18,7 +18,6 @@ from chatree.types import (
     TreeModel,
 )
 
-
 _KIND_EXT: dict[str, str] = {
     "markdown": "md",
     "sql": "sql",
@@ -131,7 +130,7 @@ class DialogueDirectoryStore:
                 f"# {node.title} (`{node.id}`)",
                 "",
                 f"- **Path:** `{node.path}`",
-                f"- **Mode:** `{node.context_mode}` | **Status:** `{node.status}` | **Permission:** `{node.tool_permission}`",
+                f"- **Mode:** `{node.context_mode}` | **Kind:** `{node.node_kind}` | **Status:** `{node.status}` | **Permission:** `{node.tool_permission}`",
                 f"- **Summary Version:** `v{node.summary_version}.{node.summary_minor_version}`",
             ]
             if node.goal:
@@ -236,11 +235,11 @@ class DialogueDirectoryStore:
                 """
                 INSERT INTO nodes (
                     id, tree_id, parent_id, path, depth, title, goal, summary_brief,
-                    context_mode, spawn_msg_seq, slice_turn_count, status, tool_permission,
+                    context_mode, spawn_msg_seq, slice_turn_count, status, node_kind, tool_permission,
                     model_override, summary, summary_version, summary_minor_version,
                     last_change_severity, last_change_delta, rollup_summary, is_dirty,
                     last_msg_seq, tokens_in, tokens_out, cache_read_tokens, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     n.id,
@@ -255,6 +254,7 @@ class DialogueDirectoryStore:
                     n.spawn_msg_seq,
                     n.slice_turn_count,
                     n.status,
+                    n.node_kind,
                     n.tool_permission,
                     n.model_override,
                     n.summary,

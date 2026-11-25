@@ -63,9 +63,9 @@ async def update_node(
         if other:
             updated = await c.repo.update_node(node_id, **other) or updated
         return updated
-    updated = await c.repo.update_node(node_id, **data)
-    assert updated is not None
-    return updated
+    updated_node = await c.repo.update_node(node_id, **data)
+    assert updated_node is not None
+    return updated_node
 
 
 @router.post("/api/nodes/{node_id}/turns/stream")

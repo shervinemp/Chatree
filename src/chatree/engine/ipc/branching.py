@@ -1,55 +1,24 @@
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import inspect
-import json
-import re
 import time
-from typing import Any, Callable
+from typing import Any
 
-from chatree.config import AblationConfig, GuardrailPolicy, ToolPermission
-from chatree.engine.context import ContextAssembler
+from chatree.config import ToolPermission
 from chatree.engine.guardrails import TraceContext
-from chatree.engine.rag import TreeRAGService, extract_key_identifiers
-from chatree.engine.reflog import ReflogService
-from chatree.engine.staleness import StalenessService
-from chatree.hooks import HookBus
-from chatree.protocols import LLMProvider, ModelRouter
+from chatree.engine.ipc.types import IpcExecutionResult
 from chatree.providers.mock import estimate_messages_tokens
-from chatree.sandbox import BranchSandbox
-from chatree.storage.repository import SQLiteRepository, cosine_similarity
-from chatree.tools import (
-    CORE_TOOL_NAMES,
-    SHADOW_READ_ONLY_CORE_TOOLS,
-    TOOL_ARCHIVE_BRANCH,
-    TOOL_ASK_TREE,
-    TOOL_COMPACT_BRANCH,
-    TOOL_PIN_INVARIANT,
-    TOOL_REFLOG_JUMP,
-    TOOL_REQUEST,
-    TOOL_SEARCH_TREE,
-    TOOL_SEND,
-    TOOL_SPAWN_CHILD,
-    ToolCallContext,
-    ToolRegistry,
-)
 from chatree.types import (
     ArtifactInput,
     ArtifactRef,
     ChildContextMode,
-    IpcEventModel,
-    LLMToolCall,
     MailboxItemModel,
+    NodeKind,
     NodeModel,
     ReflogEntryModel,
-    SearchScope,
     TreeModel,
 )
 
-
-from chatree.engine.ipc.types import IpcExecutionResult
 
 class IpcBranchingMixin:
     repo: Any
@@ -65,6 +34,7 @@ class IpcBranchingMixin:
     ablations: Any
     sandbox: Any
     on_branch_switch_away: Any
+    _resolve_model: Any
 
     # ------------------------------------------------------------------
     # 1. spawn_child
@@ -82,6 +52,7 @@ class IpcBranchingMixin:
         autonomous: bool = False,
         model_override: str | None = None,
         tool_permission: ToolPermission | None = None,
+        node_kind: NodeKind | None = None,
         switch_head: bool = True,
         initiated_by_model: bool = False,
         trace_ctx: TraceContext | None = None,
@@ -186,10 +157,15 @@ class IpcBranchingMixin:
             if tool_permission in ("read_only", "read_write")
             else self.guardrails.default_child_permission
         )
+        resolved_kind: NodeKind = (
+            node_kind
+            if node_kind in ("chat", "subagent")
+            else ("subagent" if autonomous else "chat")
+        )
         short_title = (
             (title or "").strip()
             or " ".join(goal.split()[:5]).rstrip(".,?!")
-            or "Child Branch"
+            or ("Sub-Agent Worker" if resolved_kind == "subagent" else "Child Branch")
         )
         safe_fork_seq = await self.repo.get_last_safe_fork_seq(parent.id)
 
@@ -203,6 +179,7 @@ class IpcBranchingMixin:
             slice_turn_count=slice_turns,
             model_override=model_override,
             tool_permission=resolved_perm,
+            node_kind=resolved_kind,
         )
 
         head_changed = None
@@ -243,16 +220,8 @@ class IpcBranchingMixin:
             await self.rag.index_node_summary(child.id)
             await self.rag.propagate_rollups_upward(child.id)
             autonomous_result = resp.content
-
-            await self.reflog.record_transition(
-                tree_id=tree.id,
-                from_node=parent,
-                to_node=child,
-                action="spawn",
-                note=f"Autonomous child '{child.title}' completed",
-                update_head=False,
-            )
         elif switch_head:
+            # Strict HEAD-only reflog invariant: record only interactive HEAD transitions.
             entry = await self.reflog.record_transition(
                 tree_id=tree.id,
                 from_node=parent,
@@ -268,15 +237,6 @@ class IpcBranchingMixin:
                 and parent.is_dirty
             ):
                 self.on_branch_switch_away(tree.id, parent.id)
-        else:
-            await self.reflog.record_transition(
-                tree_id=tree.id,
-                from_node=parent,
-                to_node=child,
-                action="spawn",
-                note=f"Created {context_mode} branch: {child.title}",
-                update_head=False,
-            )
 
         await self.rag.index_node_summary(child.id)
 
@@ -284,6 +244,7 @@ class IpcBranchingMixin:
         out: dict[str, Any] = {
             "child_id": child.id,
             "title": child.title,
+            "node_kind": child.node_kind,
             "context_mode": child.context_mode,
             "tool_permission": child.tool_permission,
             "spawn_msg_seq": child.spawn_msg_seq,
@@ -304,6 +265,7 @@ class IpcBranchingMixin:
             payload={
                 "goal": goal,
                 "title": child.title,
+                "node_kind": child.node_kind,
                 "context_mode": context_mode,
                 "tool_permission": child.tool_permission,
                 "summary_brief": summary_brief,

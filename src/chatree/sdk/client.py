@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable
+from typing import Any, AsyncIterator, Callable, cast
 
 from chatree.config import ChatreeConfig, ToolPermission
 from chatree.engine.actors import BackgroundActorManager
@@ -41,6 +41,7 @@ from chatree.types import (
     IpcEventModel,
     MailboxItemModel,
     MessageModel,
+    NodeKind,
     NodeModel,
     NodeStatus,
     RagGranularity,
@@ -92,8 +93,13 @@ class Chatree:
             else self.config.resolved_db_path()
         )
         self._owns_db = repo is None
-        self.db = getattr(repo, "db", None) if repo is not None else Database(resolved)
-        self.repo: Any = repo if repo is not None else SQLiteRepository(self.db)
+        if repo is None:
+            db = Database(resolved)
+            self.db: Database | None = db
+            self.repo: SQLiteRepository = SQLiteRepository(db)
+        else:
+            self.db = getattr(repo, "db", None)
+            self.repo = cast(SQLiteRepository, repo)
         self.hooks = hooks or HookBus()
         self.tools = tools or ToolRegistry()
         self.sandbox = sandbox
@@ -157,6 +163,7 @@ class Chatree:
             on_branch_switch_away=(
                 self._schedule_bg_summary if self.config.auto_background_summarize_on_switch else None
             ),
+            on_branch_archived=self._on_branch_archived,
         )
         self.query_engine = TreeQueryEngine(
             self.repo,
@@ -362,7 +369,13 @@ class Chatree:
     async def list_trees(self) -> list[TreeModel]:
         return await self.repo.list_trees()
 
+    async def _on_branch_archived(self, tree_id: str, node_id: str) -> list[str]:
+        return await self.actors.cancel_for_subtree(
+            tree_id, node_id, reason=f"Ancestor branch '{node_id}' archived"
+        )
+
     async def delete_tree(self, tree_id: str) -> bool:
+        await self.actors.cancel_for_subtree(tree_id, None, reason="Tree deleted")
         return await self.repo.delete_tree(tree_id)
 
     async def export_directory(self, tree_id: str, output_dir: str | Path) -> Path:
@@ -478,6 +491,18 @@ class DialogueTree:
     async def nodes(self) -> list[NodeModel]:
         return await self._ct.repo.list_nodes(self.id)
 
+    async def active_chat_nodes(self) -> list[NodeModel]:
+        """Return non-archived interactive chat branches (`node_kind == 'chat'`, `status == 'ACTIVE'`)."""
+        return [
+            n
+            for n in await self.nodes()
+            if n.node_kind == "chat" and n.status == "ACTIVE"
+        ]
+
+    async def subagents(self) -> list[NodeModel]:
+        """Return all spawned sub-agent worker nodes (`node_kind == 'subagent'`) in this tree."""
+        return [n for n in await self.nodes() if n.node_kind == "subagent"]
+
     async def chat(
         self,
         content: str,
@@ -533,6 +558,7 @@ class DialogueTree:
         autonomous: bool = False,
         model: str | None = None,
         permission: ToolPermission | None = None,
+        node_kind: NodeKind | None = None,
         switch_head: bool = True,
     ) -> NodeHandle:
         t = await self.model()
@@ -552,6 +578,7 @@ class DialogueTree:
             autonomous=autonomous,
             model_override=model,
             tool_permission=permission,
+            node_kind=node_kind,
             switch_head=switch_head,
         )
         if res.tool_output.get("error"):
@@ -1086,6 +1113,13 @@ class NodeHandle:
             raise ValueError(f"Node not found: {self.id}")
         return n
 
+    async def promote_to_chat(self) -> NodeModel:
+        """Promote a `subagent` worker node into a first-class interactive `chat` branch."""
+        updated = await self.tree._ct.repo.update_node(self.id, node_kind="chat")
+        if updated is None:
+            raise ValueError(f"Node not found: {self.id}")
+        return updated
+
     async def messages(self) -> list[MessageModel]:
         return await self.tree._ct.repo.list_messages(self.id)
 
@@ -1173,6 +1207,7 @@ class NodeHandle:
             if diff_art is not None:
                 combined_artifacts.append(diff_art)
 
+        assert node.parent_id is not None
         res = await self.tree._ct.ipc.send(
             tree=t,
             sender=node,

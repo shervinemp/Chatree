@@ -16,8 +16,8 @@ from chatree import (
     FastEmbedEmbedder,
     FullContextLinearAdapter,
     GuardrailPolicy,
-    LLMReranker,
     LiteLLMProvider,
+    LLMReranker,
     LongMemEvalDataset,
     MemorySystemAdapter,
     MockLLMProvider,
@@ -30,7 +30,6 @@ from chatree.cli import run_cli_async
 from chatree.protocols import Embedder, Reranker
 from chatree.providers.litellm import _is_retryable_exception, _safe_parse_tool_args
 from chatree.types import LLMResponse, LLMToolCall, SearchHit
-
 
 # ---------------------------------------------------------------------------
 # 1. Shadow KV-cache tool schema preservation + deterministic runtime blocking

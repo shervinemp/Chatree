@@ -4,7 +4,6 @@ import json
 import re
 from typing import Any
 
-
 _TOKEN_SPLIT_RE = re.compile(r"[A-Za-z0-9_]+|[^\sA-Za-z0-9_]")
 
 

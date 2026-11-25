@@ -1,28 +1,27 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import inspect
-import json
-import re
 import time
+from datetime import datetime, timezone
 from typing import Any, Callable
 
-from chatree.config import AblationConfig, GuardrailPolicy, ToolPermission
+from chatree.config import AblationConfig, GuardrailPolicy
 from chatree.engine.context import ContextAssembler
 from chatree.engine.guardrails import TraceContext
-from chatree.engine.rag import TreeRAGService, extract_key_identifiers
+from chatree.engine.ipc.branching import IpcBranchingMixin
+from chatree.engine.ipc.lifecycle import IpcLifecycleMixin
+from chatree.engine.ipc.shadow import IpcShadowMixin
+from chatree.engine.ipc.types import IpcExecutionResult
+from chatree.engine.rag import TreeRAGService
 from chatree.engine.reflog import ReflogService
 from chatree.engine.staleness import StalenessService
 from chatree.hooks import HookBus
 from chatree.protocols import LLMProvider, ModelRouter
-from chatree.providers.mock import estimate_messages_tokens
 from chatree.sandbox import BranchSandbox
-from chatree.storage.repository import SQLiteRepository, cosine_similarity
+from chatree.storage.repository import SQLiteRepository
 from chatree.tools import (
     CORE_TOOL_NAMES,
-    SHADOW_READ_ONLY_CORE_TOOLS,
     TOOL_ARCHIVE_BRANCH,
     TOOL_ASK_TREE,
     TOOL_COMPACT_BRANCH,
@@ -37,22 +36,10 @@ from chatree.tools import (
 )
 from chatree.types import (
     ArtifactInput,
-    ArtifactRef,
-    ChildContextMode,
-    IpcEventModel,
     LLMToolCall,
-    MailboxItemModel,
     NodeModel,
-    ReflogEntryModel,
-    SearchScope,
     TreeModel,
 )
-
-
-from chatree.engine.ipc.branching import IpcBranchingMixin
-from chatree.engine.ipc.lifecycle import IpcLifecycleMixin
-from chatree.engine.ipc.shadow import IpcShadowMixin
-from chatree.engine.ipc.types import IpcExecutionResult
 
 
 class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
@@ -80,7 +67,8 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
         guardrails: GuardrailPolicy | None = None,
         ablations: AblationConfig | None = None,
         sandbox: BranchSandbox | None = None,
-        on_branch_switch_away: Callable[[str, str], None] | None = None,
+        on_branch_switch_away: Callable[[str, str], Any] | None = None,
+        on_branch_archived: Callable[[str, str], Any] | None = None,
     ) -> None:
         self.repo = repo
         self.context = context
@@ -95,6 +83,7 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
         self.ablations = ablations or AblationConfig()
         self.sandbox = sandbox
         self.on_branch_switch_away = on_branch_switch_away
+        self.on_branch_archived = on_branch_archived
         self._node_last_llm_at: dict[str, float] = {}
 
     def mark_node_llm_warm(self, node_id: str) -> None:
@@ -127,14 +116,16 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
     ) -> str:
         sig = inspect.signature(self.router.resolve_model)
         if "context_tokens" in sig.parameters:
-            return self.router.resolve_model(
-                tree,
-                node,
-                role,
-                context_tokens=context_tokens,
-                cache_age_seconds=cache_age_seconds,
-            )  # type: ignore[call-arg]
-        return self.router.resolve_model(tree, node, role)
+            return str(
+                self.router.resolve_model(
+                    tree,
+                    node,
+                    role,
+                    context_tokens=context_tokens,
+                    cache_age_seconds=cache_age_seconds,
+                )  # type: ignore[call-arg]
+            )
+        return str(self.router.resolve_model(tree, node, role))
 
     def _is_parallel_safe(self, tc: LLMToolCall) -> bool:
         if tc.name in (TOOL_SEARCH_TREE, TOOL_ASK_TREE):

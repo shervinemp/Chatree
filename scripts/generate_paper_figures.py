@@ -11,14 +11,13 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-import re
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from matplotlib.patches import FancyBboxPatch
 import numpy as np
+from matplotlib.patches import FancyBboxPatch
 
 RESULTS_DIR = Path("results/deepseek_eval")
 OUT_DIR = Path("paper/figures")

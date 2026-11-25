@@ -1,18 +1,12 @@
 from __future__ import annotations
 
 from typing import Any
+
 import aiosqlite
 
 from chatree.storage.database import Database
 from chatree.storage.repos.artifacts_mailbox import ReflogArtifactsMailboxMixin
 from chatree.storage.repos.base import (
-    _np,
-    _row_to_artifact,
-    _row_to_ipc,
-    _row_to_mailbox,
-    _row_to_message,
-    _row_to_node,
-    _row_to_tree,
     cosine_similarity,
     eligible_node_ids_safe,
     new_id,
@@ -52,7 +46,8 @@ class SQLiteRepository(
 
     @property
     def conn(self) -> aiosqlite.Connection:
-        return self.db.conn
+        c: aiosqlite.Connection = self.db.conn
+        return c
 
 
 __all__ = [

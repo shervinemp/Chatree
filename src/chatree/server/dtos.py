@@ -185,7 +185,8 @@ class UpdateSettingsRequest(BaseModel):
 
 
 def get_client(request: Request) -> Chatree:
-    return request.app.state.chatree
+    client: Chatree = request.app.state.chatree
+    return client
 
 
 async def build_tree_snapshot(ct: Chatree, tree_id: str) -> TreeSnapshotResponse:

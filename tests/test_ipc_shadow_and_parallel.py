@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 
-from chatree import ArtifactInput, Chatree, LLMResponse, LLMStreamEvent, LLMToolCall, MockLLMProvider
+from chatree import ArtifactInput, Chatree, LLMResponse, LLMStreamEvent, MockLLMProvider
 
 
 class SlowParallelProvider(MockLLMProvider):

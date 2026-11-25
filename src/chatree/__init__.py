@@ -16,46 +16,6 @@ from chatree.config import (
 )
 from chatree.engine.actors import BackgroundActorManager
 from chatree.engine.query import TreeQueryEngine
-from chatree.hooks import HookBus
-from chatree.protocols import (
-    DefaultModelRouter,
-    Embedder,
-    LLMProvider,
-    ModelRole,
-    ModelRouter,
-    Reranker,
-    StorageBackend,
-    TokenCounter,
-)
-from chatree.providers.embeddings import (
-    FastEmbedEmbedder,
-    HashEmbedder,
-    LiteLLMEmbedder,
-    OpenAICompatibleEmbedder,
-    build_embedder,
-    resolve_onnx_provider_candidates,
-)
-from chatree.providers.factory import build_llm_provider
-from chatree.providers.litellm import LiteLLMProvider
-from chatree.providers.mock import MockLLMProvider
-from chatree.providers.openai_compat import (
-    CallableLLMProvider,
-    OpenAICompatibleProvider,
-    ProviderSpec,
-    resolve_provider_endpoint,
-    resolve_provider_spec,
-)
-from chatree.providers.rerankers import FastEmbedCrossEncoderReranker, LLMReranker
-from chatree.providers.tokenizer import (
-    HeuristicTokenCounter,
-    TiktokenCounter,
-    build_token_counter,
-    get_default_token_counter,
-    set_default_token_counter,
-)
-from chatree.sandbox import BranchSandbox, GitWorktreeSandbox, SandboxWorkspace
-from chatree.sdk.client import Chatree, DialogueTree, NodeHandle
-from chatree.storage.portable import DialogueDirectoryStore
 from chatree.eval import (
     ABLATION_PRESETS,
     ALL_BASELINE_MODES,
@@ -96,8 +56,8 @@ from chatree.eval import (
     JumpAroundTurn,
     JumpAroundTurnKind,
     JumpAroundTurnTrace,
-    LLMJudgeScorer,
     LettaOfficialAdapter,
+    LLMJudgeScorer,
     LoCoMoDataset,
     LongMemEvalDataset,
     McNemarResult,
@@ -135,6 +95,46 @@ from chatree.eval import (
     unscripted_agentic_scenario,
     write_run_manifest,
 )
+from chatree.hooks import HookBus
+from chatree.protocols import (
+    DefaultModelRouter,
+    Embedder,
+    LLMProvider,
+    ModelRole,
+    ModelRouter,
+    Reranker,
+    StorageBackend,
+    TokenCounter,
+)
+from chatree.providers.embeddings import (
+    FastEmbedEmbedder,
+    HashEmbedder,
+    LiteLLMEmbedder,
+    OpenAICompatibleEmbedder,
+    build_embedder,
+    resolve_onnx_provider_candidates,
+)
+from chatree.providers.factory import build_llm_provider
+from chatree.providers.litellm import LiteLLMProvider
+from chatree.providers.mock import MockLLMProvider
+from chatree.providers.openai_compat import (
+    CallableLLMProvider,
+    OpenAICompatibleProvider,
+    ProviderSpec,
+    resolve_provider_endpoint,
+    resolve_provider_spec,
+)
+from chatree.providers.rerankers import FastEmbedCrossEncoderReranker, LLMReranker
+from chatree.providers.tokenizer import (
+    HeuristicTokenCounter,
+    TiktokenCounter,
+    build_token_counter,
+    get_default_token_counter,
+    set_default_token_counter,
+)
+from chatree.sandbox import BranchSandbox, GitWorktreeSandbox, SandboxWorkspace
+from chatree.sdk.client import Chatree, DialogueTree, NodeHandle
+from chatree.storage.portable import DialogueDirectoryStore
 from chatree.tools import (
     BACKGROUND_ACTOR_BLOCKED_CORE_TOOLS,
     CORE_TOOL_DEFINITIONS,
@@ -148,8 +148,8 @@ from chatree.tools import (
     TOOL_PIN_INVARIANT,
     TOOL_REFLOG_JUMP,
     TOOL_REQUEST,
-    TOOL_SEND,
     TOOL_SEARCH_TREE,
+    TOOL_SEND,
     TOOL_SPAWN_CHILD,
     CustomToolSpec,
     ToolCallContext,
@@ -172,6 +172,7 @@ from chatree.types import (
     LLMToolCall,
     MailboxItemModel,
     MessageModel,
+    NodeKind,
     NodeModel,
     NodeStatus,
     ReflogEntryModel,
@@ -281,6 +282,7 @@ __all__ = [
     "ModelRouter",
     "MultiTangentScenario",
     "NodeHandle",
+    "NodeKind",
     "NodeModel",
     "NodeStatus",
     "OpenAICompatibleEmbedder",

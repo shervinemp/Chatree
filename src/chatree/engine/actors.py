@@ -123,14 +123,7 @@ class BackgroundActorManager:
             slice_turn_count=slice_turns,
             model_override=model_override,
             tool_permission=resolved_perm,
-        )
-        await self.reflog.record_transition(
-            tree_id=tree.id,
-            from_node=parent,
-            to_node=child,
-            action="spawn",
-            note=f"Spawned async background actor '{child.title}'",
-            update_head=False,
+            node_kind="subagent",
         )
 
         job = BackgroundJobModel(
@@ -145,6 +138,31 @@ class BackgroundActorManager:
         )
         self._jobs[job.job_id] = job
         await self.repo.upsert_background_job(job)
+        # Strict HEAD-only reflog invariant: log background sub-agent spawns in ipc_events, never reflog.
+        await self.repo.create_ipc_event(
+            tree_id=tree.id,
+            trace_id=new_id("tr"),
+            hop_depth=0,
+            from_node_id=parent.id,
+            to_node_id=child.id,
+            event_type="spawn",
+            payload={
+                "goal": goal,
+                "title": child.title,
+                "context_mode": context_mode,
+                "tool_permission": resolved_perm,
+                "node_kind": "subagent",
+                "background": True,
+                "job_id": job.job_id,
+            },
+            response={
+                "child_id": child.id,
+                "job_id": job.job_id,
+                "status": "running",
+                "node_kind": "subagent",
+            },
+            status="ok",
+        )
 
         if self.hooks is not None:
             await self.hooks.emit("background_started", job.model_dump())
@@ -283,7 +301,16 @@ class BackgroundActorManager:
             if not final_text:
                 final_text = f"Background task '{goal}' reached max_rounds={max_rounds}."
 
-            # Commit summary, refresh 3-tier RAG, and enqueue unread mailbox delivery to parent!
+            # Guard: if parent branch was archived or deleted while worker was running, abort delivery cleanly
+            cur_parent = await self.repo.get_node(parent.id)
+            if cur_parent is None or cur_parent.status == "ARCHIVED":
+                job.status = "cancelled"
+                job.error = "Parent branch archived or deleted before completion"
+                job.completed_at = utc_now()
+                await self.repo.upsert_background_job(job)
+                return
+
+            # Commit summary, refresh 4-tier RAG, and enqueue unread mailbox delivery to parent!
             cur_child = await self.repo.get_node(child.id) or child
             done_child = await self.staleness.commit_summary_with_materiality(
                 cur_child, final_text, status="COMPLETED"
@@ -401,6 +428,52 @@ class BackgroundActorManager:
         if pending:
             await asyncio.wait_for(asyncio.gather(*pending, return_exceptions=True), timeout=timeout)
         return list(self._jobs.values())
+
+    async def cancel_for_subtree(
+        self,
+        tree_id: str,
+        node_id: str | None = None,
+        *,
+        reason: str = "Parent branch archived or deleted",
+    ) -> list[str]:
+        """Supervisor cascade: cancel all running background sub-agents scoped to `node_id`'s subtree (or entire tree)."""
+        affected_node_ids: set[str] | None = None
+        if node_id is not None:
+            target = await self.repo.get_node(node_id)
+            if target is not None:
+                all_nodes = await self.repo.list_nodes(tree_id)
+                affected_node_ids = {
+                    n.id for n in all_nodes if n.id == node_id or n.path.startswith(target.path)
+                }
+            else:
+                affected_node_ids = {node_id}
+
+        cancelled_ids: list[str] = []
+        tasks_to_await: list[asyncio.Task[None]] = []
+        now = utc_now()
+        for job in list(self._jobs.values()):
+            if job.tree_id != tree_id or job.status != "running":
+                continue
+            if affected_node_ids is not None and (
+                job.parent_node_id not in affected_node_ids
+                and job.child_node_id not in affected_node_ids
+            ):
+                continue
+            job.status = "cancelled"
+            job.error = reason
+            job.completed_at = now
+            cancelled_ids.append(job.job_id)
+            task = self._tasks.get(job.job_id)
+            if task is not None and not task.done():
+                task.cancel()
+                tasks_to_await.append(task)
+            try:
+                await self.repo.upsert_background_job(job)
+            except Exception:
+                pass
+        if tasks_to_await:
+            await asyncio.gather(*tasks_to_await, return_exceptions=True)
+        return cancelled_ids
 
     async def cancel_all(self) -> None:
         pending = [t for t in self._tasks.values() if not t.done()]

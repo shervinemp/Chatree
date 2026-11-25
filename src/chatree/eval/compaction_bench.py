@@ -18,8 +18,8 @@ Tests TWO orthogonal recall probes from Generation 1 after G compactions:
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import time
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -31,7 +31,6 @@ from chatree.protocols import Embedder, LLMProvider, Reranker
 from chatree.providers.factory import build_llm_provider
 from chatree.providers.mock import MockLLMProvider, estimate_messages_tokens
 from chatree.sdk.client import Chatree
-
 
 CompactionSystemName = Literal[
     "chatree_non_destructive",

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import csv
-from datetime import datetime, timezone
 import io
 import json
-from pathlib import Path
 import re
 import subprocess
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Literal, Sequence
 from urllib.request import urlretrieve
 
@@ -30,7 +30,6 @@ from chatree.eval.stats import (
 )
 from chatree.protocols import LLMProvider
 from chatree.providers.mock import MockLLMProvider
-
 
 LOCOMO_DEFAULT_URL = (
     "https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json"
@@ -834,11 +833,8 @@ class ExternalBenchmarkRunner:
                                 )
                             await worker.finish_session(sess.session_id, summary=sess.summary)
                         ingest_ms = round((time.perf_counter() - t_ing0) * 1000.0, 2)
-                        ing_in, ing_out = (
-                            worker.get_ingest_usage()  # type: ignore[attr-defined]
-                            if callable(getattr(worker, "get_ingest_usage", None))
-                            else (0, 0)
-                        )
+                        get_ingest_fn = getattr(worker, "get_ingest_usage", None)
+                        ing_in, ing_out = get_ingest_fn() if callable(get_ingest_fn) else (0, 0)
 
                         for q_idx, qa in enumerate(missing_qas):
                             ans = await worker.answer_query(qa.question, date_time=qa.question_date)
@@ -941,11 +937,11 @@ class ExternalBenchmarkRunner:
         if ref_res is not None and ref_res.item_results:
             ref_correct = [q.correct for q in ref_res.item_results]
             ref_f1 = [q.f1 for q in ref_res.item_results]
-            for r in system_results:
-                if r.system_name == ref_name or len(r.item_results) != len(ref_correct):
+            for sys_res in system_results:
+                if sys_res.system_name == ref_name or len(sys_res.item_results) != len(ref_correct):
                     continue
-                r.mcnemar_vs_ref = mcnemar_test(ref_correct, [q.correct for q in r.item_results])
-                r.paired_f1_vs_ref = paired_bootstrap_test(ref_f1, [q.f1 for q in r.item_results])
+                sys_res.mcnemar_vs_ref = mcnemar_test(ref_correct, [q.correct for q in sys_res.item_results])
+                sys_res.paired_f1_vs_ref = paired_bootstrap_test(ref_f1, [q.f1 for q in sys_res.item_results])
 
         return ExternalBenchmarkReport(
             benchmark=benchmark_name,
@@ -1081,19 +1077,19 @@ class ExternalBenchmarkRunner:
         ref_res = next((r for r in system_results if r.system_name == ref_name), None)
         if ref_res is not None and ref_res.item_results:
             ref_by_id = {(q.conversation_id, q.question_id): q for q in ref_res.item_results}
-            for r in system_results:
-                if r.system_name == ref_name:
+            for sys_res in system_results:
+                if sys_res.system_name == ref_name:
                     continue
                 paired = [
                     (ref_by_id[(q.conversation_id, q.question_id)], q)
-                    for q in r.item_results
+                    for q in sys_res.item_results
                     if (q.conversation_id, q.question_id) in ref_by_id
                 ]
                 if paired:
-                    r.mcnemar_vs_ref = mcnemar_test(
+                    sys_res.mcnemar_vs_ref = mcnemar_test(
                         [a.correct for a, _ in paired], [b.correct for _, b in paired]
                     )
-                    r.paired_f1_vs_ref = paired_bootstrap_test(
+                    sys_res.paired_f1_vs_ref = paired_bootstrap_test(
                         [a.f1 for a, _ in paired], [b.f1 for _, b in paired]
                     )
 

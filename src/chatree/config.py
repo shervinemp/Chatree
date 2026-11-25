@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Literal
+
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 ToolPermission = Literal["read_only", "read_write"]
 SpawnPolicy = Literal["auto", "suggest", "manual"]

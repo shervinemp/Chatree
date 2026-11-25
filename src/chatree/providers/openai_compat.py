@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 import json
 import os
 import random
 import time
-from typing import Any, AsyncIterator, Callable
 import urllib.error
 import urllib.request
 import uuid
+from dataclasses import dataclass
+from typing import Any, AsyncIterator, Callable
 
 from chatree.providers.mock import MockLLMProvider, estimate_messages_tokens, estimate_tokens
 from chatree.types import LLMResponse, LLMStreamEvent, LLMToolCall
@@ -279,7 +279,8 @@ class OpenAICompatibleProvider:
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
                     raw = resp.read().decode("utf-8")
-                    return json.loads(raw)
+                    parsed: dict[str, Any] = json.loads(raw)
+                    return parsed
             except urllib.error.HTTPError as err:
                 err_body = ""
                 try:

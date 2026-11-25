@@ -269,6 +269,7 @@ class OpenAICompatibleEmbedder:
             return []
         import json
         import urllib.request
+
         from chatree.providers.openai_compat import resolve_provider_endpoint
 
         spec, base_url, key = resolve_provider_endpoint(

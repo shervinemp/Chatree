@@ -1,18 +1,9 @@
 from __future__ import annotations
 
-import hashlib
-import json
-import re
-from typing import Any
+from typing import Any, Sequence
 
 from chatree.storage.repos.base import (
     _np,
-    _row_to_artifact,
-    _row_to_ipc,
-    _row_to_mailbox,
-    _row_to_message,
-    _row_to_node,
-    _row_to_tree,
     cosine_similarity,
     eligible_node_ids_safe,
     new_id,
@@ -23,36 +14,18 @@ from chatree.storage.repos.base import (
     utc_now,
 )
 from chatree.types import (
-    ArtifactInput,
-    ArtifactModel,
-    ArtifactRef,
-    BackgroundJobModel,
-    BranchFactModel,
-    ChangeSeverity,
-    ChildContextMode,
     EmbeddingRecord,
-    IpcEventModel,
-    IpcEventType,
-    MailboxItemModel,
-    MailboxStatus,
-    MessageModel,
     NodeModel,
-    NodeStatus,
     RagGranularity,
-    ReflogAction,
-    ReflogEntryModel,
     SearchHit,
     SearchScope,
-    StaleDependencyInfo,
-    ToolPermission,
-    TreeInvariantModel,
-    TreeModel,
 )
 
 
 class SearchVectorsMixin:
     db: Any
     conn: Any
+    list_nodes: Any
     _vector_cache: dict[str, dict[int, tuple[list[EmbeddingRecord], Any]]]
     _vector_cache_hits: int
     _vector_cache_misses: int
@@ -158,7 +131,7 @@ class SearchVectorsMixin:
         node_id: str,
         path: str,
         granularity: RagGranularity,
-        items: list[tuple[int, int | None, int | None, str, list[float], int]],
+        items: Sequence[tuple[int, int | None, int | None, str, list[float], int]],
     ) -> int:
         """
         Atomically replace embeddings for `(node_id, granularity)`.
@@ -509,6 +482,7 @@ class SearchVectorsMixin:
                     node_id=n.id,
                     node_title=n.title,
                     node_status=n.status,
+                    node_kind=n.node_kind,
                     path=n.path,
                     summary_version=n.summary_version,
                     summary=n.summary,
@@ -544,6 +518,7 @@ class SearchVectorsMixin:
                     node_id=n.id,
                     node_title=n.title,
                     node_status=n.status,
+                    node_kind=n.node_kind,
                     path=n.path,
                     summary_version=n.summary_version,
                     summary=n.summary,

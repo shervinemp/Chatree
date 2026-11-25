@@ -3,7 +3,6 @@ from __future__ import annotations
 import inspect
 from typing import Any, Awaitable, Callable, Literal
 
-
 HookEventName = Literal[
     "turn_start",
     "turn_complete",
@@ -18,6 +17,8 @@ HookEventName = Literal[
     "branch_extracted",
     "branch_promoted",
     "branch_compacted",
+    "branch_archived",
+    "subagent_promoted",
     "background_started",
     "background_completed",
     "background_failed",

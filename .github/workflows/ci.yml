@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python:
+    name: Python (Ruff, Mypy, Pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --extra server --group dev
+
+      - name: Lint with Ruff
+        run: uv run --with ruff ruff check src tests scripts examples
+
+      - name: Type-check with Mypy
+        run: uv run --with mypy mypy src/chatree
+
+      - name: Run unit & integration tests
+        run: uv run pytest -v
+
+      - name: Verify package wheel build
+        run: |
+          uv build
+          uv run python -c "
+          import glob, zipfile
+          wheels = glob.glob('dist/*.whl')
+          assert wheels, 'No wheel built'
+          with zipfile.ZipFile(wheels[0]) as zf:
+              names = zf.namelist()
+          assert 'chatree/storage/schema.sql' in names, f'Missing schema.sql in {names}'
+          print('Wheel verified:', wheels[0], 'files:', len(names))
+          "
+
+  demo-ui:
+    name: Demo UI (TypeScript + Vite Build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo/ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: demo/ui/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check and build UI
+        run: pnpm build

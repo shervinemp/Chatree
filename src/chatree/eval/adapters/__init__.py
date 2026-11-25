@@ -6,11 +6,11 @@ from chatree.eval.adapters.baselines import (
 )
 from chatree.eval.adapters.chatree import ChatreeSystemAdapter
 from chatree.eval.adapters.sota import (
+    _RLM_LOCAL_REPL_LOCK,
     GraphitiOfficialAdapter,
     LettaOfficialAdapter,
     Mem0OfficialAdapter,
     RLMOfficialAdapter,
-    _RLM_LOCAL_REPL_LOCK,
 )
 
 __all__ = [

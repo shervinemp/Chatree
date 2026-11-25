@@ -1,55 +1,26 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import inspect
 import json
-import re
 import time
-from typing import Any, Callable
+from typing import Any
 
-from chatree.config import AblationConfig, GuardrailPolicy, ToolPermission
-from chatree.engine.context import ContextAssembler
 from chatree.engine.guardrails import TraceContext
-from chatree.engine.rag import TreeRAGService, extract_key_identifiers
-from chatree.engine.reflog import ReflogService
-from chatree.engine.staleness import StalenessService
-from chatree.hooks import HookBus
-from chatree.protocols import LLMProvider, ModelRouter
+from chatree.engine.ipc.types import IpcExecutionResult
+from chatree.engine.rag import extract_key_identifiers
 from chatree.providers.mock import estimate_messages_tokens
-from chatree.sandbox import BranchSandbox
-from chatree.storage.repository import SQLiteRepository, cosine_similarity
+from chatree.storage.repository import cosine_similarity
 from chatree.tools import (
     CORE_TOOL_NAMES,
     SHADOW_READ_ONLY_CORE_TOOLS,
-    TOOL_ARCHIVE_BRANCH,
-    TOOL_ASK_TREE,
-    TOOL_COMPACT_BRANCH,
-    TOOL_PIN_INVARIANT,
-    TOOL_REFLOG_JUMP,
-    TOOL_REQUEST,
-    TOOL_SEARCH_TREE,
-    TOOL_SEND,
-    TOOL_SPAWN_CHILD,
-    ToolCallContext,
-    ToolRegistry,
 )
 from chatree.types import (
-    ArtifactInput,
-    ArtifactRef,
-    ChildContextMode,
-    IpcEventModel,
-    LLMToolCall,
-    MailboxItemModel,
     NodeModel,
-    ReflogEntryModel,
     SearchScope,
     TreeModel,
 )
 
-
-from chatree.engine.ipc.types import IpcExecutionResult
 
 class IpcShadowMixin:
     repo: Any
@@ -62,6 +33,10 @@ class IpcShadowMixin:
     tools: Any
     hooks: Any
     guardrails: Any
+    get_node_cache_age_seconds: Any
+    _resolve_model: Any
+    mark_node_llm_warm: Any
+    execute_tool: Any
     ablations: Any
     sandbox: Any
 
@@ -622,7 +597,7 @@ class IpcShadowMixin:
         target_ids = ordered_candidates[:capped_targets]
 
         if not target_ids:
-            out = {
+            out: dict[str, Any] = {
                 "query": query,
                 "scope": scope,
                 "targets_queried": [],

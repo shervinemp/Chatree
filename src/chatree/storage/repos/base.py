@@ -1,47 +1,31 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-import hashlib
 import json
 import math
 import re
 import struct
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 import aiosqlite
+
+from chatree.types import (
+    ArtifactModel,
+    ArtifactRef,
+    IpcEventModel,
+    MailboxItemModel,
+    MessageModel,
+    NodeModel,
+    StaleDependencyInfo,
+    TreeModel,
+)
+
+_np: Any
 try:
     import numpy as _np  # type: ignore[import-not-found]
 except ImportError:
     _np = None
-
-from chatree.config import ToolPermission
-from chatree.storage.database import Database
-from chatree.types import (
-    ArtifactInput,
-    ArtifactModel,
-    ArtifactRef,
-    BackgroundJobModel,
-    BranchFactModel,
-    ChangeSeverity,
-    ContextMode,
-    EmbeddingRecord,
-    IpcEventModel,
-    IpcEventType,
-    MailboxItemModel,
-    MailboxStatus,
-    MessageModel,
-    NodeModel,
-    NodeStatus,
-    RagGranularity,
-    ReflogAction,
-    ReflogEntryModel,
-    SearchHit,
-    SearchScope,
-    StaleDependencyInfo,
-    TreeInvariantModel,
-    TreeModel,
-)
 
 
 def utc_now() -> str:
@@ -132,6 +116,11 @@ def _row_to_node(
         spawn_msg_seq=row["spawn_msg_seq"],
         slice_turn_count=row["slice_turn_count"],
         status=row["status"],
+        node_kind=(
+            row["node_kind"]
+            if "node_kind" in row.keys() and row["node_kind"] in ("chat", "subagent")
+            else "chat"
+        ),
         tool_permission=row["tool_permission"],
         model_override=row["model_override"],
         summary=row["summary"],

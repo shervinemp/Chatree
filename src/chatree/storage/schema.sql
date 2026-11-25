@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     spawn_msg_seq INTEGER NOT NULL DEFAULT 0,
     slice_turn_count INTEGER NOT NULL DEFAULT 6,
     status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'COMPLETED', 'ARCHIVED')),
+    node_kind TEXT NOT NULL DEFAULT 'chat' CHECK(node_kind IN ('chat', 'subagent')),
     tool_permission TEXT NOT NULL DEFAULT 'read_only' CHECK(tool_permission IN ('read_only', 'read_write')),
     model_override TEXT,
     summary TEXT,

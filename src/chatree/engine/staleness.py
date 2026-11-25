@@ -14,7 +14,6 @@ from chatree.storage.repository import SQLiteRepository, cosine_similarity
 from chatree.tools import ToolRegistry
 from chatree.types import ChangeSeverity, NodeModel, NodeStatus, TreeModel
 
-
 _POLARITY_TOKENS: frozenset[str] = frozenset(
     {
         "not",

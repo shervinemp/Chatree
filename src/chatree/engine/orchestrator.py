@@ -16,7 +16,15 @@ from chatree.protocols import LLMProvider, ModelRouter
 from chatree.providers.mock import estimate_messages_tokens
 from chatree.storage.repository import SQLiteRepository
 from chatree.tools import TOOL_SEND, ToolRegistry
-from chatree.types import IpcEventModel, LLMResponse, MailboxItemModel, MessageModel, TurnResult
+from chatree.types import (
+    IpcEventModel,
+    LLMResponse,
+    MailboxItemModel,
+    MessageModel,
+    NodeModel,
+    TreeModel,
+    TurnResult,
+)
 
 
 class TurnOrchestrator:
@@ -280,6 +288,18 @@ class TurnOrchestrator:
         node_id = node.id
         for cev in compact_events:
             yield cev
+
+        # Promotable subagent lifecycle: if a human directly chats inside a subagent node,
+        # seamlessly adopt it as a first-class interactive 'chat' branch.
+        if node.node_kind == "subagent":
+            promoted = await self.repo.update_node(node.id, node_kind="chat")
+            if promoted is not None:
+                node = promoted
+            if self.hooks:
+                await self.hooks.emit(
+                    "subagent_promoted",
+                    {"tree_id": tree.id, "node_id": node.id, "title": node.title},
+                )
 
         reopened = False
         if node.status == "COMPLETED":

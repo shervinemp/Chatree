@@ -1,51 +1,25 @@
 from __future__ import annotations
 
-import hashlib
 import json
-import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from chatree.storage.repos.base import (
-    _np,
-    _row_to_artifact,
-    _row_to_ipc,
-    _row_to_mailbox,
     _row_to_message,
     _row_to_node,
     _row_to_tree,
-    cosine_similarity,
-    eligible_node_ids_safe,
     new_id,
-    normalize_bm25,
-    pack_vector,
-    sanitize_fts_query,
-    unpack_vector,
     utc_now,
 )
 from chatree.types import (
-    ArtifactInput,
-    ArtifactModel,
-    ArtifactRef,
-    BackgroundJobModel,
-    BranchFactModel,
     ChangeSeverity,
-    ChildContextMode,
-    EmbeddingRecord,
-    IpcEventModel,
-    IpcEventType,
-    MailboxItemModel,
-    MailboxStatus,
+    ContextMode,
     MessageModel,
+    NodeKind,
     NodeModel,
     NodeStatus,
-    RagGranularity,
-    ReflogAction,
     ReflogEntryModel,
-    SearchHit,
-    SearchScope,
     StaleDependencyInfo,
     ToolPermission,
-    TreeInvariantModel,
     TreeModel,
 )
 
@@ -53,6 +27,24 @@ from chatree.types import (
 class TreesNodesMessagesMixin:
     db: Any
     conn: Any
+    if TYPE_CHECKING:
+        async def _upsert_node_fts(
+            self,
+            node_id: str,
+            tree_id: str,
+            title: str,
+            goal: str,
+            summary: str,
+            rollup_summary: str,
+        ) -> None: ...
+        async def list_reflog(self, tree_id: str, limit: int = 100) -> list[ReflogEntryModel]: ...
+        async def compute_stale_dependencies_map(
+            self,
+            tree_id: str,
+            *,
+            transitive: bool = True,
+            max_hops: int = 3,
+        ) -> dict[str, list[StaleDependencyInfo]]: ...
 
     # ------------------------------------------------------------------
     # Trees
@@ -166,7 +158,7 @@ class TreesNodesMessagesMixin:
             await self.conn.execute("DELETE FROM nodes_fts WHERE tree_id = ?", (tree_id,))
             await self.conn.execute("DELETE FROM embeddings_fts WHERE tree_id = ?", (tree_id,))
             cur = await self.conn.execute("DELETE FROM trees WHERE id = ?", (tree_id,))
-            deleted = cur.rowcount > 0
+            deleted = bool((cur.rowcount or 0) > 0)
         return deleted
 
     # ------------------------------------------------------------------
@@ -184,6 +176,7 @@ class TreesNodesMessagesMixin:
         slice_turn_count: int = 6,
         model_override: str | None = None,
         tool_permission: ToolPermission = "read_only",
+        node_kind: NodeKind = "chat",
     ) -> NodeModel:
         now = utc_now()
         node_id = new_id("n")
@@ -195,10 +188,10 @@ class TreesNodesMessagesMixin:
                 """
                 INSERT INTO nodes (
                     id, tree_id, parent_id, path, depth, title, goal, summary_brief,
-                    context_mode, spawn_msg_seq, slice_turn_count, status, tool_permission,
+                    context_mode, spawn_msg_seq, slice_turn_count, status, node_kind, tool_permission,
                     model_override, summary, summary_version, rollup_summary, is_dirty,
                     last_msg_seq, tokens_in, tokens_out, cache_read_tokens, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?,
                           ?, NULL, 0, NULL, 0, 0, 0, 0, 0, ?, ?)
                 """,
                 (
@@ -213,6 +206,7 @@ class TreesNodesMessagesMixin:
                     context_mode,
                     spawn_msg_seq,
                     slice_turn_count,
+                    node_kind,
                     tool_permission,
                     model_override,
                     now,
@@ -311,6 +305,7 @@ class TreesNodesMessagesMixin:
             "goal",
             "summary_brief",
             "status",
+            "node_kind",
             "tool_permission",
             "model_override",
             "summary",

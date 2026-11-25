@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
-from typing import Any, Literal
+from typing import Literal
 
 from chatree.protocols import LLMProvider
 from chatree.providers.litellm import LiteLLMProvider

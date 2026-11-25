@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import inspect
-from pathlib import Path
 import re
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Literal, get_type_hints
 
 from chatree.config import ToolPermission
 from chatree.types import NodeModel, TreeModel
-
 
 CORE_TOOL_NAMESPACE = "dialogue_tree"
 _VALID_TOOL_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -77,18 +76,19 @@ def format_namespaced_tool(namespace: str | None, name: str, *, separator: str =
 STATIC_SYSTEM_PROMPT = f"""You operate inside a hierarchical dialogue tree where each branch is an isolated conversation node with its own history, goal, and versioned summary.
 
 Context envelope (`<dialogue_tree_context>`):
-- `TREE` = structural hierarchy (parent, siblings, children; `*` = dirty uncommitted turns).
-- `REFLOG` = temporal visit order (`HEAD@{{0}}` current, `HEAD@{{1}}` previous).
+- `TREE` = structural hierarchy (parent, siblings, children; `*` = dirty uncommitted turns; `[subagent]` = non-chat worker node).
+- `REFLOG` = interactive `HEAD`-only focus history (`HEAD@{{0}}` current chat branch, `HEAD@{{1}}` previous chat branch).
 - `BRANCH SUMMARIES` = compact Tier-2 overview of other summarized branches; `PINNED` = tree-wide locked invariants (verify any marked `[STALE]`); `FACTS` = relevant provenance-tagged atomic dated facts from sibling branches.
-- `STALE` = previously read branches modified since last check; `RELATED` = search pointers; `MAILBOX` = delivered handoffs.
+- `STALE` = previously read branches modified since last check; `RELATED` = search pointers; `SUBAGENTS` = currently running background workers (when active); `MAILBOX` = delivered handoffs.
 
 Tool routing (`{CORE_TOOL_NAMESPACE}_*` — see JSON schemas for parameters):
 - Stay in-branch and answer directly when this branch or clean `BRANCH SUMMARIES` already suffice; avoid speculative cross-branch calls on routine turns.
 - Known branch ID → call `{TOOL_REQUEST}` directly (emit independent calls in parallel): omit `prompt` for 0-cost cached summary, or pass `prompt` when needing verbatim detail or when the branch is dirty (`*`)/`STALE`.
 - Unknown branch ID → call `{TOOL_ASK_TREE}` (1-hop search+query, when provided) or `{TOOL_SEARCH_TREE}` (browse snippets).
-- Isolated tangent or sub-task → `{TOOL_SPAWN_CHILD}` (`fork`=shared prefix, `slice`=recent turns, `clean`=isolated); conclude and squash-merge via `{TOOL_SEND}(finish=True)`.
+- Interactive topic or tangent → `{TOOL_SPAWN_CHILD}` (`autonomous=False`, moves `HEAD`; `fork`=shared prefix, `slice`=recent turns, `clean`=isolated); conclude and squash-merge via `{TOOL_SEND}(finish=True)`.
+- Behind-the-scenes sub-agent task (isolated lookup, Graph RAG traversal, or verification that should not hijack the chat) → `{TOOL_SPAWN_CHILD}(autonomous=True, context_mode="clean")` so `HEAD` stays on the active chat; inspect finished `[subagent]` nodes via `{TOOL_REQUEST}` rather than switching `HEAD` into them unless the user asks to open them.
 - Abandoning or scrapping a dead-end prototype/branch → call `{TOOL_ARCHIVE_BRANCH}` (NEVER merge it) so its turns and facts are quarantined from future search and HEAD returns cleanly to parent.
-- Switch active focus (or 1-turn jump-and-act via `follow_up_prompt`) → `{TOOL_REFLOG_JUMP}`, then remain on the destination branch unless asked to return.
+- Switch active chat focus (or 1-turn jump-and-act via `follow_up_prompt`) → `{TOOL_REFLOG_JUMP}`, then remain on the destination branch unless asked to return.
 - Long branch nearing context budget → `{TOOL_COMPACT_BRANCH}` to spawn a compact linked continuation branch while keeping the previous branch verbatim in the tree for future lossless shadow queries.
 - Global tree-wide invariants (`read_write` branches only) → `{TOOL_PIN_INVARIANT}` to pin/update/unpin up to 8 concise constraints visible to every branch.
 
@@ -129,8 +129,9 @@ CORE_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "function": {
             "name": TOOL_SPAWN_CHILD,
             "description": (
-                "Open a new child branch under the current branch for a distinct tangent, deep-dive, "
-                "or bounded sub-task and switch HEAD into it (unless autonomous=True)."
+                "Open a new child branch under the current branch. Use autonomous=False (default) for an "
+                "interactive topic/tangent that moves HEAD; use autonomous=True for a silent sub-agent worker "
+                "that runs in isolation, keeps HEAD on the current chat, and returns its conclusion inline."
             ),
             "parameters": {
                 "type": "object",
@@ -219,7 +220,7 @@ CORE_TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "function": {
             "name": TOOL_SEARCH_TREE,
             "description": (
-                "Hybrid BM25+vector search across branch chunks, summaries, and subtree rollups "
+                "Hybrid BM25+vector search across branch chunks, summaries, atomic facts, and subtree rollups "
                 f"to discover relevant branch IDs and snippets before calling {TOOL_REQUEST}."
             ),
             "parameters": {

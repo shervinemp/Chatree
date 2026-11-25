@@ -1,6 +1,7 @@
 """Quickstart showing Chatree used directly as an embeddable Python library."""
 
 import asyncio
+
 from chatree import ArtifactInput, Chatree
 
 

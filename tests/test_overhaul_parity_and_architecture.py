@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 from httpx import ASGITransport, AsyncClient
-import pytest
 
 from chatree import (
     CallableLLMProvider,
@@ -428,19 +427,22 @@ async def test_unified_tree_query_engine_live_and_adapter_parity():
 
 def test_modular_package_backward_compatible_imports():
     """All pre-refactor import paths must continue resolving cleanly alongside modular subpackages."""
-    from chatree.engine.ipc import IPCRouter, IpcExecutionResult
+    from chatree.engine.ipc import IpcExecutionResult, IPCRouter
     from chatree.engine.ipc.branching import IpcBranchingMixin
     from chatree.engine.ipc.lifecycle import IpcLifecycleMixin
     from chatree.engine.ipc.shadow import IpcShadowMixin
     from chatree.eval.adapters import (
         ChatreeSystemAdapter as LegacyChatreeAdapter,
+    )
+    from chatree.eval.adapters import (
         FlatHybridRAGAdapter,
         FullContextLinearAdapter,
         Mem0OfficialAdapter,
         MemorySystemAdapter,
         RLMOfficialAdapter,
     )
-    from chatree.server.app import AskTreePayload, TreeSnapshotResponse, create_app as legacy_create_app
+    from chatree.server.app import AskTreePayload, TreeSnapshotResponse
+    from chatree.server.app import create_app as legacy_create_app
     from chatree.storage.repos import SearchVectorsMixin, TreesNodesMessagesMixin
     from chatree.storage.repository import SQLiteRepository, cosine_similarity, new_id
 

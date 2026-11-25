@@ -326,8 +326,8 @@ class MockLLMProvider:
                 if not txt:
                     continue
                 m_terms = {w for w in re.findall(r"[a-z0-9_]{3,}", txt.lower())}
-                overlap = float(len(q_terms & m_terms))
-                scored_win.append((overlap + idx * 0.05, txt[:260]))
+                win_overlap = float(len(q_terms & m_terms))
+                scored_win.append((win_overlap + idx * 0.05, txt[:260]))
             scored_win.sort(key=lambda x: x[0], reverse=True)
             best = "\n".join(t for sc, t in scored_win[:2] if sc > 0.5) or "(Not found in sliding window.)"
             ans = f'Sliding-window answer for "{question[:120]}":\n{best}'
@@ -785,9 +785,9 @@ class MockLLMProvider:
             for idx, m in enumerate(prior_conv):
                 txt = str(m.get("content") or "").strip()
                 m_terms = {w for w in re.findall(r"[a-z0-9_]{3,}", txt.lower())}
-                overlap = float(len(q_terms & m_terms))
-                if overlap > 0:
-                    scored_prev.append((overlap + idx * 0.02, f"[{m['role']}] {txt[:260]}"))
+                prev_overlap = float(len(q_terms & m_terms))
+                if prev_overlap > 0:
+                    scored_prev.append((prev_overlap + idx * 0.02, f"[{m['role']}] {txt[:260]}"))
             if scored_prev:
                 scored_prev.sort(key=lambda x: x[0], reverse=True)
                 top_lines = "\n".join(line for _, line in scored_prev[:2])

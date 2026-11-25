@@ -18,7 +18,6 @@ from chatree.types import (
     TreeModel,
 )
 
-
 ModelRole = Literal["chat", "shadow", "summary"]
 
 

@@ -1,6 +1,7 @@
 export type ContextMode = 'root' | 'fork' | 'slice' | 'clean'
 export type ChildContextMode = 'fork' | 'slice' | 'clean'
 export type NodeStatus = 'ACTIVE' | 'COMPLETED' | 'ARCHIVED'
+export type NodeKind = 'chat' | 'subagent'
 export type ToolPermission = 'read_only' | 'read_write'
 export type LLMBackendKind = 'auto' | 'litellm' | 'openai_compat' | 'mock'
 export type ReflogAction = 'init' | 'spawn' | 'jump' | 'return' | 'close' | 'reopen' | 'fork_edit'
@@ -77,6 +78,7 @@ export interface NodeModel {
   spawn_msg_seq: number
   slice_turn_count: number
   status: NodeStatus
+  node_kind?: NodeKind
   model_override: string | null
   tool_permission?: ToolPermission
   summary: string | null

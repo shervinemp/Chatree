@@ -1,55 +1,25 @@
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import inspect
-import json
 import re
 import time
-from typing import Any, Callable
+from typing import Any
 
-from chatree.config import AblationConfig, GuardrailPolicy, ToolPermission
-from chatree.engine.context import ContextAssembler
 from chatree.engine.guardrails import TraceContext
-from chatree.engine.rag import TreeRAGService, extract_key_identifiers
-from chatree.engine.reflog import ReflogService
-from chatree.engine.staleness import StalenessService
-from chatree.hooks import HookBus
-from chatree.protocols import LLMProvider, ModelRouter
-from chatree.providers.mock import estimate_messages_tokens
-from chatree.sandbox import BranchSandbox
-from chatree.storage.repository import SQLiteRepository, cosine_similarity
+from chatree.engine.ipc.types import IpcExecutionResult
 from chatree.tools import (
-    CORE_TOOL_NAMES,
-    SHADOW_READ_ONLY_CORE_TOOLS,
     TOOL_ARCHIVE_BRANCH,
     TOOL_ASK_TREE,
-    TOOL_COMPACT_BRANCH,
     TOOL_PIN_INVARIANT,
-    TOOL_REFLOG_JUMP,
     TOOL_REQUEST,
-    TOOL_SEARCH_TREE,
-    TOOL_SEND,
-    TOOL_SPAWN_CHILD,
-    ToolCallContext,
-    ToolRegistry,
 )
 from chatree.types import (
-    ArtifactInput,
-    ArtifactRef,
     ChildContextMode,
-    IpcEventModel,
-    LLMToolCall,
-    MailboxItemModel,
     NodeModel,
     ReflogEntryModel,
-    SearchScope,
     TreeModel,
 )
 
-
-from chatree.engine.ipc.types import IpcExecutionResult
 
 class IpcLifecycleMixin:
     repo: Any
@@ -64,6 +34,8 @@ class IpcLifecycleMixin:
     guardrails: Any
     ablations: Any
     sandbox: Any
+    mark_node_llm_warm: Any
+    on_branch_archived: Any
 
     # ------------------------------------------------------------------
     # 6. compact_branch (Non-Destructive Continuation Chaining)
@@ -179,16 +151,18 @@ class IpcLifecycleMixin:
             f"Compacted continuation of {updated_source.id} ({updated_source.title}, "
             f"{tokens_before}->{tokens_after} tok). Ancestor history remains verbatim & queryable."
         )
-        entry = await self.reflog.record_transition(
-            tree_id=tree.id,
-            from_node=updated_source,
-            to_node=cont_node,
-            action="spawn",
-            note=note_txt,
-            orientation_cue=cue,
-            update_head=switch_head,
-        )
-        head_changed = (updated_source.id, cont_node.id, entry) if switch_head else None
+        head_changed: tuple[str, str, ReflogEntryModel] | None = None
+        if switch_head:
+            entry = await self.reflog.record_transition(
+                tree_id=tree.id,
+                from_node=updated_source,
+                to_node=cont_node,
+                action="spawn",
+                note=note_txt,
+                orientation_cue=cue,
+                update_head=True,
+            )
+            head_changed = (updated_source.id, cont_node.id, entry)
 
         latency_ms = int((time.perf_counter() - t0) * 1000)
         out: dict[str, Any] = {
@@ -394,6 +368,14 @@ class IpcLifecycleMixin:
 
         archived = await self.repo.update_node(target.id, status="ARCHIVED", is_dirty=False)
         assert archived is not None
+        # Supervisor cascade: cancel any in-flight background sub-agents scoped to this archived subtree
+        cancelled_jobs: list[str] = []
+        if self.on_branch_archived is not None:
+            res_cb = self.on_branch_archived(tree.id, archived.id)
+            if inspect.isawaitable(res_cb):
+                res_cb = await res_cb
+            if isinstance(res_cb, list):
+                cancelled_jobs = [str(j) for j in res_cb]
         # Refresh parent's Tier-3 subtree rollup so archived branch no longer leaks into active rollups
         if archived.parent_id:
             await self.rag.propagate_rollups_upward(archived.id)
@@ -428,6 +410,7 @@ class IpcLifecycleMixin:
             "archived_node_title": archived.title,
             "status": archived.status,
             "quarantined_from_search": True,
+            "cancelled_background_jobs": cancelled_jobs,
             "reason": reason.strip(),
             "switched_head_to": switched_to_id,
         }

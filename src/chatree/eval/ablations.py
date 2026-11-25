@@ -9,7 +9,7 @@ from typing import Sequence
 from pydantic import BaseModel, Field
 
 from chatree.config import AblationConfig, ChatreeConfig
-from chatree.eval.runner import BaselineMode, BenchmarkRunner, ModeBenchmarkResult
+from chatree.eval.runner import BaselineMode, BenchmarkRunner
 from chatree.eval.scenarios import (
     MultiTangentScenario,
     build_full_eval_suite,
@@ -26,7 +26,6 @@ from chatree.eval.stats import (
 from chatree.protocols import Embedder, LLMProvider, Reranker
 from chatree.providers.mock import MockLLMProvider
 from chatree.sdk.client import Chatree
-
 
 # Canonical systematic ablation matrix isolating every Chatree architectural mechanism
 ABLATION_PRESETS: dict[str, tuple[AblationConfig, bool]] = {
@@ -297,9 +296,9 @@ class AblationMatrixRunner:
                     await tree.chat(step.content, node_id=nid, include_core_tools=False)
                     await _track_root()
                 elif step.kind == "finish":
-                    nid = branch_map.get(step.branch)
-                    if nid and nid != root.id:
-                        await tree.node(nid).finish(
+                    finish_nid = branch_map.get(step.branch)
+                    if finish_nid and finish_nid != root.id:
+                        await tree.node(finish_nid).finish(
                             summary=step.content or None, auto_commit=True, return_to_parent=True
                         )
                         await _track_root()

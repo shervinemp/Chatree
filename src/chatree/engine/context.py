@@ -199,18 +199,28 @@ class ContextAssembler:
             for n in all_nodes
             if n.parent_id == node.parent_id and n.id != node.id and node.parent_id is not None
         ]
-        reflog_entries = await self.repo.list_reflog(tree.id, limit=12)
+        reflog_entries = await self.repo.list_reflog(tree.id, limit=24)
         invariants = await self.repo.list_tree_invariants(tree.id)
         cues = await self.repo.get_unconsumed_orientation_cues(tree.id, node.id)
+        running_jobs = (
+            [
+                j
+                for j in await self.repo.list_background_jobs(tree.id, limit=20)
+                if j.status == "running"
+            ]
+            if hasattr(self.repo, "list_background_jobs")
+            else []
+        )
         stale_deps = node.stale_dependencies if self.ablations.enable_staleness_notices else []
         if not self.ablations.enable_transitive_staleness:
             stale_deps = [d for d in stale_deps if d.hops == 1]
 
+        self_kind_tag = f" kind={node.node_kind}" if node.node_kind != "chat" else ""
         lines: list[str] = [
             "<dialogue_tree_context>",
             (
                 f'branch={node.id} "{_escape_envelope_text(node.title)}" | '
-                f"status={node.status} mode={node.context_mode} depth={node.depth} "
+                f"status={node.status}{self_kind_tag} mode={node.context_mode} depth={node.depth} "
                 f"perm={node.tool_permission} parent={node.parent_id or 'NONE'} path=\"{node.path}\""
             ),
         ]
@@ -248,48 +258,56 @@ class ContextAssembler:
             )
         if siblings:
             sib_strs = [
-                f'{s.id} "{_escape_envelope_text(s.title)}" {s.status} v{s.summary_version}{"*" if s.is_dirty else ""}'
+                f'{s.id} "{_escape_envelope_text(s.title)}"'
+                f'{" [subagent]" if s.node_kind == "subagent" else ""} '
+                f'{s.status} v{s.summary_version}{"*" if s.is_dirty else ""}'
                 for s in siblings[:8]
             ]
             tree_parts.append('siblings: ' + "; ".join(sib_strs))
         if children:
             child_strs = [
-                f'{c.id} "{_escape_envelope_text(c.title)}" {c.status} v{c.summary_version}{"*" if c.is_dirty else ""}'
+                f'{c.id} "{_escape_envelope_text(c.title)}"'
+                f'{" [subagent]" if c.node_kind == "subagent" else ""} '
+                f'{c.status} v{c.summary_version}{"*" if c.is_dirty else ""}'
                 for c in children[:10]
             ]
             tree_parts.append('children: ' + "; ".join(child_strs))
         if tree_parts:
-            lines.append('TREE [id "title" status v# (*=dirty)]: ' + " | ".join(tree_parts))
+            lines.append('TREE [id "title" ([subagent]) status v# (*=dirty)]: ' + " | ".join(tree_parts))
 
-        # 2. Temporal REFLOG visit stack (explicitly distinct from structural TREE!)
+        # 2. Temporal REFLOG visit stack (HEAD-only, MRU-deduplicated while preserving exact HEAD@{k} indices!)
         if len(reflog_entries) > 1:
             reflog_parts: list[str] = []
-            seen_refs = 0
+            seen_reflog_nodes: set[str] = set()
             for idx, entry in enumerate(reflog_entries):
-                if seen_refs >= 5:
+                if len(reflog_parts) >= 5:
                     break
+                if entry.to_node_id in seen_reflog_nodes:
+                    continue
+                seen_reflog_nodes.add(entry.to_node_id)
                 dest = nodes_by_id.get(entry.to_node_id)
                 dest_title = _escape_envelope_text(dest.title) if dest else entry.to_node_id
                 reflog_parts.append(f'@{{{idx}}}={entry.to_node_id} "{dest_title}" ({entry.action})')
-                seen_refs += 1
-            if reflog_parts:
+            if len(reflog_parts) > 1:
                 lines.append(
                     'REFLOG [HEAD@{k}=id "title" (action) -> call dialogue_tree_switch_branch]: '
                     + "; ".join(reflog_parts)
                 )
 
-        # 3. Compact Tier-2 BRANCH SUMMARIES overview for other non-archived summarized branches
+        # 3. Compact Tier-2 BRANCH SUMMARIES overview (interactive chat branches prioritized over subagents)
         summarized_others = [
             n
             for n in all_nodes
             if n.id != node.id and n.status != "ARCHIVED" and n.summary and n.summary.strip()
         ]
+        summarized_others.sort(key=lambda n: (0 if n.node_kind == "chat" else 1, n.updated_at))
         if summarized_others:
             lines.append('BRANCH SUMMARIES [id "title" status v# | summary]:')
             for other in summarized_others[:8]:
                 compact = _escape_envelope_text(" ".join((other.summary or "").split())[:140])
+                kind_tag = " [subagent]" if other.node_kind == "subagent" else ""
                 lines.append(
-                    f'- {other.id} "{_escape_envelope_text(other.title)}" '
+                    f'- {other.id} "{_escape_envelope_text(other.title)}"{kind_tag} '
                     f"{other.status} v{other.summary_version} | {compact}"
                 )
 
@@ -327,13 +345,14 @@ class ContextAssembler:
                     continue
                 seen_nodes.add(h.node_id)
                 one_line = _escape_envelope_text(" ".join((h.summary or h.snippet).split())[:140])
+                kind_tag = " [subagent]" if h.node_kind == "subagent" else ""
                 pointer_lines.append(
-                    f'- {h.node_id} "{_escape_envelope_text(h.node_title)}" '
+                    f'- {h.node_id} "{_escape_envelope_text(h.node_title)}"{kind_tag} '
                     f"{h.node_status} v{h.summary_version} {h.score:.3f} | {one_line}"
                 )
             if pointer_lines:
                 lines.append(
-                    'RELATED [id "title" status v# score | summary -> call dialogue_tree_query_branch(id, prompt)]:'
+                    'RELATED [id "title" status v# score | summary -> query_branch (or switch_branch for chat topics)]:'
                 )
                 lines.extend(pointer_lines)
 
@@ -358,6 +377,16 @@ class ContextAssembler:
             if fact_lines:
                 lines.append('FACTS [id "title" | dated atomic fact (verify via query_branch if critical)]:')
                 lines.extend(fact_lines)
+
+        if running_jobs:
+            job_strs = [
+                f'{j.child_node_id} "{_escape_envelope_text(j.title)}" (parent={j.parent_node_id})'
+                for j in running_jobs[:6]
+            ]
+            lines.append(
+                "SUBAGENTS [running -> results arrive in MAILBOX; do not duplicate-spawn]: "
+                + "; ".join(job_strs)
+            )
 
         if unread_mailbox:
             lines.append('MAILBOX [from_id "title" | summary | artifacts]:')

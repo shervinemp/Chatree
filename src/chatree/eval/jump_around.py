@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import csv
 import io
-import json
-from pathlib import Path
 import time
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -16,7 +15,6 @@ from chatree.protocols import Embedder, LLMProvider, Reranker
 from chatree.providers.litellm import LiteLLMProvider
 from chatree.providers.mock import MockLLMProvider, estimate_messages_tokens
 from chatree.sdk.client import Chatree
-
 
 JumpAroundTurnKind = Literal[
     "chat",
@@ -821,7 +819,7 @@ class JumpAroundBenchmarkRunner:
                             0, m_after.total_cache_read_tokens - m_before.total_cache_read_tokens
                         ),
                         latency_ms=round(elapsed_ms, 2),
-                        tools_called=tools_called,
+                        tools_called=[str(t) for t in tools_called],
                         answer_preview=res.content[:220],
                     )
                 )

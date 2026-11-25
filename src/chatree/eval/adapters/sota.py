@@ -1,27 +1,19 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
 import json
 import os
-from pathlib import Path
-import re
 import tempfile
 import threading
 import time
-from typing import Any, Protocol, runtime_checkable
-
-_RLM_LOCAL_REPL_LOCK = threading.Lock()
-
-from chatree.config import AblationConfig, ChatreeConfig
-from chatree.protocols import Embedder, LLMProvider, Reranker
-from chatree.providers.mock import MockLLMProvider
-from chatree.providers.openai_compat import resolve_provider_endpoint
-from chatree.sdk.client import Chatree, DialogueTree
-
+from pathlib import Path
+from typing import Any
 
 from chatree.eval.adapters.base import AdapterAnswer
+from chatree.protocols import LLMProvider
+from chatree.providers.openai_compat import resolve_provider_endpoint
 
+_RLM_LOCAL_REPL_LOCK = threading.Lock()
 
 
 class Mem0OfficialAdapter:
@@ -203,7 +195,7 @@ class Mem0OfficialAdapter:
                 },
                 {
                     "role": "user",
-                    "content": f"[Mem0 Memories]\n" + "\n".join(mem_lines) + f"\n\nQuestion: {prompt_q}",
+                    "content": "[Mem0 Memories]\n" + "\n".join(mem_lines) + f"\n\nQuestion: {prompt_q}",
                 },
             ],
             tools=None,
