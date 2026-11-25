@@ -21,9 +21,11 @@ from chatree.types import (
     TreeModel,
 )
 
-_np: Any
+_np: Any = None
 try:
-    import numpy as _np  # type: ignore[import-not-found]
+    import numpy as _numpy_mod
+
+    _np = _numpy_mod
 except ImportError:
     _np = None
 
