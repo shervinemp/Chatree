@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![Tests: 111 Passing](https://img.shields.io/badge/tests-111%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
-[![Paper: LaTeX + Markdown](https://img.shields.io/badge/paper-LaTeX%20%2B%20MD-blue.svg)](paper/chatree_paper.md)
+[![Paper: PDF + LaTeX + MD](https://img.shields.io/badge/paper-PDF%20%2B%20LaTeX%20%2B%20MD-blue.svg)](paper/chatree_paper.pdf)
 [![Local-First SQLite](https://img.shields.io/badge/storage-SQLite%20WAL%20%2B%20FTS5-lightgrey.svg)](#architecture)
 [![MCP Compatible](https://img.shields.io/badge/protocol-MCP%20JSON--RPC%202.0-purple.svg)](#cli-mcp-server--optional-demo-ui)
 
@@ -388,7 +388,7 @@ Chatree/
 │   └── server/                    # Modular FastAPI REST + SSE adapter (app, dtos, routes_trees, routes_nodes)
 ├── demo/ui/                       # Optional React + TypeScript IDE-style tree explorer
 ├── examples/                      # 5 runnable SDK, custom-tool, ablation, and eval scripts
-├── paper/                         # Camera-ready LaTeX paper (chatree_paper.tex), Markdown report, BibTeX & PDF/PNG/SVG figures
+├── paper/                         # Compiled PDF (chatree_paper.pdf), camera-ready LaTeX (chatree_paper.tex), Markdown report, BibTeX & figures
 ├── scripts/                       # Provider-agnostic evaluation runner & reproducible figure generator
 ├── results/deepseek_eval/         # Reproducible benchmark tables, LaTeX exports, checkpoints & manifests
 └── tests/                         # 111 automated unit & integration tests (zero API keys required)

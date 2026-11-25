@@ -95,7 +95,8 @@ Tree-of-Thoughts \citep{yao2023tot} explores branching search trees for single-p
 \caption{Qualitative capability comparison across long-horizon conversational memory architectures.}
 \label{tab:capabilities}
 \small
-\setlength{\tabcolsep}{4.2pt}
+\setlength{\tabcolsep}{3.5pt}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lccccccccc@{}}
 \toprule
 \textbf{Capability} & \textbf{Linear} & \textbf{Sliding} & \textbf{Flat RAG} & \textbf{Mem0} & \textbf{Letta} & \textbf{Zep/Graphiti} & \textbf{Folding} & \textbf{MIT RLM} & \textbf{\chatree{}} \\
@@ -110,7 +111,9 @@ KV-cache prefix preservation       & \checkmark & $\times$ & $\times$ & $\times$
 Git-style \texttt{HEAD@\{k\}} reflog & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & \textbf{\checkmark} \\
 \bottomrule
 \multicolumn{10}{@{}l}{\footnotesize $^\dagger$Full-context linear retains verbatim history only until the model's context window overflows.}
-\end{tabular}
+\end{tabular}%
+}
+
 \end{table*}
 
 % ============================================================================
@@ -140,13 +143,15 @@ A \chatree{} session is a tuple $\mathcal{T} = (V, E, H, \mathcal{R}, \mathcal{A
 
 \subsection{Copy-on-Write Inheritance and KV-Cache Safety}
 When branch $u$ spawns child $c$ at parent sequence $k_{\text{fork}}$ (automatically aligned to a safe non-dangling tool-call boundary), \texttt{ContextAssembler} constructs $c$'s static prompt prefix $P(c)$ according to $\mu(c)$:
+{\small
 \begin{equation}
   P(c) = \begin{cases}
-    P(u)\Vert M_{1..k_{\text{fork}}}(u) \Vert M(c), & \mu(c)=\texttt{fork},\\
-    S_{\text{sys}} \Vert \text{brief}(c) \Vert M_{k_{\text{fork}}-w+1..k_{\text{fork}}}(u) \Vert M(c), & \mu(c)=\texttt{slice},\\
-    S_{\text{sys}} \Vert \text{brief}(c) \Vert M(c), & \mu(c)=\texttt{clean}.
+    P(u)\Vert M_{1..k}(u) \Vert M(c), & \mu=\texttt{fork},\\
+    S_{\text{sys}} \Vert b(c) \Vert M_{k-w+1..k}(u) \Vert M(c), & \mu=\texttt{slice},\\
+    S_{\text{sys}} \Vert b(c) \Vert M(c), & \mu=\texttt{clean},
   \end{cases}
-\end{equation}
+\end{equation}}
+\noindent where $k = k_{\text{fork}}$ and $b(c) = \text{brief}(c)$.
 Critically, $P(c)$ is \emph{byte-immutable} across turns and multi-round tool calls (frozen within a turn's tool loop): \texttt{brief($c$)} binds to a frozen \texttt{brief\_title} captured at node creation, allowing Turn-1 non-blocking auto-titling and piggybacked-exit \texttt{TITLE:} refinement (\texttt{title\_source} $\in \{\texttt{placeholder}, \texttt{auto}, \texttt{user}\}$) to enrich UI navigation and RAG \texttt{[Path | Goal]} headers without invalidating the KV cache. All dynamic tree state is serialized into an ephemeral XML block \texttt{<dialogue\_tree\_context>} appended solely to the newest user message and stripped from storage before the next turn. On Anthropic models, explicit \texttt{cache\_control} breakpoints are placed at the system prompt, canonical tool list, and fork boundary. Multiple concurrent human or agent visitors may independently traverse the same tree with isolated \texttt{HEAD} pointers and reflogs via \texttt{TreeSession}.
 
 \subsection{Bidirectional IPC, Read-Only Shadow Turns, and Guardrails}
@@ -231,6 +236,7 @@ Table~\ref{tab:locomo} and Figure~\ref{fig:locomo} summarize the 7-system compar
 \label{tab:locomo}
 \small
 \setlength{\tabcolsep}{3.0pt}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lrcccccccrrrc@{}}
 \toprule
 \textbf{System} & \textbf{$n$} & \textbf{Overall (95\% CI)} & \textbf{Sgl} & \textbf{Mlt} & \textbf{Tmp} & \textbf{Opn} & \textbf{Adv} & \textbf{Peak} & \textbf{Total USD (Q+I)} & \textbf{p95} & \textbf{Cache} & \textbf{$p$} \\
@@ -243,7 +249,8 @@ Table~\ref{tab:locomo} and Figure~\ref{fig:locomo} summarize the 7-system compar
 \texttt{flat\_hybrid\_rag} & 245 & 48.2\% {\scriptsize[42.0, 54.3]} & 46\% & 26\% & 40\% & 33\% & 94\% & \textbf{725} & \textbf{\$0.05} {\scriptsize(.05+.00)} & 3.1s & 2.3\% & \textbf{$<$.0001$^*$} \\
 \texttt{tree\_summary\_only} & 245 & 41.2\% {\scriptsize[35.5, 47.3]} & 40\% & 32\% & 16\% & 31\% & 86\% & 1,480 & \$0.06 {\scriptsize(.06+.00)} & \textbf{2.1s} & 11.9\% & \textbf{$<$.0001$^*$} \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table*}
 
 \begin{figure*}[t]
@@ -269,6 +276,7 @@ Table~\ref{tab:lme} and Figure~\ref{fig:pareto} report results on Official LongM
 \label{tab:lme}
 \small
 \setlength{\tabcolsep}{3.0pt}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lcccccccrrcr@{}}
 \toprule
 \textbf{System} & \textbf{Overall (95\% CI)} & \textbf{S-User} & \textbf{S-Asst} & \textbf{Pref} & \textbf{Update} & \textbf{Temp.} & \textbf{Multi} & \textbf{Peak Tok} & \textbf{Total USD (Q+I)} & \textbf{p50 / p95} & \textbf{$p$ vs.\ v3} \\
@@ -280,7 +288,8 @@ Table~\ref{tab:lme} and Figure~\ref{fig:pareto} report results on Official LongM
 \texttt{chatree\_two\_tier} (v2) & 63.3\% {\scriptsize[46.7, 80.0]} & 80\% & 60\% & 60\% & 80\% & 60\% & 40\% & 6,927 & \$0.79 {\scriptsize(.16+.63)} & 6.2 / 8.1s & 0.1797 \\
 \texttt{flat\_hybrid\_rag} & 40.0\% {\scriptsize[23.3, 56.7]} & 80\% & 20\% & 0\% & 80\% & 20\% & 40\% & \textbf{717} & \textbf{\$0.004} {\scriptsize(.004+.00)} & 3.5 / 7.1s & \textbf{0.0018$^*$} \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table*}
 
 \begin{figure*}[t]
@@ -301,6 +310,7 @@ To test non-monotonic spec revisions, competing scrapped prototypes, downstream 
 \label{tab:track7}
 \scriptsize
 \setlength{\tabcolsep}{2.6pt}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{@{}lccccrr@{}}
 \toprule
 \textbf{System} & \textbf{All} & \textbf{Rev.} & \textbf{Verb.} & \textbf{Synth.} & \textbf{Total USD} & \textbf{$p$} \\
@@ -312,7 +322,8 @@ Summary Folding & 88.9\% & 100\% & 75.0\% & 83.3\% & \$0.020 & .125 \\
 MIT RLM (\texttt{0.1.3}) & 77.8\% & 66.7\% & 75.0\% & 66.7\% & \$0.111 & \textbf{.0078$^*$} \\
 Flat Hybrid RAG & 36.1\% & 33.3\% & 25.0\% & 0.0\% & \textbf{\$0.008} & \textbf{$<$.0001$^*$} \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 \subsection{Tracks 1 \& 2: Five-Family Stress Suite, Ablations, and Crossover Scaling}
@@ -324,6 +335,7 @@ On Track~1 (Table~\ref{tab:track1}), \texttt{tree\_ipc\_full} achieves \textbf{8
 \label{tab:track1}
 \scriptsize
 \setlength{\tabcolsep}{3.0pt}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 \textbf{Scenario Family} & \textbf{Linear} & \textbf{Flat RAG} & \textbf{Folding} & \textbf{\chatree{} Full} \\
@@ -336,7 +348,8 @@ Crossover ($B=4, T=3$)     & 2/2 {\tiny(6.6k)} & 2/2 {\tiny(1.2k)} & 0/2 {\tiny(
 \midrule
 \textbf{Total Strict Pass} & \textbf{8/8 (100\%)} & 3/7 (43\%) & 0/7 (0\%) & \textbf{8/8 (100\%)} \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 Figure~\ref{fig:crossover} displays Track~2's scaling crossover and mechanism ablations:
@@ -371,6 +384,7 @@ After 9 successive compactions across 10 branch generations (Table~\ref{tab:comp
 \label{tab:compaction}
 \scriptsize
 \setlength{\tabcolsep}{3.0pt}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{@{}lccccrr@{}}
 \toprule
 \textbf{System} & \textbf{Comp.} & \textbf{Anch.} & \textbf{Un-Anch.} & \textbf{All} & \textbf{Peak} & \textbf{Gen-1} \\
@@ -379,7 +393,8 @@ After 9 successive compactions across 10 branch generations (Table~\ref{tab:comp
 Destructive Rolling & 6 & \textbf{100\%} & 0\% & 50\% & 1,483 & 0/4 \\
 Sliding Window & 0 & 0\% & 0\% & 0\% & 1,144 & 0/4 \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 \paragraph{Track 5 (Live 18-Turn Jump-Around with Natural Prompts).}
@@ -399,6 +414,7 @@ To isolate structural guarantees over write-time distilled flat stores (\texttt{
 \label{tab:track8}
 \scriptsize
 \setlength{\tabcolsep}{2.6pt}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{@{}lcc@{}}
 \toprule
 \textbf{Diagnostic Dimension} & \textbf{\chatree{}} & \textbf{\texttt{mem0ai==2.2.1}} \\
@@ -412,7 +428,8 @@ To isolate structural guarantees over write-time distilled flat stores (\texttt{
 8B Live: Probe 3 Silent Archive Quarantine & \textbf{2/2} {\tiny(0 leaks)} & 1/2 {\tiny(\textbf{1 leak})} \\
 \textbf{8B Live Combined Rollup} & \textbf{8/8 (100\%)} & 6/8 (75\%) \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 % ============================================================================
