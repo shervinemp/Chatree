@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import importlib.util
+
 from chatree import Chatree
 
 
 async def test_three_tier_hybrid_rag_chunks_summaries_and_subtree_rollups():
     async with Chatree.in_memory() as ct:
-        # Confirm native sqlite-vec loaded cleanly on host
-        assert ct.db.has_sqlite_vec is True
+        # Confirm native sqlite-vec loads cleanly whenever the optional `chatree[vec]` extra is installed
+        if importlib.util.find_spec("sqlite_vec") is not None:
+            assert ct.db is not None and ct.db.has_sqlite_vec is True
 
         tree = await ct.create_tree("Deep Tree RAG", auto_commit_handoffs=True)
         root = await tree.root()

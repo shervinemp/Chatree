@@ -20,6 +20,7 @@ from chatree import (
     LLMStreamEvent,
     LLMToolCall,
     MockLLMProvider,
+    OpenAICompatibleProvider,
     StorageBackend,
     ToolCallContext,
     TrajectoryExporter,
@@ -350,7 +351,7 @@ async def test_security_xml_escape_secret_hygiene_cors_and_bearer_auth() -> None
     sentinel_env = "CHATREE_TEST_KEY_SHOULD_NOT_LEAK"
     os.environ.pop(sentinel_env, None)
     async with Chatree.in_memory() as ct:
-        assert isinstance(ct.llm, LiteLLMProvider)
+        assert isinstance(ct.llm, (LiteLLMProvider, OpenAICompatibleProvider))
         await ct.update_runtime_settings({"api_keys": {sentinel_env: "sk-secret-xyz"}})
         assert sentinel_env not in os.environ
         stored = await ct.repo.get_all_settings()
