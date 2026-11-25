@@ -1,0 +1,7 @@
+probe_id,probe_title,system_name,passed,total,accuracy,leakage_count,structural_stale_detected,structural_stale_total,query_tokens_in,query_tokens_out,query_cache_read_tokens,ingest_tokens_in,ingest_tokens_out,query_usd,ingest_usd,total_usd,ingest_seconds,mean_latency_ms
+probe1_verbatim_recovery,Probe 1: Un-Anchored Verbatim Detail Recovery,chatree_live,4,4,1.0,0,,,48000,402,39296,1956,932,0.003706,0.000939,0.004645,7.68,2498.3
+probe1_verbatim_recovery,Probe 1: Un-Anchored Verbatim Detail Recovery,mem0_official,4,4,1.0,0,,,1637,82,0,1842,753,0.000493,0.000832,0.001325,5.43,881.1
+probe2_transitive_staleness,Probe 2: Transitive Downstream Staleness (A -> B -> C),chatree_live,2,2,1.0,0,2,2,16580,1026,13056,4824,1808,0.001783,0.00211,0.003893,15.98,6035.9
+probe2_transitive_staleness,Probe 2: Transitive Downstream Staleness (A -> B -> C),mem0_official,1,2,0.5,0,0,2,469,443,0,4205,689,0.000317,0.001467,0.001784,12.27,2958.39
+probe3_silent_quarantine,Probe 3: Silent Dead-End Quarantine (No Cancellation Essay),chatree_live,2,2,1.0,0,,,15033,374,12288,1415,601,0.00127,0.000649,0.001919,1.98,2681.0
+probe3_silent_quarantine,Probe 3: Silent Dead-End Quarantine (No Cancellation Essay),mem0_official,1,2,0.5,1,,,519,262,0,1393,287,0.000255,0.000511,0.000766,4.85,1339.1

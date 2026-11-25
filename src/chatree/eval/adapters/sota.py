@@ -191,10 +191,15 @@ class Mem0OfficialAdapter:
         def _do_search() -> Any:
             try:
                 return self._mem.search(
-                    prompt_q, filters={"user_id": self._user_id}, limit=self.top_k
+                    prompt_q, filters={"user_id": self._user_id}, top_k=self.top_k
                 )
             except (TypeError, ValueError):
-                return self._mem.search(prompt_q, user_id=self._user_id, limit=self.top_k)
+                try:
+                    return self._mem.search(
+                        prompt_q, filters={"user_id": self._user_id}, limit=self.top_k
+                    )
+                except (TypeError, ValueError):
+                    return self._mem.search(prompt_q, user_id=self._user_id, limit=self.top_k)
 
         raw = await asyncio.to_thread(_do_search)
         items = raw.get("results", raw) if isinstance(raw, dict) else raw

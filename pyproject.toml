@@ -93,3 +93,15 @@ python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "litellm.*",
+    "mem0.*",
+    "qdrant_client.*",
+    "fastembed.*",
+    "rlm.*",
+    "letta_client.*",
+    "graphiti_core.*",
+]
+follow_imports = "skip"

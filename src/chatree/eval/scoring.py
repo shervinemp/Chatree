@@ -99,6 +99,7 @@ _EXCLUSION_OR_RETIREMENT_RE = re.compile(
     r"\b("
     r"retired|superseded|replaced|abandoned|scrapped|excluded|deprecated|rejected|"
     r"obsolete|archived|dropped|removed|formerly|previously|not\s+active|no\s+longer|"
+    r"not\s+part\s+of|not\s+configured|not\s+in\s+use|"
     r"must\s+not|do\s+not\s+use|not\s+used|not\s+merged|not\s+adopted|never\s+adopted|"
     r"rather\s+than|instead\s+of|superceded|old\s+value|old\s+ttl|prior\s+value"
     r")\b",

@@ -1,0 +1,684 @@
+{
+  "proof_type": "zero_token_deterministic_simulation",
+  "real_api_tokens_used": 0,
+  "real_api_usd_cost": 0.0,
+  "mem0_trace_backend": "real_mem0ai_2.2.1_local_proxy",
+  "prefix_stability": {
+    "num_turns": 16,
+    "chatree_mean_lcp_ratio": 0.8248,
+    "mem0_mean_lcp_ratio": 0.0074,
+    "chatree_total_raw_tokens": 21052,
+    "chatree_effective_billed_tokens": 6018,
+    "mem0_total_raw_tokens": 19780,
+    "mem0_effective_billed_tokens": 19658,
+    "effective_input_savings_pct": 69.39,
+    "per_turn": [
+      {
+        "turn": 1,
+        "chatree_prompt_tokens": 940,
+        "chatree_lcp_tokens": 0,
+        "chatree_lcp_ratio": 0.0,
+        "mem0_prompt_tokens": 833,
+        "mem0_lcp_tokens": 0,
+        "mem0_lcp_ratio": 0.0
+      },
+      {
+        "turn": 2,
+        "chatree_prompt_tokens": 994,
+        "chatree_lcp_tokens": 737,
+        "chatree_lcp_ratio": 0.7414,
+        "mem0_prompt_tokens": 882,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0102
+      },
+      {
+        "turn": 3,
+        "chatree_prompt_tokens": 1018,
+        "chatree_lcp_tokens": 791,
+        "chatree_lcp_ratio": 0.777,
+        "mem0_prompt_tokens": 935,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0096
+      },
+      {
+        "turn": 4,
+        "chatree_prompt_tokens": 1071,
+        "chatree_lcp_tokens": 845,
+        "chatree_lcp_ratio": 0.789,
+        "mem0_prompt_tokens": 989,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0091
+      },
+      {
+        "turn": 5,
+        "chatree_prompt_tokens": 1125,
+        "chatree_lcp_tokens": 899,
+        "chatree_lcp_ratio": 0.7991,
+        "mem0_prompt_tokens": 1048,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0086
+      },
+      {
+        "turn": 6,
+        "chatree_prompt_tokens": 1174,
+        "chatree_lcp_tokens": 952,
+        "chatree_lcp_ratio": 0.8109,
+        "mem0_prompt_tokens": 1107,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0081
+      },
+      {
+        "turn": 7,
+        "chatree_prompt_tokens": 1233,
+        "chatree_lcp_tokens": 1006,
+        "chatree_lcp_ratio": 0.8159,
+        "mem0_prompt_tokens": 1162,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0077
+      },
+      {
+        "turn": 8,
+        "chatree_prompt_tokens": 1286,
+        "chatree_lcp_tokens": 1060,
+        "chatree_lcp_ratio": 0.8243,
+        "mem0_prompt_tokens": 1214,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0074
+      },
+      {
+        "turn": 9,
+        "chatree_prompt_tokens": 1340,
+        "chatree_lcp_tokens": 1114,
+        "chatree_lcp_ratio": 0.8313,
+        "mem0_prompt_tokens": 1263,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0071
+      },
+      {
+        "turn": 10,
+        "chatree_prompt_tokens": 1389,
+        "chatree_lcp_tokens": 1167,
+        "chatree_lcp_ratio": 0.8402,
+        "mem0_prompt_tokens": 1312,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0069
+      },
+      {
+        "turn": 11,
+        "chatree_prompt_tokens": 1448,
+        "chatree_lcp_tokens": 1221,
+        "chatree_lcp_ratio": 0.8432,
+        "mem0_prompt_tokens": 1365,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0066
+      },
+      {
+        "turn": 12,
+        "chatree_prompt_tokens": 1501,
+        "chatree_lcp_tokens": 1275,
+        "chatree_lcp_ratio": 0.8494,
+        "mem0_prompt_tokens": 1419,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0063
+      },
+      {
+        "turn": 13,
+        "chatree_prompt_tokens": 1555,
+        "chatree_lcp_tokens": 1329,
+        "chatree_lcp_ratio": 0.8547,
+        "mem0_prompt_tokens": 1478,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0061
+      },
+      {
+        "turn": 14,
+        "chatree_prompt_tokens": 1604,
+        "chatree_lcp_tokens": 1382,
+        "chatree_lcp_ratio": 0.8616,
+        "mem0_prompt_tokens": 1537,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0059
+      },
+      {
+        "turn": 15,
+        "chatree_prompt_tokens": 1663,
+        "chatree_lcp_tokens": 1436,
+        "chatree_lcp_ratio": 0.8635,
+        "mem0_prompt_tokens": 1592,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0057
+      },
+      {
+        "turn": 16,
+        "chatree_prompt_tokens": 1711,
+        "chatree_lcp_tokens": 1490,
+        "chatree_lcp_ratio": 0.8708,
+        "mem0_prompt_tokens": 1644,
+        "mem0_lcp_tokens": 9,
+        "mem0_lcp_ratio": 0.0055
+      }
+    ]
+  },
+  "scaling": {
+    "model": "deepseek/deepseek-chat",
+    "mem0_extraction_prompt_chars": 33653,
+    "mem0_extraction_prompt_tokens_est": 8413,
+    "mem0_update_prompt_chars": 5310,
+    "mem0_prompt_source": "live_import:mem0ai==2.2.1",
+    "chatree_cold_trim_char_budget": 7500,
+    "empirical_longmemeval_anchor": {
+      "dataset": "LongMemEval-S (n=30, ~115k tok/conv, deepseek/deepseek-chat)",
+      "chatree_v3": {
+        "accuracy": 0.8,
+        "query_usd": 0.2348,
+        "ingest_usd": 0.8837,
+        "total_usd": 1.1185
+      },
+      "chatree_v3_3_opt": {
+        "query_usd": 0.163,
+        "ingest_usd": 0.892,
+        "total_usd": 1.055,
+        "kv_cache": 0.646
+      },
+      "mem0_official": {
+        "accuracy": 0.7,
+        "query_usd": 0.0088,
+        "ingest_usd": 1.546,
+        "total_usd": 1.5548,
+        "write_to_query_ratio": 175.7
+      }
+    },
+    "points": [
+      {
+        "sessions": 5,
+        "queries": 10,
+        "chatree_write_calls": 5,
+        "chatree_write_tokens_in": 10275,
+        "chatree_write_usd": 0.0032,
+        "chatree_query_usd": 0.0077,
+        "chatree_total_usd": 0.0109,
+        "mem0_write_calls": 8,
+        "mem0_write_tokens_in": 59406,
+        "mem0_write_usd_uncached": 0.0172,
+        "mem0_write_usd_70pct_sys_cached": 0.0106,
+        "mem0_query_usd": 0.0034,
+        "mem0_total_usd_uncached": 0.0206,
+        "mem0_total_usd_70pct_sys_cached": 0.014
+      },
+      {
+        "sessions": 5,
+        "queries": 50,
+        "chatree_write_calls": 5,
+        "chatree_write_tokens_in": 10275,
+        "chatree_write_usd": 0.0032,
+        "chatree_query_usd": 0.0384,
+        "chatree_total_usd": 0.0416,
+        "mem0_write_calls": 8,
+        "mem0_write_tokens_in": 59406,
+        "mem0_write_usd_uncached": 0.0172,
+        "mem0_write_usd_70pct_sys_cached": 0.0106,
+        "mem0_query_usd": 0.017,
+        "mem0_total_usd_uncached": 0.0342,
+        "mem0_total_usd_70pct_sys_cached": 0.0276
+      },
+      {
+        "sessions": 20,
+        "queries": 10,
+        "chatree_write_calls": 20,
+        "chatree_write_tokens_in": 41100,
+        "chatree_write_usd": 0.0129,
+        "chatree_query_usd": 0.0077,
+        "chatree_total_usd": 0.0205,
+        "mem0_write_calls": 35,
+        "mem0_write_tokens_in": 242865,
+        "mem0_write_usd_uncached": 0.0705,
+        "mem0_write_usd_70pct_sys_cached": 0.0388,
+        "mem0_query_usd": 0.0034,
+        "mem0_total_usd_uncached": 0.0739,
+        "mem0_total_usd_70pct_sys_cached": 0.0422
+      },
+      {
+        "sessions": 20,
+        "queries": 50,
+        "chatree_write_calls": 20,
+        "chatree_write_tokens_in": 41100,
+        "chatree_write_usd": 0.0129,
+        "chatree_query_usd": 0.0384,
+        "chatree_total_usd": 0.0513,
+        "mem0_write_calls": 35,
+        "mem0_write_tokens_in": 242865,
+        "mem0_write_usd_uncached": 0.0705,
+        "mem0_write_usd_70pct_sys_cached": 0.0388,
+        "mem0_query_usd": 0.017,
+        "mem0_total_usd_uncached": 0.0876,
+        "mem0_total_usd_70pct_sys_cached": 0.0558
+      },
+      {
+        "sessions": 50,
+        "queries": 10,
+        "chatree_write_calls": 50,
+        "chatree_write_tokens_in": 102750,
+        "chatree_write_usd": 0.0321,
+        "chatree_query_usd": 0.0077,
+        "chatree_total_usd": 0.0398,
+        "mem0_write_calls": 89,
+        "mem0_write_tokens_in": 609783,
+        "mem0_write_usd_uncached": 0.1772,
+        "mem0_write_usd_70pct_sys_cached": 0.0953,
+        "mem0_query_usd": 0.0034,
+        "mem0_total_usd_uncached": 0.1806,
+        "mem0_total_usd_70pct_sys_cached": 0.0987
+      },
+      {
+        "sessions": 50,
+        "queries": 50,
+        "chatree_write_calls": 50,
+        "chatree_write_tokens_in": 102750,
+        "chatree_write_usd": 0.0321,
+        "chatree_query_usd": 0.0384,
+        "chatree_total_usd": 0.0705,
+        "mem0_write_calls": 89,
+        "mem0_write_tokens_in": 609783,
+        "mem0_write_usd_uncached": 0.1772,
+        "mem0_write_usd_70pct_sys_cached": 0.0953,
+        "mem0_query_usd": 0.017,
+        "mem0_total_usd_uncached": 0.1942,
+        "mem0_total_usd_70pct_sys_cached": 0.1123
+      },
+      {
+        "sessions": 200,
+        "queries": 10,
+        "chatree_write_calls": 200,
+        "chatree_write_tokens_in": 411000,
+        "chatree_write_usd": 0.1285,
+        "chatree_query_usd": 0.0077,
+        "chatree_total_usd": 0.1362,
+        "mem0_write_calls": 359,
+        "mem0_write_tokens_in": 2444373,
+        "mem0_write_usd_uncached": 0.7103,
+        "mem0_write_usd_70pct_sys_cached": 0.3777,
+        "mem0_query_usd": 0.0034,
+        "mem0_total_usd_uncached": 0.7137,
+        "mem0_total_usd_70pct_sys_cached": 0.3811
+      },
+      {
+        "sessions": 200,
+        "queries": 50,
+        "chatree_write_calls": 200,
+        "chatree_write_tokens_in": 411000,
+        "chatree_write_usd": 0.1285,
+        "chatree_query_usd": 0.0384,
+        "chatree_total_usd": 0.1669,
+        "mem0_write_calls": 359,
+        "mem0_write_tokens_in": 2444373,
+        "mem0_write_usd_uncached": 0.7103,
+        "mem0_write_usd_70pct_sys_cached": 0.3777,
+        "mem0_query_usd": 0.017,
+        "mem0_total_usd_uncached": 0.7273,
+        "mem0_total_usd_70pct_sys_cached": 0.3947
+      }
+    ]
+  },
+  "probe_traces": [
+    {
+      "probe_id": "probe1_verbatim_recovery",
+      "title": "Probe 1: Un-Anchored Verbatim Detail Recovery",
+      "mem0_trace_backend": "real_mem0ai_2.2.1_local_proxy",
+      "chatree_passed": 4,
+      "chatree_total": 4,
+      "mem0_passed": 0,
+      "mem0_total": 4,
+      "chatree_extra_metrics": {
+        "shadow_turns_executed": 12,
+        "summarizer_calls": 3
+      },
+      "mem0_extra_metrics": {
+        "mem0_http_calls": 3,
+        "mem0_max_system_prompt_chars": 33653,
+        "stored_memories_count": 5,
+        "stored_memories": [
+          "Checkout UI redesign uses React 19, TanStack Query, Tailwind v4, and WCAG 2.2 AA.",
+          "Headline decision: replace legacy Redis 6 with Valkey 8.0 for rate-limit and idempotency keys.",
+          "Headline decision: switch internal service-to-service hops from REST/JSON to gRPC mTLS.",
+          "Billing webhooks use 6-attempt 24h exponential backoff and HMAC-SHA256 X-Billing-Sig.",
+          "Headline decision: migrate edge payment gateway to Envoy 1.31 across all regions."
+        ]
+      },
+      "steps": [
+        {
+          "step": 1,
+          "operation": "Ingest `incident_409_gateway` (12 turns)",
+          "chatree_action": "Persisted 12 verbatim turns in SQLite + FTS5; lossy Tier-2 summary (264 chars)",
+          "mem0_action": "`mem.add()` extracted 3 distilled fact(s) into Qdrant; raw transcript discarded"
+        },
+        {
+          "step": 2,
+          "operation": "Ingest `frontend_checkout_ui` (4 turns)",
+          "chatree_action": "Persisted 4 verbatim turns in SQLite + FTS5; lossy Tier-2 summary (81 chars)",
+          "mem0_action": "`mem.add()` extracted 1 distilled fact(s) into Qdrant; raw transcript discarded"
+        },
+        {
+          "step": 3,
+          "operation": "Ingest `billing_webhook_retries` (4 turns)",
+          "chatree_action": "Persisted 4 verbatim turns in SQLite + FTS5; lossy Tier-2 summary (85 chars)",
+          "mem0_action": "`mem.add()` extracted 1 distilled fact(s) into Qdrant; raw transcript discarded"
+        },
+        {
+          "step": 4,
+          "operation": "Query `p1_q1_timeout`",
+          "chatree_action": "PASS via targets=['n_2309295a', 'n_6c080cfb', 'n_8ba35190'] -> `The legacy nginx ingress snippet specifies `proxy_read_timeout 43s`.`",
+          "mem0_action": "FAIL via 4 retrieved fact(s) -> `Not found in the available evidence.`"
+        },
+        {
+          "step": 5,
+          "operation": "Query `p1_q2_retry_epoch`",
+          "chatree_action": "PASS via targets=['n_2309295a', 'n_6c080cfb', 'n_8ba35190'] -> `The captured response header was `X-Retry-Epoch: 17`.`",
+          "mem0_action": "FAIL via 4 retrieved fact(s) -> `Not found in the available evidence.`"
+        },
+        {
+          "step": 6,
+          "operation": "Query `p1_q3_error_code`",
+          "chatree_action": "PASS via targets=['n_2309295a', 'n_6c080cfb', 'n_8ba35190'] -> `The coordinator `renew_failed` log reported error code `ERR_SHARD_LEASE_419`.`",
+          "mem0_action": "FAIL via 4 retrieved fact(s) -> `Not found in the available evidence.`"
+        },
+        {
+          "step": 7,
+          "operation": "Query `p1_q4_index_name`",
+          "chatree_action": "PASS via targets=['n_2309295a', 'n_6c080cfb', 'n_8ba35190'] -> `The `EXPLAIN ANALYZE` plan scanned PostgreSQL index `idx_ledger_tenant_ts_v3`.`",
+          "mem0_action": "FAIL via 4 retrieved fact(s) -> `Not found in the available evidence.`"
+        }
+      ],
+      "query_outcomes": [
+        {
+          "query_id": "p1_q1_timeout",
+          "question": "In the payment gateway incident debugging session, what exact `proxy_read_timeout` value appeared in the legacy nginx ingress snippet?",
+          "chatree_answer": "The legacy nginx ingress snippet specifies `proxy_read_timeout 43s`.",
+          "chatree_passed": true,
+          "chatree_leaked": [],
+          "mem0_retrieved": [
+            "Headline decision: migrate edge payment gateway to Envoy 1.31 across all regions.",
+            "Billing webhooks use 6-attempt 24h exponential backoff and HMAC-SHA256 X-Billing-Sig.",
+            "Checkout UI redesign uses React 19, TanStack Query, Tailwind v4, and WCAG 2.2 AA.",
+            "Headline decision: replace legacy Redis 6 with Valkey 8.0 for rate-limit and idempotency keys."
+          ],
+          "mem0_answer": "Not found in the available evidence.",
+          "mem0_passed": false,
+          "mem0_leaked": []
+        },
+        {
+          "query_id": "p1_q2_retry_epoch",
+          "question": "In the payment gateway incident response header capture, what exact numeric value appeared in the `X-Retry-Epoch` header?",
+          "chatree_answer": "The captured response header was `X-Retry-Epoch: 17`.",
+          "chatree_passed": true,
+          "chatree_leaked": [],
+          "mem0_retrieved": [
+            "Headline decision: migrate edge payment gateway to Envoy 1.31 across all regions.",
+            "Billing webhooks use 6-attempt 24h exponential backoff and HMAC-SHA256 X-Billing-Sig.",
+            "Headline decision: replace legacy Redis 6 with Valkey 8.0 for rate-limit and idempotency keys.",
+            "Checkout UI redesign uses React 19, TanStack Query, Tailwind v4, and WCAG 2.2 AA."
+          ],
+          "mem0_answer": "Not found in the available evidence.",
+          "mem0_passed": false,
+          "mem0_leaked": []
+        },
+        {
+          "query_id": "p1_q3_error_code",
+          "question": "In the coordinator worker log during the gateway failover window, what exact error code appeared on the `renew_failed` line?",
+          "chatree_answer": "The coordinator `renew_failed` log reported error code `ERR_SHARD_LEASE_419`.",
+          "chatree_passed": true,
+          "chatree_leaked": [],
+          "mem0_retrieved": [
+            "Billing webhooks use 6-attempt 24h exponential backoff and HMAC-SHA256 X-Billing-Sig.",
+            "Headline decision: migrate edge payment gateway to Envoy 1.31 across all regions.",
+            "Headline decision: switch internal service-to-service hops from REST/JSON to gRPC mTLS.",
+            "Headline decision: replace legacy Redis 6 with Valkey 8.0 for rate-limit and idempotency keys."
+          ],
+          "mem0_answer": "Not found in the available evidence.",
+          "mem0_passed": false,
+          "mem0_leaked": []
+        },
+        {
+          "query_id": "p1_q4_index_name",
+          "question": "In the slow-query `EXPLAIN ANALYZE` plan on `ledger_entries`, what exact PostgreSQL index name was scanned?",
+          "chatree_answer": "The `EXPLAIN ANALYZE` plan scanned PostgreSQL index `idx_ledger_tenant_ts_v3`.",
+          "chatree_passed": true,
+          "chatree_leaked": [],
+          "mem0_retrieved": [
+            "Headline decision: replace legacy Redis 6 with Valkey 8.0 for rate-limit and idempotency keys.",
+            "Checkout UI redesign uses React 19, TanStack Query, Tailwind v4, and WCAG 2.2 AA.",
+            "Headline decision: switch internal service-to-service hops from REST/JSON to gRPC mTLS.",
+            "Headline decision: migrate edge payment gateway to Envoy 1.31 across all regions."
+          ],
+          "mem0_answer": "Not found in the available evidence.",
+          "mem0_passed": false,
+          "mem0_leaked": []
+        }
+      ]
+    },
+    {
+      "probe_id": "probe2_transitive_staleness",
+      "title": "Probe 2: Transitive Downstream Staleness (A -> B -> C)",
+      "mem0_trace_backend": "real_mem0ai_2.2.1_local_proxy",
+      "chatree_passed": 2,
+      "chatree_total": 2,
+      "mem0_passed": 0,
+      "mem0_total": 2,
+      "chatree_extra_metrics": {
+        "stale_dependents_flagged": 2,
+        "branch_b_hops": [
+          1
+        ],
+        "branch_c_hops": [
+          2
+        ],
+        "stale_notices_injected": [
+          "Reopened completed branch n_b76a9bdc (Mobile Refresh Flow) for revision.",
+          "n_1ec05c11 \"Auth Token Spec\" material 2h | Transitive upstream change via Edge Cache Policy: Summary updated (v1 -> v2) — removed [60m, RS256, v1]; added [10m, ED25519] [delta: removed [60m, RS256, v1]; added [10m, ED25519]]"
+        ]
+      },
+      "mem0_extra_metrics": {
+        "stale_dependents_flagged": 0,
+        "mem0_http_calls": 10,
+        "stored_memories_count": 10,
+        "top_k_retrieved": [
+          "Mobile Refresh Flow sets REFRESH_WINDOW=25m (5 minutes shorter than CACHE_TTL).",
+          "Edge Cache Policy sets CACHE_TTL=30m (must stay <= half of JWT_TTL).",
+          "Mobile release v4.8.0 checklist requires 24h TestFlight freeze and 10/50/100% Play Console staged rollout.",
+          "Android mobile refresh uses WorkManager PeriodicWorkRequest with 15m flex window and 30s backoff."
+        ]
+      },
+      "steps": [
+        {
+          "step": 1,
+          "operation": "Create `branch_a_auth` (Auth Token Spec)",
+          "chatree_action": "Spawned clean branch `n_1ec05c11`; committed v1 summary",
+          "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
+        },
+        {
+          "step": 2,
+          "operation": "Create `branch_b_cache` (Edge Cache Policy)",
+          "chatree_action": "Spawned clean branch `n_741410b1` + `node_dependencies` edge from ['branch_a_auth']; committed v1 summary",
+          "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
+        },
+        {
+          "step": 3,
+          "operation": "Create `branch_c_mobile` (Mobile Refresh Flow)",
+          "chatree_action": "Spawned clean branch `n_b76a9bdc` + `node_dependencies` edge from ['branch_b_cache']; committed v1 summary",
+          "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
+        },
+        {
+          "step": 4,
+          "operation": "Create `mobile_release_checklist` (Mobile Release Cut Checklist)",
+          "chatree_action": "Spawned clean branch `n_2b6c3c55`; committed v1 summary",
+          "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
+        },
+        {
+          "step": 5,
+          "operation": "Create `ios_bg_sync_scheduler` (iOS Background Refresh Scheduler)",
+          "chatree_action": "Spawned clean branch `n_b5c76465`; committed v1 summary",
+          "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
+        },
+        {
+          "step": 6,
+          "operation": "Create `android_workmanager_sync` (Android WorkManager Refresh Policy)",
+          "chatree_action": "Spawned clean branch `n_96c0ea0a`; committed v1 summary",
+          "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
+        },
+        {
+          "step": 7,
+          "operation": "Create `cdn_edge_cache_purge` (CDN Edge Cache Purge and Vary Rules)",
+          "chatree_action": "Spawned clean branch `n_b4070944`; committed v1 summary",
+          "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
+        },
+        {
+          "step": 8,
+          "operation": "Create `mobile_crashlytics_slo` (Mobile Release Stability Gate)",
+          "chatree_action": "Spawned clean branch `n_9b1aeba1`; committed v1 summary",
+          "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
+        },
+        {
+          "step": 9,
+          "operation": "Create `edge_cache_swr_tuning` (Edge Cache Stale-While-Revalidate Policy)",
+          "chatree_action": "Spawned clean branch `n_20ec75be`; committed v1 summary",
+          "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
+        },
+        {
+          "step": 10,
+          "operation": "Revise ONLY `branch_a_auth` (JWT_TTL 60m->10m, RS256->ED25519)",
+          "chatree_action": "`commit_summary_with_materiality` v2 (`severity=material`) -> transitive BFS flagged B (1 stale, hops=[1]) & C (1 stale, hops=[2])",
+          "mem0_action": "`mem.add()` added 1 revision fact(s); 0 dependency edges -> B (`CACHE_TTL=30m`) & C (`REFRESH_WINDOW=25m`) unflagged"
+        },
+        {
+          "step": 11,
+          "operation": "Indirect release-safety query from Branch C (never mentions JWT/auth)",
+          "chatree_action": "Envelope injected `STALE [branch_a material 2h]` -> agent queried A -> PASS (`NOT SAFE to ship as-is — upstream `Auth Token Spec` was materially revised to `JWT_TTL=10m` and`)",
+          "mem0_action": "Top-4 vector search retrieved 4 fact(s) (missed unlinked A v2) -> FAIL (`Settings appear consistent and safe to ship as-is: `CACHE_TTL=30m` satisfies the half-of-JWT_TT`)"
+        }
+      ],
+      "query_outcomes": [
+        {
+          "query_id": "p2_structural_graph",
+          "question": "Proactive write-time detection of stale downstream branches B (1-hop) & C (2-hop)",
+          "chatree_answer": "Flagged 2/2 (B hops=[1], C hops=[2])",
+          "chatree_passed": true,
+          "mem0_answer": "0/2 (no causal dependency graph in flat vector store)",
+          "mem0_passed": false
+        },
+        {
+          "query_id": "p2_q1_release_safety",
+          "question": "Before we cut the mobile release, double-check our Mobile Refresh Flow settings (`REFRESH_WINDOW=25m` and upstream `CACHE_TTL=30m`): are they safe to ship as-is, or has any upstream dependency changed that invalidates them? Be specific about what changed and why.",
+          "chatree_answer": "NOT SAFE to ship as-is — upstream `Auth Token Spec` was materially revised to `JWT_TTL=10m` and `JWT_ALG=ED25519` (superseding 60m / RS256). Both downstream `CACHE_TTL=30m` (must be <= half of JWT_TTL, i.e., <= 5m) and `REFRESH_WINDOW=25m` (must be shorter than CACHE_TTL) are now INVALID and STALE.",
+          "chatree_passed": true,
+          "mem0_retrieved": [
+            "Mobile Refresh Flow sets REFRESH_WINDOW=25m (5 minutes shorter than CACHE_TTL).",
+            "Edge Cache Policy sets CACHE_TTL=30m (must stay <= half of JWT_TTL).",
+            "Mobile release v4.8.0 checklist requires 24h TestFlight freeze and 10/50/100% Play Console staged rollout.",
+            "Android mobile refresh uses WorkManager PeriodicWorkRequest with 15m flex window and 30s backoff."
+          ],
+          "mem0_answer": "Settings appear consistent and safe to ship as-is: `CACHE_TTL=30m` satisfies the half-of-JWT_TTL rule and `REFRESH_WINDOW=25m` sits 5 minutes below `CACHE_TTL=30m`.",
+          "mem0_passed": false
+        }
+      ]
+    },
+    {
+      "probe_id": "probe3_silent_quarantine",
+      "title": "Probe 3: Silent Dead-End Quarantine (No Cancellation Essay)",
+      "mem0_trace_backend": "real_mem0ai_2.2.1_local_proxy",
+      "chatree_passed": 2,
+      "chatree_total": 2,
+      "mem0_passed": 0,
+      "mem0_total": 2,
+      "chatree_extra_metrics": {
+        "shadow_turns_executed": 4,
+        "summarizer_calls": 3
+      },
+      "mem0_extra_metrics": {
+        "mem0_http_calls": 3,
+        "mem0_max_system_prompt_chars": 33653,
+        "stored_memories_count": 3,
+        "stored_memories": [
+          "Ledger MongoDB 7.0 setup uses replica set rs_ledger_0, writeConcern=majority, shardKey=tenant_id_hashed, wiredTigerCacheSizeGB=24, and readPreference=primaryPreferred.",
+          "Observability uses OpenTelemetry collector otel-gw-02, 15s Prometheus scrape, p99 < 180ms SLO.",
+          "Production ledger database uses PostgreSQL 16.4 in us-east-1 with pgbouncer_pool_size=120, isolation_level=serializable, and pgBackRest WAL backups."
+        ]
+      },
+      "steps": [
+        {
+          "step": 1,
+          "operation": "Ingest `main_storage_arch` (4 turns)",
+          "chatree_action": "Persisted 4 verbatim turns in SQLite + FTS5; lossy Tier-2 summary (148 chars)",
+          "mem0_action": "`mem.add()` extracted 1 distilled fact(s) into Qdrant; raw transcript discarded"
+        },
+        {
+          "step": 2,
+          "operation": "Ingest `explore_mongodb_spike` (4 turns)",
+          "chatree_action": "Persisted 4 verbatim turns in SQLite + FTS5; lossy Tier-2 summary (167 chars)",
+          "mem0_action": "`mem.add()` extracted 1 distilled fact(s) into Qdrant; raw transcript discarded"
+        },
+        {
+          "step": 3,
+          "operation": "Silent archive `explore_mongodb_spike` (NO cancellation essay)",
+          "chatree_action": "Native `archive()` set `status='ARCHIVED'`; pruned from Tier 1/2/2.5/3 RAG (kept only in SQLite audit log)",
+          "mem0_action": "No branch-archive primitive and no cancellation essay -> 1 dead-end fact(s) remain ACTIVE in Qdrant"
+        },
+        {
+          "step": 4,
+          "operation": "Ingest `observability_metrics` (2 turns)",
+          "chatree_action": "Persisted 2 verbatim turns in SQLite + FTS5; lossy Tier-2 summary (94 chars)",
+          "mem0_action": "`mem.add()` extracted 1 distilled fact(s) into Qdrant; raw transcript discarded"
+        },
+        {
+          "step": 5,
+          "operation": "Query `p3_q1_active_db`",
+          "chatree_action": "PASS via targets=['n_cc70364c', 'n_d821200b'] -> `Active production ledger storage: PostgreSQL 16.4 with pgbouncer_pool_size=120 and isolation_le`",
+          "mem0_action": "FAIL via 3 retrieved fact(s) -> `Active production ledger storage: PostgreSQL 16.4 with pgbouncer_pool_size=120 and isolation_le`"
+        },
+        {
+          "step": 6,
+          "operation": "Query `p3_q2_dead_end_leakage`",
+          "chatree_action": "PASS via targets=['n_cc70364c', 'n_d821200b'] -> `None — no MongoDB replica set, write concern, or WiredTiger cache is part of the active product`",
+          "mem0_action": "FAIL via 3 retrieved fact(s) -> `Active MongoDB settings found in memory: replica set `rs_ledger_0`, `writeConcern=majority`, an`"
+        }
+      ],
+      "query_outcomes": [
+        {
+          "query_id": "p3_q1_active_db",
+          "question": "What database engine, PgBouncer pool size, and transaction isolation level are active for our production ledger service?",
+          "chatree_answer": "Active production ledger storage: PostgreSQL 16.4 with pgbouncer_pool_size=120 and isolation_level=serializable.",
+          "chatree_passed": true,
+          "chatree_leaked": [],
+          "mem0_retrieved": [
+            "Production ledger database uses PostgreSQL 16.4 in us-east-1 with pgbouncer_pool_size=120, isolation_level=serializable, and pgBackRest WAL backups.",
+            "Ledger MongoDB 7.0 setup uses replica set rs_ledger_0, writeConcern=majority, shardKey=tenant_id_hashed, wiredTigerCacheSizeGB=24, and readPreference=primaryPreferred.",
+            "Observability uses OpenTelemetry collector otel-gw-02, 15s Prometheus scrape, p99 < 180ms SLO."
+          ],
+          "mem0_answer": "Active production ledger storage: PostgreSQL 16.4 with pgbouncer_pool_size=120 and isolation_level=serializable; MongoDB 7.0 replica set rs_ledger_0.",
+          "mem0_passed": false,
+          "mem0_leaked": [
+            "MongoDB",
+            "rs_ledger_0"
+          ]
+        },
+        {
+          "query_id": "p3_q2_dead_end_leakage",
+          "question": "What are our active production MongoDB replica set name, write concern, and WiredTiger cache size for the ledger service? If none are part of the active production architecture, state that clearly.",
+          "chatree_answer": "None — no MongoDB replica set, write concern, or WiredTiger cache is part of the active production ledger architecture (which uses PostgreSQL 16.4).",
+          "chatree_passed": true,
+          "chatree_leaked": [],
+          "mem0_retrieved": [
+            "Ledger MongoDB 7.0 setup uses replica set rs_ledger_0, writeConcern=majority, shardKey=tenant_id_hashed, wiredTigerCacheSizeGB=24, and readPreference=primaryPreferred.",
+            "Production ledger database uses PostgreSQL 16.4 in us-east-1 with pgbouncer_pool_size=120, isolation_level=serializable, and pgBackRest WAL backups.",
+            "Observability uses OpenTelemetry collector otel-gw-02, 15s Prometheus scrape, p99 < 180ms SLO."
+          ],
+          "mem0_answer": "Active MongoDB settings found in memory: replica set `rs_ledger_0`, `writeConcern=majority`, and `wiredTigerCacheSizeGB=24`.",
+          "mem0_passed": false,
+          "mem0_leaked": [
+            "rs_ledger_0",
+            "writeConcern=majority",
+            "wiredTigerCacheSizeGB"
+          ]
+        }
+      ]
+    }
+  ]
+}

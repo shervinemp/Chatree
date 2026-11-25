@@ -55,6 +55,8 @@ from chatree import (
     build_non_monotonic_engineering_benchmark,
     default_jump_around_scenario,
     natural_jump_around_scenario,
+    run_live_micro_diagnostics,
+    run_zero_token_simulation_proof,
     write_run_manifest,
 )
 
@@ -559,8 +561,13 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
         help="LLM backend driver (auto uses litellm if installed, else zero-dep openai_compat)",
     )
     parser.add_argument("--api-base", default=None, help="Optional custom OpenAI-compatible base URL (Ollama, vLLM, SGLang, proxy)")
-    parser.add_argument("--tracks", default="1,2,3,4", help="Comma-separated tracks to run (1,2,3,4,5,6,7)")
+    parser.add_argument("--tracks", default="1,2,3,4", help="Comma-separated tracks to run (1,2,3,4,5,6,7,8)")
     parser.add_argument("--out-dir", default=default_out_dir)
+    parser.add_argument(
+        "--simulate-proof",
+        action="store_true",
+        help="Run Track 8A zero-token structural simulation & execution-trace proof ($0.00, 0 API tokens)",
+    )
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--locomo-convs", type=int, default=2)
     parser.add_argument("--locomo-per-cat", type=int, default=6)
@@ -588,6 +595,15 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
     out_dir = Path(args.out_dir or f"results/eval_{_slugify_model(model)}").resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     tracks = {t.strip() for t in args.tracks.split(",") if t.strip()}
+
+    if args.simulate_proof:
+        sim_rep = await run_zero_token_simulation_proof(model=model, prefer_real_mem0_proxy=True)
+        sim_rep.save_json(out_dir / "exp8_simulation_proof.json")
+        md = sim_rep.to_markdown()
+        (out_dir / "exp8_simulation_proof.md").write_text(md, encoding="utf-8")
+        print(md, flush=True)
+        if "8" not in tracks:
+            return
 
     llm = build_llm_provider(
         args.provider,
@@ -755,6 +771,27 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
         (out_dir / "exp6_compaction_bench.tex").write_text(comp_rep.to_latex_table(), encoding="utf-8")
         print(comp_rep.to_markdown_table(), flush=True)
         totals["track6_seconds"] = round(time.perf_counter() - t6, 1)
+    if "8" in tracks and not args.dry_run:
+        t8 = time.perf_counter()
+        sim_rep = await run_zero_token_simulation_proof(model=model, prefer_real_mem0_proxy=True)
+        sim_rep.save_json(out_dir / "exp8_simulation_proof.json")
+        (out_dir / "exp8_simulation_proof.md").write_text(sim_rep.to_markdown(), encoding="utf-8")
+
+        live_rep = await run_live_micro_diagnostics(
+            model=model,
+            llm=llm,
+            embedder=embedder,
+            reranker=reranker,
+            embed_model=args.embed_model,
+            reranker_name=reranker_name,
+            api_base=args.api_base,
+        )
+        live_rep.save_json(out_dir / "exp8_micro_diagnostics.json")
+        live_rep.save_csv(out_dir / "exp8_micro_diagnostics.csv")
+        live_md = live_rep.to_markdown()
+        (out_dir / "exp8_micro_diagnostics.md").write_text(live_md, encoding="utf-8")
+        print(live_md, flush=True)
+        totals["track8_seconds"] = round(time.perf_counter() - t8, 1)
 
     if not args.dry_run:
         (out_dir / "run_summary.json").write_text(json.dumps(totals, indent=2), encoding="utf-8")

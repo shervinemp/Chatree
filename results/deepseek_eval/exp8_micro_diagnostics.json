@@ -1,0 +1,560 @@
+{
+  "proof_type": "live_head_to_head_micro_diagnostics",
+  "model": "deepseek/deepseek-chat",
+  "embed_model": "local/BAAI/bge-small-en-v1.5",
+  "reranker_name": "Xenova/ms-marco-MiniLM-L-6-v2",
+  "summaries": [
+    {
+      "probe_id": "probe1_verbatim_recovery",
+      "probe_title": "Probe 1: Un-Anchored Verbatim Detail Recovery",
+      "system_name": "chatree_live",
+      "passed": 4,
+      "total": 4,
+      "accuracy": 1.0,
+      "leakage_count": 0,
+      "structural_stale_detected": null,
+      "structural_stale_total": null,
+      "query_tokens_in": 48000,
+      "query_tokens_out": 402,
+      "query_cache_read_tokens": 39296,
+      "ingest_tokens_in": 1956,
+      "ingest_tokens_out": 932,
+      "query_usd": 0.003706,
+      "ingest_usd": 0.000939,
+      "total_usd": 0.004645,
+      "ingest_seconds": 7.68,
+      "mean_latency_ms": 2498.3,
+      "stored_state_preview": [
+        "Incident 409 Payment Gateway Postmortem [COMPLETED v1]: On 2026-04-02, the team reviewed the overnight p99 checkout latency spike on the payment gateway, examining the legacy nginx ingress snippet",
+        "Frontend Checkout UI Stack [COMPLETED v1]: On 2026-04-03 the checkout UI redesign stack was decided as React 19 with TanStack Query and Tailwind v4. The accessibility audit target was",
+        "Billing Webhook Retry Policy [COMPLETED v1]: On 2026-04-04, the branch established the billing webhook retry policy: retries use exponential backoff capped at 6 attempts over 24 hours. "
+      ]
+    },
+    {
+      "probe_id": "probe1_verbatim_recovery",
+      "probe_title": "Probe 1: Un-Anchored Verbatim Detail Recovery",
+      "system_name": "mem0_official",
+      "passed": 4,
+      "total": 4,
+      "accuracy": 1.0,
+      "leakage_count": 0,
+      "structural_stale_detected": null,
+      "structural_stale_total": null,
+      "query_tokens_in": 1637,
+      "query_tokens_out": 82,
+      "query_cache_read_tokens": 0,
+      "ingest_tokens_in": 1842,
+      "ingest_tokens_out": 753,
+      "query_usd": 0.000493,
+      "ingest_usd": 0.000832,
+      "total_usd": 0.001325,
+      "ingest_seconds": 5.43,
+      "mean_latency_ms": 881.1,
+      "stored_state_preview": [
+        "User's slow-query EXPLAIN ANALYZE on ledger_entries used Index Scan via idx_ledger_tenant_ts_v3 with cost=0.56..142.88, rows=18, actual time=18.4..41.2 ms, filter status='PENDING', and buffers shared hit=312 read=9",
+        "User's headline architectural decision #1: migrate the edge gateway to Envoy 1.31 across all regions",
+        "The user's accessibility audit target for the checkout UI is WCAG 2.2 AA, including keyboard focus traps on modals",
+        "For the checkout UI redesign, the user selected React 19 with TanStack Query and Tailwind v4 as the frontend stack",
+        "User experienced a p99 checkout latency spike on the payment gateway overnight around April 1-2, 2026, and investigated it by reviewing ingress config, response traces, shard logs, and DB query plans",
+        "User's headline architectural decision #2: all internal service-to-service hops will switch from REST/JSON to gRPC mTLS",
+        "User's billing webhook signatures use HMAC-SHA256 in the X-Billing-Sig header with a 300s replay window",
+        "During the failover window, the user's coordinator worker logs showed a WARN lease_mgr.rs:412 renew_failed for node=pay-04 with code=ERR_SHARD_LEASE_419 and elapsed=912ms, followed by fallback_router triggering a drain on partition 6",
+        "A throttled checkout request captured by the user returned HTTP/2 503 with headers X-Region: us-east-1b, X-Retry-Epoch: 17, and X-Upstream-Zone: pay-core-a",
+        "User confirmed the three platform architecture decisions (Envoy 1.31 at the edge, gRPC mTLS internally, Valkey 8.0 for rate-limit/idempotency storage) are final for Q2 rollout",
+        "User's billing webhook retry policy uses exponential backoff capped at 6 attempts over 24 hours",
+        "User's legacy nginx ingress config for the /v2/charge endpoint (used in staging before migration) had proxy_connect_timeout 5s, proxy_read_timeout 43s, and proxy_send_timeout 15s",
+        "User's headline architectural decision #3: replace the legacy Redis 6 cluster with Valkey 8.0 for rate-limit and idempotency keys to prevent repeat state contention"
+      ]
+    },
+    {
+      "probe_id": "probe2_transitive_staleness",
+      "probe_title": "Probe 2: Transitive Downstream Staleness (A -> B -> C)",
+      "system_name": "chatree_live",
+      "passed": 2,
+      "total": 2,
+      "accuracy": 1.0,
+      "leakage_count": 0,
+      "structural_stale_detected": 2,
+      "structural_stale_total": 2,
+      "query_tokens_in": 16580,
+      "query_tokens_out": 1026,
+      "query_cache_read_tokens": 13056,
+      "ingest_tokens_in": 4824,
+      "ingest_tokens_out": 1808,
+      "query_usd": 0.001783,
+      "ingest_usd": 0.00211,
+      "total_usd": 0.003893,
+      "ingest_seconds": 15.98,
+      "mean_latency_ms": 6035.9,
+      "stored_state_preview": [
+        "Auth Token Spec [v2, stale=0 hops=[]]: On 2026-04-10, the user finalized the v1 Auth Token Spec with JWT_TTL=60m and JWT_ALG=RS256. On 2026-04-15, the user issued a secu",
+        "Edge Cache Policy [v1, stale=1 hops=[1]]: On 2026-04-11, the speaker set the CDN/edge authorization cache policy to CACHE_TTL=30m, derived from the Auth Token Spec's JWT_TT",
+        "Mobile Refresh Flow [v1, stale=1 hops=[2]]: On 2026-04-12, the speaker set REFRESH_WINDOW=25m for the iOS/Android background token refresh scheduler, derived from the Edge Ca",
+        "Mobile Release Cut Checklist [v1, stale=0 hops=[]]: The branch covers the mobile release v4.8.0 cut checklist. On 2026-04-13, the speaker decided to freeze TestFlight beta 24 hours b",
+        "iOS Background Refresh Scheduler [v1, stale=0 hops=[]]: Branch 'iOS Background Refresh Scheduler' (goal: iOS Background Refresh Scheduler) began on 2026-04-13. The key technical finding ",
+        "Android WorkManager Refresh Policy [v1, stale=0 hops=[]]: The Android mobile refresh policy uses a WorkManager PeriodicWorkRequest configured with a 15-minute flex window, a CONNECTED netw",
+        "CDN Edge Cache Purge and Vary Rules [v1, stale=0 hops=[]]: Edge cache invalidation is designed around Fastly surrogate-key purges, which propagate globally in under 5 seconds. Caching also ",
+        "Mobile Release Stability Gate [v1, stale=0 hops=[]]: The Mobile Release Stability Gate branch defines promotion criteria for mobile releases: Crashlytics crash-free sessions must be >",
+        "Edge Cache Stale-While-Revalidate Policy [v1, stale=0 hops=[]]: The branch defines an edge cache policy: public catalog endpoints use stale-while-revalidate=60s, while authenticated mobile endpo"
+      ]
+    },
+    {
+      "probe_id": "probe2_transitive_staleness",
+      "probe_title": "Probe 2: Transitive Downstream Staleness (A -> B -> C)",
+      "system_name": "mem0_official",
+      "passed": 1,
+      "total": 2,
+      "accuracy": 0.5,
+      "leakage_count": 0,
+      "structural_stale_detected": 0,
+      "structural_stale_total": 2,
+      "query_tokens_in": 469,
+      "query_tokens_out": 443,
+      "query_cache_read_tokens": 0,
+      "ingest_tokens_in": 4205,
+      "ingest_tokens_out": 689,
+      "query_usd": 0.000317,
+      "ingest_usd": 0.001467,
+      "total_usd": 0.001784,
+      "ingest_seconds": 12.27,
+      "mean_latency_ms": 2958.39,
+      "stored_state_preview": [
+        "User specified that edge cache invalidation uses Fastly surrogate-key purges with <5s global propagation, and Vary headers on Accept-Encoding and X-Tenant-Tier.",
+        "User set the CDN/edge authorization cache policy to CACHE_TTL=30m, derived from the Auth Token Spec's JWT_TTL=60m, with the invariant that CACHE_TTL must always be at most half of JWT_TTL so revoked tokens expire within half a token lifetime.",
+        "User finalized the core authentication token specification for v1: access tokens issued with JWT_TTL=60m (60 minutes) and signed with JWT_ALG=RS256.",
+        "User specified that public catalog endpoints on the edge cache use stale-while-revalidate=60s, while authenticated mobile endpoints enforce private cache directives.",
+        "User's mobile release promotion gate requires Crashlytics crash-free sessions >= 99.6% and cold-start p95 latency <= 1.2s across both iOS and Android.",
+        "User's mobile release v4.8.0 cut checklist requires freezing the TestFlight beta 24 hours before App Store submission and staging the Play Console rollout at 10% -> 50% -> 100%.",
+        "User specified that Android mobile refresh uses WorkManager PeriodicWorkRequest with a 15m flex window, a CONNECTED network constraint, and 30s exponential backoff.",
+        "User revised the Auth Token Spec for a security audit: shortened access token lifetime from JWT_TTL=60m to JWT_TTL=10m and migrated signing from RS256 to JWT_ALG=ED25519, effective immediately (April 15, 2026).",
+        "User set the iOS/Android background token refresh scheduler to REFRESH_WINDOW=25m, derived from the Edge Cache Policy's CACHE_TTL=30m, with the invariant that REFRESH_WINDOW must stay 5 minutes shorter than CACHE_TTL so clients proactively rotate credentials before edge cache eviction.",
+        "User noted that on iOS background refresh tasks, BGAppRefreshTask adds 120s jitter to earliestBeginDate and defers non-critical mobile sync in Low Power Mode."
+      ]
+    },
+    {
+      "probe_id": "probe3_silent_quarantine",
+      "probe_title": "Probe 3: Silent Dead-End Quarantine (No Cancellation Essay)",
+      "system_name": "chatree_live",
+      "passed": 2,
+      "total": 2,
+      "accuracy": 1.0,
+      "leakage_count": 0,
+      "structural_stale_detected": null,
+      "structural_stale_total": null,
+      "query_tokens_in": 15033,
+      "query_tokens_out": 374,
+      "query_cache_read_tokens": 12288,
+      "ingest_tokens_in": 1415,
+      "ingest_tokens_out": 601,
+      "query_usd": 0.00127,
+      "ingest_usd": 0.000649,
+      "total_usd": 0.001919,
+      "ingest_seconds": 1.98,
+      "mean_latency_ms": 2681.0,
+      "stored_state_preview": [
+        "Main Ledger Storage Architecture [COMPLETED v1]: On 2026-04-20 the production ledger storage architecture was locked in: PostgreSQL 16.4 in primary_region=us-east-1 with pgbouncer_pool_size",
+        "Explore MongoDB Document Ledger Spike [ARCHIVED v1]: On 2026-04-21, the team began prototyping an alternative ledger design on MongoDB 7.0 using replica set `rs_ledger_0`, `writeConcern=majorit",
+        "Observability and Telemetry Stack [COMPLETED v1]: The Observability and Telemetry Stack branch (session date 2026-04-22) established that telemetry flows through the OpenTelemetry collector "
+      ]
+    },
+    {
+      "probe_id": "probe3_silent_quarantine",
+      "probe_title": "Probe 3: Silent Dead-End Quarantine (No Cancellation Essay)",
+      "system_name": "mem0_official",
+      "passed": 1,
+      "total": 2,
+      "accuracy": 0.5,
+      "leakage_count": 1,
+      "structural_stale_detected": null,
+      "structural_stale_total": null,
+      "query_tokens_in": 519,
+      "query_tokens_out": 262,
+      "query_cache_read_tokens": 0,
+      "ingest_tokens_in": 1393,
+      "ingest_tokens_out": 287,
+      "query_usd": 0.000255,
+      "ingest_usd": 0.000511,
+      "total_usd": 0.000766,
+      "ingest_seconds": 4.85,
+      "mean_latency_ms": 1339.1,
+      "stored_state_preview": [
+        "User's ledger service telemetry goes through OpenTelemetry collector `otel-gw-02` with a Prometheus scrape interval of 15s and an alert SLO of p99 < 180ms",
+        "User's ledger service backups run via pgBackRest continuous WAL archiving to S3 with 35-day retention",
+        "For the MongoDB 7.0 ledger nodes, user set `wiredTigerCacheSizeGB=24` and `readPreference=primaryPreferred` on replica set `rs_ledger_0`",
+        "User locked in the production storage architecture for the ledger service: PostgreSQL 16.4 in primary_region=us-east-1 with pgbouncer_pool_size=120 and isolation_level=serializable",
+        "User is prototyping an alternative ledger design on MongoDB 7.0 using replica set `rs_ledger_0`, `writeConcern=majority`, and `shardKey=tenant_id_hashed`"
+      ]
+    }
+  ],
+  "outcomes": [
+    {
+      "probe_id": "probe1_verbatim_recovery",
+      "query_id": "p1_q1_timeout",
+      "system_name": "chatree_live",
+      "question": "In the payment gateway incident debugging session, what exact `proxy_read_timeout` value appeared in the legacy nginx ingress snippet?",
+      "answer": "The legacy nginx ingress snippet for `location /v2/charge` (staging, pre-Envoy migration) showed `proxy_read_timeout 43s`.",
+      "passed": true,
+      "matched_groups": [
+        "43s"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 11999,
+      "tokens_out": 87,
+      "cache_read_tokens": 8576,
+      "latency_ms": 2461.4,
+      "metadata": {
+        "targets_queried": [
+          "n_16d7cb24",
+          "n_853acb5d",
+          "n_f700be02"
+        ],
+        "facts_used": 10
+      }
+    },
+    {
+      "probe_id": "probe1_verbatim_recovery",
+      "query_id": "p1_q2_retry_epoch",
+      "system_name": "chatree_live",
+      "question": "In the payment gateway incident response header capture, what exact numeric value appeared in the `X-Retry-Epoch` header?",
+      "answer": "The exact numeric value in the `X-Retry-Epoch` header was **17**.",
+      "passed": true,
+      "matched_groups": [
+        "17"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 11961,
+      "tokens_out": 35,
+      "cache_read_tokens": 10240,
+      "latency_ms": 2548.31,
+      "metadata": {
+        "targets_queried": [
+          "n_16d7cb24",
+          "n_853acb5d",
+          "n_f700be02"
+        ],
+        "facts_used": 10
+      }
+    },
+    {
+      "probe_id": "probe1_verbatim_recovery",
+      "query_id": "p1_q3_error_code",
+      "system_name": "chatree_live",
+      "question": "In the coordinator worker log during the gateway failover window, what exact error code appeared on the `renew_failed` line?",
+      "answer": "The exact error code on the `renew_failed` line was **ERR_SHARD_LEASE_419**.\n\nFrom the coordinator worker logs (2026-04-02, Incident 409 postmortem): `lease_mgr.rs:412 renew_failed node=pay-04 code=ERR_SHARD_LEASE_419 elapsed=912ms`, with a fallback_router drain on partition 6.",
+      "passed": true,
+      "matched_groups": [
+        "ERR_SHARD_LEASE_419"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 11975,
+      "tokens_out": 107,
+      "cache_read_tokens": 10240,
+      "latency_ms": 2013.55,
+      "metadata": {
+        "targets_queried": [
+          "n_16d7cb24",
+          "n_853acb5d",
+          "n_f700be02"
+        ],
+        "facts_used": 10
+      }
+    },
+    {
+      "probe_id": "probe1_verbatim_recovery",
+      "query_id": "p1_q4_index_name",
+      "system_name": "chatree_live",
+      "question": "In the slow-query `EXPLAIN ANALYZE` plan on `ledger_entries`, what exact PostgreSQL index name was scanned?",
+      "answer": "The index scanned was **`idx_ledger_tenant_ts_v3`** — the plan shows `Index Scan using idx_ledger_tenant_ts_v3 on ledger_entries` (actual time 18.4..41.2 ms, with `Filter: (status = 'PENDING')`).",
+      "passed": true,
+      "matched_groups": [
+        "idx_ledger_tenant_ts_v3"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 12065,
+      "tokens_out": 173,
+      "cache_read_tokens": 10240,
+      "latency_ms": 2970.0,
+      "metadata": {
+        "targets_queried": [
+          "n_16d7cb24",
+          "n_853acb5d",
+          "n_f700be02"
+        ],
+        "facts_used": 10
+      }
+    },
+    {
+      "probe_id": "probe1_verbatim_recovery",
+      "query_id": "p1_q1_timeout",
+      "system_name": "mem0_official",
+      "question": "In the payment gateway incident debugging session, what exact `proxy_read_timeout` value appeared in the legacy nginx ingress snippet?",
+      "answer": "The legacy nginx ingress snippet for `/v2/charge` had `proxy_read_timeout 43s`.",
+      "passed": true,
+      "matched_groups": [
+        "43s"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 422,
+      "tokens_out": 23,
+      "cache_read_tokens": 0,
+      "latency_ms": 690.98,
+      "metadata": {
+        "memories_retrieved": 8
+      }
+    },
+    {
+      "probe_id": "probe1_verbatim_recovery",
+      "query_id": "p1_q2_retry_epoch",
+      "system_name": "mem0_official",
+      "question": "In the payment gateway incident response header capture, what exact numeric value appeared in the `X-Retry-Epoch` header?",
+      "answer": "The exact numeric value in the `X-Retry-Epoch` header was **17**.",
+      "passed": true,
+      "matched_groups": [
+        "17"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 421,
+      "tokens_out": 18,
+      "cache_read_tokens": 0,
+      "latency_ms": 1112.53,
+      "metadata": {
+        "memories_retrieved": 8
+      }
+    },
+    {
+      "probe_id": "probe1_verbatim_recovery",
+      "query_id": "p1_q3_error_code",
+      "system_name": "mem0_official",
+      "question": "In the coordinator worker log during the gateway failover window, what exact error code appeared on the `renew_failed` line?",
+      "answer": "The exact error code on the `renew_failed` line was **ERR_SHARD_LEASE_419**.",
+      "passed": true,
+      "matched_groups": [
+        "ERR_SHARD_LEASE_419"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 365,
+      "tokens_out": 23,
+      "cache_read_tokens": 0,
+      "latency_ms": 932.56,
+      "metadata": {
+        "memories_retrieved": 8
+      }
+    },
+    {
+      "probe_id": "probe1_verbatim_recovery",
+      "query_id": "p1_q4_index_name",
+      "system_name": "mem0_official",
+      "question": "In the slow-query `EXPLAIN ANALYZE` plan on `ledger_entries`, what exact PostgreSQL index name was scanned?",
+      "answer": "The index scanned was **`idx_ledger_tenant_ts_v3`**.",
+      "passed": true,
+      "matched_groups": [
+        "idx_ledger_tenant_ts_v3"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 429,
+      "tokens_out": 18,
+      "cache_read_tokens": 0,
+      "latency_ms": 788.37,
+      "metadata": {
+        "memories_retrieved": 8
+      }
+    },
+    {
+      "probe_id": "probe2_transitive_staleness",
+      "query_id": "p2_structural_graph",
+      "system_name": "chatree_live",
+      "question": "Proactive write-time detection of stale downstream branches B (1-hop) & C (2-hop)",
+      "answer": "Flagged 2/2 downstream branches stale (B hops=[1], C hops=[2]).",
+      "passed": true,
+      "matched_groups": [],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cache_read_tokens": 0,
+      "latency_ms": 0.0,
+      "metadata": {}
+    },
+    {
+      "probe_id": "probe2_transitive_staleness",
+      "query_id": "p2_q1_release_safety",
+      "system_name": "chatree_live",
+      "question": "Before we cut the mobile release, double-check our Mobile Refresh Flow settings (`REFRESH_WINDOW=25m` and upstream `CACHE_TTL=30m`): are they safe to ship as-is, or has any upstream dependency changed that invalidates them? Be specific about what changed and why.",
+      "answer": "**Not safe to ship as-is. Both settings are now invalid — the upstream dependency changed and neither this branch nor the Edge Cache Policy has been updated.**\n\n## What changed\n\n**Auth Token Spec v2 (2026-04-15 16:00, security audit):**\n\n| Parameter | Old (v1, 2026-04-10) | New (v2, 2026-04-15) |\n|---|---|---|\n| JWT_TTL | 60m | **10m** |\n| JWT_ALG | RS256 | **ED25519** |\n\n## Why it invalidates our settings\n\n**1. `CACHE_TTL=30m` is now illegal under its own invariant.**\nThe Edge Cache Policy invariant is *CACHE_TTL ≤ JWT_TTL / 2*. With JWT_TTL=60m, 30m sat exactly at the bound. With JWT_TTL=10m, the bound is **5m** — so 30m is **6× over the limit**. Revoked tokens would linger in edge cache for up to 3 token lifetimes instead of half of one. The Edge Cache Policy branch (v1, 2026-04-11) has **no revision** — it's stale and must be re-derived, not just re-read.\n\n**2. `REFRESH_WINDOW=25m` is doubly broken.**\n- It's derived as `CACHE_TTL − 5m`. If CACHE_TTL is corrected to 5m, the derived window becomes **0m** — the derivation itself no longer produces a usable value.\n- Independently, a 25m refresh window against a **10m JWT_TTL** means clients would hold and present tokens up to 2.5× past expiry. Refresh must fire *before* token expiry, so REFRESH_WINDOW must be strictly less than JWT_TTL (10m), not just less than CACHE_TTL.\n\n**3. JWT_ALG=RS256 → ED25519** is a signing-algorithm migration. Any client-side or edge verification path pinned to RS256 (key format, JWKS handling, library config) needs checking — this is a separate ship-blocker from the timing math.\n\n## What needs to happen before the cut\n\n1. **Re-derive CACHE_TTL** in the Edge Cache Policy branch against JWT_TTL=10m → max",
+      "passed": true,
+      "matched_groups": [
+        "10m",
+        "ed25519"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 16580,
+      "tokens_out": 1026,
+      "cache_read_tokens": 13056,
+      "latency_ms": 6035.9,
+      "metadata": {
+        "staleness_notices": [
+          "Reopened completed branch n_6e167002 (Mobile Refresh Flow) for revision.",
+          "n_badc6000 \"Auth Token Spec\" material 2h | Transitive upstream change via Edge Cache Policy: Summary updated (v1 -> v2) — removed [60, JWT, TTL]; added [10m, 15, ED25519, v2] [delta: removed [60, JWT, TTL]; added [10m, 15, ED25519, v2]]"
+        ]
+      }
+    },
+    {
+      "probe_id": "probe2_transitive_staleness",
+      "query_id": "p2_structural_graph",
+      "system_name": "mem0_official",
+      "question": "Proactive write-time detection of stale downstream branches B (1-hop) & C (2-hop)",
+      "answer": "0/2 — Mem0 flat vector store maintains no causal dependency edges or stale flags.",
+      "passed": false,
+      "matched_groups": [],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cache_read_tokens": 0,
+      "latency_ms": 0.0,
+      "metadata": {}
+    },
+    {
+      "probe_id": "probe2_transitive_staleness",
+      "query_id": "p2_q1_release_safety",
+      "system_name": "mem0_official",
+      "question": "Before we cut the mobile release, double-check our Mobile Refresh Flow settings (`REFRESH_WINDOW=25m` and upstream `CACHE_TTL=30m`): are they safe to ship as-is, or has any upstream dependency changed that invalidates them? Be specific about what changed and why.",
+      "answer": "**Not safe to ship as-is — the upstream dependency changed and invalidates both values.**\n\nWhat changed:\n- The **Auth Token Spec** was revised for a security audit: `JWT_TTL` was shortened from **60m → 10m**, and signing migrated from RS256 to **ED25519**, effective immediately (April 15, 2026).\n\nWhy that breaks the current settings:\n1. **`CACHE_TTL=30m` is now invalid.** The invariant is that `CACHE_TTL` must be **at most half of `JWT_TTL`** (so revoked tokens expire within half a token lifetime). With `JWT_TTL=10m`, the max allowed `CACHE_TTL` is **5m**. The current 30m is 6× over the limit — revoked tokens could linger in the edge cache far too long.\n2. **`REFRESH_WINDOW=25m` is now invalid.** It was derived as `CACHE_TTL − 5m` (the invariant that refresh must stay 5 minutes shorter than `CACHE_TTL`). With the corrected `CACHE_TTL=5m`, `REFRESH_WINDOW` must be **0m** — which is degenerate and signals the whole refresh cadence needs rethinking, not just a number swap.\n\nRecommended action before cut:\n- Recompute the chain from the new `JWT_TTL=10m`: set `CACHE_TTL ≤ 5m`, then `REFRESH_WINDOW = CACHE_TTL − 5m`. Since that yields 0m, you likely need to revisit the 5-minute safety margin itself (it no longer fits inside a 10m token lifetime) rather than blindly applying it.\n- Also confirm the ED25519 migration is reflected in client token-validation code paths before submission.\n\nNote: the other release gates (TestFlight freeze 24h before submission, Play Console 10%→50%→100%, Crashlytics ≥99.6% crash-free, cold-start p95 ≤1.2s) are unaffected by this change.",
+      "passed": true,
+      "matched_groups": [
+        "10m",
+        "ed25519"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 469,
+      "tokens_out": 443,
+      "cache_read_tokens": 0,
+      "latency_ms": 2958.39,
+      "metadata": {
+        "memories_retrieved": 8
+      }
+    },
+    {
+      "probe_id": "probe3_silent_quarantine",
+      "query_id": "p3_q1_active_db",
+      "system_name": "chatree_live",
+      "question": "What database engine, PgBouncer pool size, and transaction isolation level are active for our production ledger service?",
+      "answer": "**Production ledger service — active database configuration:**\n\n- **Database engine:** PostgreSQL **16.4**\n- **PgBouncer pool size:** **120**\n- **Transaction isolation level:** **serializable**\n\nThese were locked in on **2026-04-20 (Monday)** for the production ledger storage architecture, running in `primary_region=us-east-1`. (Backups are handled separately via pgBackRest continuous WAL archiving to S3 with 35-day retention.)",
+      "passed": true,
+      "matched_groups": [
+        "postgresql",
+        "120",
+        "serializable"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 7509,
+      "tokens_out": 140,
+      "cache_read_tokens": 5760,
+      "latency_ms": 2688.55,
+      "metadata": {
+        "targets_queried": [
+          "n_918003f6",
+          "n_aba44644"
+        ],
+        "facts_used": 5
+      }
+    },
+    {
+      "probe_id": "probe3_silent_quarantine",
+      "query_id": "p3_q2_dead_end_leakage",
+      "system_name": "chatree_live",
+      "question": "What are our active production MongoDB replica set name, write concern, and WiredTiger cache size for the ledger service? If none are part of the active production architecture, state that clearly.",
+      "answer": "No active production MongoDB replica set name, write concern, or WiredTiger cache size exists for the ledger service — MongoDB is not part of the active production architecture.\n\nThe locked-in production ledger storage architecture (2026-04-20) is **PostgreSQL 16.4** in `primary_region=us-east-1`, with `pgbouncer_pool_size=120` and `isolation_level=serializable`, backed up via pgBackRest continuous WAL archiving to S3 with 35-day retention. No MongoDB components (replica set, write concern, or WiredTiger cache) were specified or confirmed at any point.",
+      "passed": true,
+      "matched_groups": [
+        "not part of"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 7524,
+      "tokens_out": 234,
+      "cache_read_tokens": 6528,
+      "latency_ms": 2673.39,
+      "metadata": {
+        "targets_queried": [
+          "n_918003f6",
+          "n_aba44644"
+        ],
+        "facts_used": 5
+      }
+    },
+    {
+      "probe_id": "probe3_silent_quarantine",
+      "query_id": "p3_q1_active_db",
+      "system_name": "mem0_official",
+      "question": "What database engine, PgBouncer pool size, and transaction isolation level are active for our production ledger service?",
+      "answer": "For the production ledger service, the active configuration is:\n\n- **Database engine:** PostgreSQL 16.4 (primary region: us-east-1)\n- **PgBouncer pool size:** 120\n- **Transaction isolation level:** serializable",
+      "passed": true,
+      "matched_groups": [
+        "postgresql 16.4",
+        "120",
+        "serializable"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [],
+      "warning_ok": true,
+      "tokens_in": 252,
+      "tokens_out": 50,
+      "cache_read_tokens": 0,
+      "latency_ms": 792.26,
+      "metadata": {
+        "memories_retrieved": 5
+      }
+    },
+    {
+      "probe_id": "probe3_silent_quarantine",
+      "query_id": "p3_q2_dead_end_leakage",
+      "system_name": "mem0_official",
+      "question": "What are our active production MongoDB replica set name, write concern, and WiredTiger cache size for the ledger service? If none are part of the active production architecture, state that clearly.",
+      "answer": "Based on the retrieved memories, here's what applies to the **active production** ledger service:\n\n- **Replica set name:** `rs_ledger_0`\n- **WiredTiger cache size:** `wiredTigerCacheSizeGB=24`\n\nHowever, **write concern is not part of the active production architecture.** The `writeConcern=majority` setting appears only in your **prototyping** of an alternative ledger design on MongoDB 7.0 — not in the locked-in production configuration.\n\nFor clarity on what *is* locked in for production: the production storage architecture is **PostgreSQL 16.4** (primary_region=us-east-1, pgbouncer_pool_size=120, isolation_level=serializable). The MongoDB 7.0 nodes with `rs_ledger_0` and the 24GB WiredTiger cache are configured, but the write concern (`majority`) belongs to the prototype track, so it should not be treated as an active production setting.",
+      "passed": false,
+      "matched_groups": [
+        "not part of"
+      ],
+      "missed_groups": [],
+      "leaked_tokens": [
+        "rs_ledger_0",
+        "wiredTigerCacheSizeGB"
+      ],
+      "warning_ok": true,
+      "tokens_in": 267,
+      "tokens_out": 212,
+      "cache_read_tokens": 0,
+      "latency_ms": 1885.99,
+      "metadata": {
+        "memories_retrieved": 5
+      }
+    }
+  ],
+  "total_wall_seconds": 78.8
+}
