@@ -547,10 +547,13 @@ class IpcShadowMixin:
         trace_ctx: TraceContext | None = None,
         exclude_node_ids: set[str] | None = None,
         shadow_prompt: str | None = None,
+        extra_queries: list[str] | None = None,
     ) -> IpcExecutionResult:
         """
         Fuses `search_tree` + parallel `asyncio.gather` shadow `request()` calls into one
         single round trip, avoiding the serial `search_tree -> parent LLM -> request` latency tax.
+        Optional `extra_queries` (e.g., decomposed multi-event sub-queries) are interleaved
+        round-robin with the primary query so one entity never starves another in top-k selection.
         """
         ctx = trace_ctx or TraceContext.start(
             caller.id, self.guardrails.max_hop_depth, self.guardrails.token_budget
@@ -559,21 +562,45 @@ class IpcShadowMixin:
         capped_targets = max(1, min(max_targets, 10))
         excluded = set(exclude_node_ids or ())
         excluded.add(caller.id)
-        hits = await self.rag.search(
+        per_q_k = max(12, (capped_targets + len(excluded)) * 2)
+        primary_hits = await self.rag.search(
             tree_id=tree.id,
             query=query,
             scope=scope,
             current_node=caller,
-            top_k=max(12, (capped_targets + len(excluded)) * 2),
+            top_k=per_q_k,
             max_per_node=2,
         )
-        # Pick top distinct target nodes excluding caller/excluded, with causal freshness filtering:
-        # if candidate A has a stale dependency on candidate B (another hit), suppress stale A so
-        # authoritative revised branches always take precedence over outdated consumers.
+        ranked_lists: list[list[str]] = [
+            list(dict.fromkeys(h.node_id for h in primary_hits if h.node_id not in excluded))
+        ]
+        for sub_q in (extra_queries or [])[:3]:
+            sq = sub_q.strip()
+            if not sq or sq.lower() == query.strip().lower():
+                continue
+            sub_hits = await self.rag.search(
+                tree_id=tree.id,
+                query=sq,
+                scope=scope,
+                current_node=caller,
+                top_k=max(8, capped_targets + len(excluded)),
+                max_per_node=2,
+            )
+            ranked_lists.append(
+                list(dict.fromkeys(h.node_id for h in sub_hits if h.node_id not in excluded))
+            )
+
+        # Pick top distinct target nodes via round-robin interleaving across primary + sub-queries,
+        # with causal freshness filtering: if candidate A has a stale dependency on candidate B,
+        # suppress stale A so authoritative revised branches take precedence over outdated consumers.
         raw_candidates: list[str] = []
-        for h in hits:
-            if h.node_id not in excluded and h.node_id not in raw_candidates:
-                raw_candidates.append(h.node_id)
+        max_len = max((len(lst) for lst in ranked_lists), default=0)
+        for idx in range(max_len):
+            for lst in ranked_lists:
+                if idx < len(lst):
+                    nid = lst[idx]
+                    if nid not in raw_candidates:
+                        raw_candidates.append(nid)
 
         stale_map = await self.repo.compute_stale_dependencies_map(
             tree.id,

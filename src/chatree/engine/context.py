@@ -195,6 +195,7 @@ class ContextAssembler:
         speculative_hits: list[SearchHit] | None = None,
         fact_hits: list[SearchHit] | None = None,
         unread_mailbox: list[MailboxItemModel] | None = None,
+        compact_steady_state: bool = False,
     ) -> tuple[str, list[str], list[str]]:
         if not self.ablations.enable_ephemeral_cues:
             return "", [], []
@@ -319,14 +320,20 @@ class ContextAssembler:
         ]
         summarized_others.sort(key=lambda n: (0 if n.node_kind == "chat" else 1, n.updated_at))
         if summarized_others:
-            lines.append('BRANCH SUMMARIES [id "title" status v# | summary]:')
-            for other in summarized_others[:8]:
-                compact = _escape_envelope_text(" ".join((other.summary or "").split())[:140])
-                kind_tag = " [subagent]" if other.node_kind == "subagent" else ""
+            if compact_steady_state:
                 lines.append(
-                    f'- {other.id} "{_escape_envelope_text(other.title)}"{kind_tag} '
-                    f"{other.status} v{other.summary_version} | {compact}"
+                    f"BRANCH SUMMARIES: {len(summarized_others)} unchanged "
+                    "(call dialogue_tree_query_branch(id) for 0-token cached summary)"
                 )
+            else:
+                lines.append('BRANCH SUMMARIES [id "title" status v# | summary]:')
+                for other in summarized_others[:8]:
+                    compact = _escape_envelope_text(" ".join((other.summary or "").split())[:140])
+                    kind_tag = " [subagent]" if other.node_kind == "subagent" else ""
+                    lines.append(
+                        f'- {other.id} "{_escape_envelope_text(other.title)}"{kind_tag} '
+                        f"{other.status} v{other.summary_version} | {compact}"
+                    )
 
         if cues:
             lines.append("ORIENTATION:")
@@ -450,6 +457,7 @@ class ContextAssembler:
         fact_hits: list[SearchHit] | None = None,
         unread_mailbox: list[MailboxItemModel] | None = None,
         session_id: str = DEFAULT_SESSION_ID,
+        compact_steady_state: bool = False,
     ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
         prefix = await self.build_static_prefix(node, exclude_last_seq=newest_user_msg.seq)
         envelope, cue_ids, notices = await self.build_ephemeral_envelope(
@@ -459,6 +467,7 @@ class ContextAssembler:
             speculative_hits=speculative_hits,
             fact_hits=fact_hits,
             unread_mailbox=unread_mailbox,
+            compact_steady_state=compact_steady_state,
         )
         combined_user = (
             f"{envelope}\n\n{newest_user_msg.content}" if envelope else newest_user_msg.content

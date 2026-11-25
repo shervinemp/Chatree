@@ -43,10 +43,11 @@ class GuardrailPolicy(BaseModel):
     preserve_kv_cache_tool_schemas: bool = True
     enable_compound_ask_tool: bool = True
     auto_title_enabled: bool = True
+    compact_steady_state_envelope: bool = True
 
 
 class RagConfig(BaseModel):
-    """Configuration for 3-tier hybrid Tree RAG (chunks + lazy summaries + subtree rollups)."""
+    """Configuration for 4-tier hybrid Tree RAG (chunks + lazy summaries + Tier-2.5 facts + subtree rollups)."""
 
     enabled: bool = True
     chunk_target_tokens: int = Field(default=320, ge=50, le=2000)

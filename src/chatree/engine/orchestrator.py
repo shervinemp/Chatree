@@ -66,6 +66,7 @@ class TurnOrchestrator:
         self.hooks = hooks
         self.guardrails = guardrails or GuardrailPolicy()
         self.on_first_turn_title = on_first_turn_title
+        self._last_envelope_sig: dict[tuple[str, str], tuple[str, tuple[tuple[str, str, int, str], ...]]] = {}
 
     async def run_turn(
         self,
@@ -373,6 +374,28 @@ class TurnOrchestrator:
             tree.id, to_node_id=node.id, status="unread"
         )
 
+        # Conservative steady-state envelope: omit redundant multi-line BRANCH SUMMARIES only when
+        # continuing on the exact same node with zero branch/summary changes and no pending cues.
+        compact_steady = False
+        if self.guardrails.compact_steady_state_envelope and not reopened:
+            all_tree_nodes = await self.repo.list_nodes(tree.id)
+            other_sig = tuple(
+                (n.id, n.status, n.summary_version, n.title)
+                for n in all_tree_nodes
+                if n.id != node.id and n.status != "ARCHIVED" and n.summary
+            )
+            cur_sig = (node.id, other_sig)
+            sig_key = (tree.id, session_id)
+            prev_sig = self._last_envelope_sig.get(sig_key)
+            has_cues = bool(
+                await self.repo.get_unconsumed_orientation_cues(
+                    tree.id, node.id, session_id=session_id
+                )
+            )
+            if prev_sig == cur_sig and not has_cues and not unread_mailbox:
+                compact_steady = True
+            self._last_envelope_sig[sig_key] = cur_sig
+
         llm_messages, cue_ids, notices = await self.context.assemble_for_active_turn(
             tree=tree,
             node=refreshed_node,
@@ -381,6 +404,7 @@ class TurnOrchestrator:
             fact_hits=fact_hits,
             unread_mailbox=unread_mailbox,
             session_id=session_id,
+            compact_steady_state=compact_steady,
         )
         turn_start_data = {
             "trace_id": trace_ctx.trace_id,

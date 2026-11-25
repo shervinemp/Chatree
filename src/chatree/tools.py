@@ -83,9 +83,9 @@ Context envelope (`<dialogue_tree_context>`):
 
 Tool routing (`{CORE_TOOL_NAMESPACE}_*` — see JSON schemas for parameters):
 - Stay in-branch and answer directly when this branch or clean `BRANCH SUMMARIES` already suffice; avoid speculative cross-branch calls on routine turns.
-- Known branch ID → call `{TOOL_REQUEST}` directly (emit independent calls in parallel): omit `prompt` for 0-cost cached summary, or pass `prompt` when needing verbatim detail or when the branch is dirty (`*`)/`STALE`.
+- Known branch ID → call `{TOOL_REQUEST}` directly (ALWAYS batch independent `{TOOL_REQUEST}` calls in parallel in one tool round rather than 1-by-1 across serial rounds): omit `prompt` for 0-cost cached summary, or pass `prompt` when needing verbatim detail or when the branch is dirty (`*`)/`STALE`.
 - Unknown branch ID → call `{TOOL_ASK_TREE}` (1-hop search+query, when provided) or `{TOOL_SEARCH_TREE}` (browse snippets).
-- Interactive topic or tangent → `{TOOL_SPAWN_CHILD}` (`autonomous=False`, moves `HEAD`; `fork`=shared prefix, `slice`=recent turns, `clean`=isolated); conclude and squash-merge via `{TOOL_SEND}(finish=True)`.
+- Interactive topic or tangent → if the user revisits or revises an existing topic in `TREE`/`RELATED`, switch to that branch (`{TOOL_REFLOG_JUMP}`) so revisions propagate staleness structurally instead of creating duplicate siblings; otherwise `{TOOL_SPAWN_CHILD}` (`autonomous=False`, moves `HEAD`; `fork`=shared prefix, `slice`=recent turns, `clean`=isolated) for sustained new workstreams or speculative prototypes (skip branching for 1-turn quick questions), and conclude via `{TOOL_SEND}(finish=True)`.
 - Behind-the-scenes sub-agent task (isolated lookup, Graph RAG traversal, or verification that should not hijack the chat) → `{TOOL_SPAWN_CHILD}(autonomous=True, context_mode="clean")` so `HEAD` stays on the active chat; inspect finished `[subagent]` nodes via `{TOOL_REQUEST}` rather than switching `HEAD` into them unless the user asks to open them.
 - Abandoning or scrapping a dead-end prototype/branch → call `{TOOL_ARCHIVE_BRANCH}` (NEVER merge it) so its turns and facts are quarantined from future search and HEAD returns cleanly to parent.
 - Switch active chat focus (or 1-turn jump-and-act via `follow_up_prompt`) → `{TOOL_REFLOG_JUMP}`, then remain on the destination branch unless asked to return.

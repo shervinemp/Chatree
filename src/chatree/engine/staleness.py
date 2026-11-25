@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import json
 import re
+from datetime import datetime
 from typing import Any
 
 from chatree.config import AblationConfig, GuardrailPolicy
@@ -60,6 +61,55 @@ _POLARITY_TOKENS: frozenset[str] = frozenset(
         "private",
     }
 )
+
+
+_WEEKDAY_RE = re.compile(
+    r"\b(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b",
+    flags=re.IGNORECASE,
+)
+_DATE_CANDIDATE_PATTERNS: tuple[tuple[re.Pattern[str], tuple[str, ...]], ...] = (
+    (re.compile(r"\b(\d{4}[-/]\d{1,2}[-/]\d{1,2})\b"), ("%Y-%m-%d", "%Y/%m/%d")),
+    (
+        re.compile(
+            r"\b(\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+            r"Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?),?\s+\d{4})\b",
+            flags=re.IGNORECASE,
+        ),
+        ("%d %B %Y", "%d %b %Y", "%d %B, %Y", "%d %b, %Y"),
+    ),
+    (
+        re.compile(
+            r"\b((?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+            r"Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4})\b",
+            flags=re.IGNORECASE,
+        ),
+        ("%B %d %Y", "%b %d %Y", "%B %d, %Y", "%b %d, %Y"),
+    ),
+)
+
+
+def enrich_date_with_weekday(date_str: str) -> str:
+    """
+    Append the exact calendar day-of-week (e.g. `2023-05-25 (Thursday)`) when a parseable
+    date is present and no weekday is already included. Eliminates LLM weekday-arithmetic errors
+    when resolving relative expressions like 'last Sunday' or 'two weeks ago'.
+    """
+    raw = (date_str or "").strip()
+    if not raw or _WEEKDAY_RE.search(raw):
+        return raw
+    for pat, fmts in _DATE_CANDIDATE_PATTERNS:
+        m = pat.search(raw)
+        if not m:
+            continue
+        token = re.sub(r"\s+", " ", m.group(1).strip())
+        token_norm = re.sub(r"\bSept\b", "Sep", token, flags=re.IGNORECASE)
+        for fmt in fmts:
+            try:
+                dt = datetime.strptime(token_norm, fmt)
+                return f"{raw} ({dt.strftime('%A')})"
+            except ValueError:
+                continue
+    return raw
 
 
 def _extract_polarity_tokens(text: str) -> set[str]:
@@ -379,34 +429,70 @@ class StalenessService:
             if should_piggyback_title
             else ""
         )
+        enriched_date = enrich_date_with_weekday(session_date) if session_date else ""
         date_anchor = (
-            f" Session date: {session_date} — CRITICAL: resolve relative time words "
-            "('yesterday', 'last Saturday', 'two weeks ago', 'next month') into explicit "
-            "absolute calendar dates using this Session date!"
-            if session_date
+            f" Session date: {enriched_date} — CRITICAL: resolve relative time words "
+            "('yesterday', 'last Saturday', 'last Sunday', 'two weeks ago', 'next month') into explicit "
+            "absolute calendar dates using this exact Session date and weekday!"
+            if enriched_date
             else " (resolving any relative dates to absolute calendar dates when session dates are present)."
         )
         facts_suffix = (
-            '\nOptionally append one final line `FACTS_JSON: [{"fact": "atomic dated fact", '
-            '"entities": ["Entity"], "resolved_date": "YYYY-MM-DD"}]` with up to 8 key atomic facts'
+            '\nOptionally append one final line `FACTS_JSON: [{"fact": "Subject-attributed atomic dated fact", '
+            '"entities": ["ExactSpeakerOrEntity"], "resolved_date": "YYYY-MM-DD"}]` with up to 8 key atomic facts. '
+            "CRITICAL: always name the exact speaker/person who performed each action (never swap or omit speakers)"
             f"{date_anchor}"
             if self.ablations.enable_atomic_facts
             else ""
         )
         summarizer_prompt = (
-            "[Chatree Summarizer] Produce a concise, high-signal summary of this branch "
+            "[Chatree Summarizer] Produce a crisp, high-signal summary (2-4 sentences) of this branch "
             f"('{node.title}', goal: '{node.goal or 'general discussion'}'). "
             f"{title_prefix}"
-            "Preserve exact decisions, constraints, file paths, schemas, and open questions. "
+            "Preserve key people, events, plans, preferences, decisions, constraints, dates, "
+            "exact identifiers, file paths, schemas, and concrete facts. "
             f"Reply in plain text only (do not call any tools).{facts_suffix}"
         )
-        messages = [*prefix, {"role": "user", "content": summarizer_prompt}]
         model = self.router.resolve_model(tree, node, "summary")
         branch_chat_model = self.router.resolve_model(tree, node, "chat")
 
-        # Preserve byte-0 provider KV prefix cache when summarizing on the branch's warm model
-        # by keeping the canonical tool schemas with `tool_choice="none"` (falling back cleanly
-        # to a tool-free system prompt if the provider rejects `tool_choice="none"`).
+        # Preserve byte-0 provider KV prefix cache ONLY when this branch actually has a warm
+        # chat prefix (`node.tokens_in > 0`). On cold/ingested branches (`node.tokens_in == 0`),
+        # omit unused tool schemas and trim verbose assistant essays while keeping user turns
+        # intact so cold write-time ingest stays fast and low-cost without losing user facts.
+        has_warm_prefix = node.tokens_in > 0
+        if has_warm_prefix:
+            messages = [*prefix, {"role": "user", "content": summarizer_prompt}]
+        else:
+            compact_prefix: list[dict[str, Any]] = []
+            char_budget = 7_500
+            used_chars = 0
+            for m in prefix:
+                role = m.get("role")
+                if role == "system":
+                    continue
+                content = str(m.get("content") or "")
+                if role == "assistant" and len(content) > 800:
+                    content = f"{content[:550]}\n...[trimmed]...\n{content[-220:]}"
+                if used_chars + len(content) > char_budget:
+                    rem = max(0, char_budget - used_chars)
+                    if rem < 120:
+                        break
+                    content = content[:rem]
+                used_chars += len(content)
+                compact_prefix.append({"role": role, "content": content})
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a concise, accurate summarizer for a conversation branch. "
+                        "Preserve people, preferences, plans, decisions, exact identifiers, and dates. "
+                        "Reply in plain text only; no tools are available."
+                    ),
+                },
+                *compact_prefix,
+                {"role": "user", "content": summarizer_prompt},
+            ]
         summary_tools = (
             self.tool_registry.schemas_for_node(
                 node.tool_permission,
@@ -415,7 +501,8 @@ class StalenessService:
                 is_shadow=False,
             )
             if (
-                self.tool_registry is not None
+                has_warm_prefix
+                and self.tool_registry is not None
                 and self.guardrails.preserve_kv_cache_tool_schemas
                 and model == branch_chat_model
             )

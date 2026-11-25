@@ -973,22 +973,26 @@ class ExternalBenchmarkRunner:
                     }
                     try:
                         t_ing0 = time.perf_counter()
-                        for sess in conv.sessions:
-                            await worker.start_session(
-                                sess.session_id, title=sess.title, date_time=sess.date_time
-                            )
-                            for turn in sess.turns:
-                                await worker.ingest_turn(
-                                    sess.session_id,
-                                    turn.role,
-                                    turn.content,
-                                    date_time=turn.date_time or sess.date_time,
+                        batch_ingest_fn = getattr(worker, "ingest_conversation", None)
+                        if callable(batch_ingest_fn):
+                            await batch_ingest_fn(conv.sessions)
+                        else:
+                            for sess in conv.sessions:
+                                await worker.start_session(
+                                    sess.session_id, title=sess.title, date_time=sess.date_time
                                 )
-                            await worker.finish_session(sess.session_id, summary=sess.summary)
-                            if sess.archived:
-                                arch_fn = getattr(worker, "archive_session", None)
-                                if callable(arch_fn):
-                                    await arch_fn(sess.session_id, reason=sess.archive_reason)
+                                for turn in sess.turns:
+                                    await worker.ingest_turn(
+                                        sess.session_id,
+                                        turn.role,
+                                        turn.content,
+                                        date_time=turn.date_time or sess.date_time,
+                                    )
+                                await worker.finish_session(sess.session_id, summary=sess.summary)
+                                if sess.archived:
+                                    arch_fn = getattr(worker, "archive_session", None)
+                                    if callable(arch_fn):
+                                        await arch_fn(sess.session_id, reason=sess.archive_reason)
                         ingest_ms = round((time.perf_counter() - t_ing0) * 1000.0, 2)
                         get_ingest_fn = getattr(worker, "get_ingest_usage", None)
                         ing_in, ing_out = get_ingest_fn() if callable(get_ingest_fn) else (0, 0)

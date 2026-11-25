@@ -308,7 +308,7 @@ class IpcDepsShadowMixin:
 
     @staticmethod
     def hash_shadow_prompt(prompt: str) -> str:
-        normalized = " ".join(prompt.strip().lower().split())
+        normalized = " ".join(prompt.strip().lower().split()).rstrip("?!.:; ")
         return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
     async def get_cached_shadow_answer(
