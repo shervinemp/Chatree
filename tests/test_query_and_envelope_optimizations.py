@@ -10,7 +10,7 @@ from chatree.engine.query import (
     extract_comparison_subqueries,
     parse_escalation_directive,
 )
-from chatree.engine.staleness import enrich_date_with_weekday
+from chatree.engine.staleness import _compact_cold_prefix_messages, enrich_date_with_weekday
 from chatree.eval.external_benchmarks import ExternalSession, ExternalTurn
 from chatree.storage.repository import SQLiteRepository
 from chatree.types import LLMResponse
@@ -106,6 +106,14 @@ def test_weekday_anchoring_and_query_intent() -> None:
     intent_cnt = classify_query_intent("How many model kits have I bought altogether?")
     assert intent_cnt["is_counting"] is True
     assert intent_cnt["is_update"] is False
+
+    # Elapsed-time duration must NOT inflate counting fan-out, whereas cumulative days spent DOES
+    intent_dur = classify_query_intent("How many weeks ago did I receive the crystal chandelier?")
+    assert intent_dur["is_counting"] is False
+    assert intent_dur["is_temporal_compare"] is True
+
+    intent_sum_days = classify_query_intent("How many days did I spend on camping trips?")
+    assert intent_sum_days["is_counting"] is True
 
     intent_upd = classify_query_intent("Where does Rachel currently live after her recent relocation?")
     assert intent_upd["is_update"] is True
@@ -318,3 +326,91 @@ async def test_conservative_steady_state_envelope() -> None:
         await ct.repo.commit_node_summary(ch.id, "Revised to RS256 signing.", status="COMPLETED")
         await root.chat("Third question after sibling change.")
         assert 'BRANCH SUMMARIES [id "title"' in captured_envelopes[-1]
+
+
+def test_role_balanced_proportional_cold_trimming() -> None:
+    # Case 1: Verbose assistant essays (~20k chars) + late user turn #12 -> 100% of user turns kept,
+    # and ALL assistant turns represented proportionally (no chronological `break` dropping late turns!).
+    long_session: list[dict[str, Any]] = [{"role": "system", "content": "sys"}]
+    for i in range(7):
+        long_session.append({"role": "user", "content": f"User turn #{i}: important preference_{i}."})
+        long_session.append({"role": "assistant", "content": f"Asst#{i} start " + ("filler " * 420) + f" END_{i}"})
+    compacted = _compact_cold_prefix_messages(long_session, char_budget=7_500)
+    assert len(compacted) == 14
+    blob = "\n".join(m["content"] for m in compacted)
+    for i in range(7):
+        assert f"preference_{i}" in blob
+        assert f"END_{i}" in blob
+    assert sum(len(m["content"]) for m in compacted) <= 7_900
+
+    # Case 2: Giant 10k pasted log in one user turn -> user paste trimmed to <=50% so assistant stays intact!
+    giant_paste: list[dict[str, Any]] = [
+        {"role": "user", "content": "HEADER_LOG " + ("stackline\n" * 1000) + " TAIL_ERR"},
+        {"role": "assistant", "content": "Root cause is VALKEY_TIMEOUT_500MS in pool.rs."},
+    ]
+    comp2 = _compact_cold_prefix_messages(giant_paste, char_budget=7_500)
+    assert len(comp2) == 2
+    assert "HEADER_LOG" in comp2[0]["content"] and "TAIL_ERR" in comp2[0]["content"]
+    assert "VALKEY_TIMEOUT_500MS" in comp2[1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_hop2_runs_both_chosen_tids_and_followup_query() -> None:
+    class _DualHop2Stub(_FusedQueryStubLLM):
+        def __init__(self, target_id: str, followup_query: str) -> None:
+            super().__init__()
+            self._tid = target_id
+            self._fq = followup_query
+
+        async def complete(
+            self,
+            model: str,
+            messages: list[dict[str, Any]],
+            tools: list[dict[str, Any]] | None = None,
+            temperature: float = 0.0,
+            tool_choice: Any = None,
+            **kwargs: Any,
+        ) -> LLMResponse:
+            sys_msg = str(messages[0].get("content", "")) if messages else ""
+            if "root coordinator of a dialogue tree" in sys_msg:
+                self.plan_calls += 1
+                return LLMResponse(
+                    content=f'{{"need_more": true, "target_ids": ["{self._tid}"], "followup_query": "{self._fq}"}}',
+                    model_used=model,
+                    tokens_in=100,
+                    tokens_out=20,
+                )
+            return await super().complete(
+                model=model, messages=messages, tools=tools, temperature=temperature, tool_choice=tool_choice
+            )
+
+    cfg = ChatreeConfig(db_path=":memory:", default_model="stub/dual-hop2")
+    stub = _DualHop2Stub("", "customized phone case")
+    async with Chatree.in_memory(config=cfg, llm=stub) as ct:
+        tree = await ct.create_tree("Dual Hop2 Tree", default_model="stub/dual-hop2")
+        root = await tree.root()
+        b1 = await root.spawn(goal="Nursery | Date: 2023-02-05", title="Nursery", mode="clean", switch_head=False)
+        b2 = await root.spawn(goal="Shower | Date: 2023-02-10", title="Baby Shower", mode="clean", switch_head=False)
+        b3 = await root.spawn(goal="Gifts | Date: 2023-02-20", title="Sibling Gifts", mode="clean", switch_head=False)
+        await ct.repo.append_message(node_id=b1.id, tree_id=tree.id, role="user", content="Helped prepare nursery.")
+        await ct.repo.append_message(node_id=b2.id, tree_id=tree.id, role="user", content="Picked baby shower gifts.")
+        await ct.repo.append_message(node_id=b3.id, tree_id=tree.id, role="user", content="Ordered customized phone case.")
+        await ct.repo.commit_node_summary(b1.id, "Nursery prep.", status="COMPLETED")
+        await ct.repo.commit_node_summary(b2.id, "Baby shower.", status="COMPLETED")
+        await ct.repo.commit_node_summary(b3.id, "Ordered customized phone case for friend.", status="COMPLETED")
+        await ct.rag.index_tree(tree.id)
+
+        stub._tid = b2.id
+        out = await ct.query_engine.deep_ask(
+            tree=await tree.model(),
+            caller=await root.model(),
+            query="Which happened first: nursery or baby shower?",
+            max_targets=1,
+            enable_recursive_hop=True,
+            include_branch_summary_map=True,
+        )
+        assert stub.plan_calls == 1
+        # Both explicit `target_ids` (b2) AND `followup_query` hit (b3) were queried in Hop-2!
+        assert b2.id in out["targets_queried"]
+        assert b3.id in out["targets_queried"]
+

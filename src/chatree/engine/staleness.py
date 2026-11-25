@@ -112,6 +112,86 @@ def enrich_date_with_weekday(date_str: str) -> str:
     return raw
 
 
+def _head_tail_trim(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    if limit < 60:
+        return text[:limit]
+    marker = "\n...[trimmed]...\n"
+    avail = max(20, limit - len(marker))
+    head = int(avail * 0.65)
+    tail = avail - head
+    return f"{text[:head]}{marker}{text[-tail:]}" if tail > 0 else text[:avail]
+
+
+def _waterfill_caps(lengths: list[int], budget: int) -> list[int]:
+    """Allocate `budget` across items so short items stay 100% intact and long items split the rest fairly."""
+    if not lengths:
+        return []
+    if sum(lengths) <= budget:
+        return list(lengths)
+    caps = list(lengths)
+    remaining_idxs = list(range(len(lengths)))
+    rem_budget = max(0, budget)
+    while remaining_idxs:
+        fair = max(80, rem_budget // len(remaining_idxs))
+        small = [i for i in remaining_idxs if lengths[i] <= fair]
+        if not small:
+            for i in remaining_idxs:
+                caps[i] = fair
+            break
+        for i in small:
+            caps[i] = lengths[i]
+            rem_budget = max(0, rem_budget - lengths[i])
+        remaining_idxs = [i for i in remaining_idxs if i not in set(small)]
+    return caps
+
+
+def _compact_cold_prefix_messages(
+    prefix: list[dict[str, Any]], *, char_budget: int = 7_500
+) -> list[dict[str, Any]]:
+    """
+    Role-balanced proportional cold-branch trimmer for write-time summarization:
+      - Never drops late turns via chronological `break`.
+      - Reserves up to 50% of `char_budget` for `user` turns (keeping 100% of normal user
+        turns intact while head+tail trimming giant pasted logs so assistant replies keep >=50%).
+      - Distributes the entire remaining budget fairly across all non-user (`assistant`) turns.
+    """
+    non_sys: list[tuple[str, str]] = [
+        (str(m.get("role") or "user"), str(m.get("content") or ""))
+        for m in prefix
+        if m.get("role") != "system" and str(m.get("content") or "").strip()
+    ]
+    if not non_sys:
+        return []
+    total_chars = sum(len(content) for _, content in non_sys)
+    if total_chars <= char_budget:
+        return [{"role": role, "content": content} for role, content in non_sys]
+
+    user_idxs = [i for i, (role, _) in enumerate(non_sys) if role == "user"]
+    other_idxs = [i for i, (role, _) in enumerate(non_sys) if role != "user"]
+
+    user_lens = [len(non_sys[i][1]) for i in user_idxs]
+    other_lens = [len(non_sys[i][1]) for i in other_idxs]
+
+    user_budget = char_budget // 2 if other_idxs else char_budget
+    user_caps = _waterfill_caps(user_lens, user_budget)
+    used_user = sum(min(length, cap) for length, cap in zip(user_lens, user_caps))
+    other_budget = max(400, char_budget - used_user)
+    other_caps = _waterfill_caps(other_lens, other_budget)
+
+    cap_by_idx: dict[int, int] = {}
+    for i, cap in zip(user_idxs, user_caps):
+        cap_by_idx[i] = cap
+    for i, cap in zip(other_idxs, other_caps):
+        cap_by_idx[i] = cap
+
+    return [
+        {"role": role, "content": _head_tail_trim(content, cap_by_idx[i])}
+        for i, (role, content) in enumerate(non_sys)
+    ]
+
+
 def _extract_polarity_tokens(text: str) -> set[str]:
     return {w.lower() for w in re.findall(r"\b[A-Za-z]+\b", text) if w.lower() in _POLARITY_TOKENS}
 
@@ -464,23 +544,7 @@ class StalenessService:
         if has_warm_prefix:
             messages = [*prefix, {"role": "user", "content": summarizer_prompt}]
         else:
-            compact_prefix: list[dict[str, Any]] = []
-            char_budget = 7_500
-            used_chars = 0
-            for m in prefix:
-                role = m.get("role")
-                if role == "system":
-                    continue
-                content = str(m.get("content") or "")
-                if role == "assistant" and len(content) > 800:
-                    content = f"{content[:550]}\n...[trimmed]...\n{content[-220:]}"
-                if used_chars + len(content) > char_budget:
-                    rem = max(0, char_budget - used_chars)
-                    if rem < 120:
-                        break
-                    content = content[:rem]
-                used_chars += len(content)
-                compact_prefix.append({"role": role, "content": content})
+            compact_prefix = _compact_cold_prefix_messages(prefix, char_budget=7_500)
             messages = [
                 {
                     "role": "system",

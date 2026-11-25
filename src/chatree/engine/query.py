@@ -79,12 +79,25 @@ _PREF_OPEN_KWS = (
 )
 
 
+_ELAPSED_DURATION_RE = re.compile(
+    r"\bhow\s+many\s+(?:days|weeks|months|years|hours|minutes)\s+"
+    r"(?:ago|passed|have\s+passed|has\s+passed|since|between|before|after)\b",
+    flags=re.IGNORECASE,
+)
+
+
 def classify_query_intent(query: str) -> dict[str, bool]:
     """Classify query intent to adapt retrieval fan-out, fact depth, and recency ordering."""
     q_low = (query or "").lower()
+    is_elapsed_duration = bool(_ELAPSED_DURATION_RE.search(q_low))
+    is_counting = any(
+        kw in q_low
+        for kw in _COUNTING_KWS
+        if not (is_elapsed_duration and kw == "how many")
+    )
     return {
-        "is_counting": any(kw in q_low for kw in _COUNTING_KWS),
-        "is_temporal_compare": any(kw in q_low for kw in _TEMPORAL_COMPARE_KWS),
+        "is_counting": is_counting,
+        "is_temporal_compare": is_elapsed_duration or any(kw in q_low for kw in _TEMPORAL_COMPARE_KWS),
         "is_update": any(kw in q_low for kw in _UPDATE_KWS),
         "is_pref_open": any(kw in q_low for kw in _PREF_OPEN_KWS),
     }
@@ -472,13 +485,14 @@ class TreeQueryEngine:
             "- If facts changed over time, ALWAYS use the latest dated update. "
             "- Use resolved calendar dates AND exact day-of-week anchors in session headers to compute exact dates/durations. "
             "- For counting/aggregation questions, carefully combine ALL distinct items across all branches without double-counting. "
-            "- Verify exact speaker/subject names strictly — never attribute one person's job, event, or action to another speaker. "
             "- For recommendation, preference, or hypothetical/inference questions ('Would X likely...', "
-            "'What fields...', 'What kind of...'), NEVER reply 'I do not know' — always commit to a "
-            "concrete grounded inference grounded in branch clues. "
-            "- For concrete factual questions whose asked person, entity, or event NEVER occurred "
-            "in any branch (e.g. wrong speaker or fabricated event), verify names strictly and either "
-            "state you do not know or explicitly correct the false premise."
+            "'What fields...', 'What kind of...', 'Can you recommend...'), NEVER reply 'I do not know' — "
+            "always commit to a concrete recommendation or inference grounded in branch clues. "
+            "- For concrete factual questions, reject false premises strictly when the asked person/entity/event "
+            "NEVER occurred or happened to a DIFFERENT speaker (never swap speakers). However, do NOT refuse "
+            "to answer merely because the question slightly paraphrases a recorded fact for the same person/entity "
+            "(e.g., asking when they 'met up and received X' when the session logs the date they 'received X') — "
+            "state/compute the answer directly from the recorded date and briefly note any wording nuance."
         )
 
         # Dedicated Hop-2 Planner ONLY when needed (low Hop-1 hits, counting, temporal comparison,
@@ -562,22 +576,43 @@ class TreeQueryEngine:
             )
             if should_escalate:
                 seen_tids = {str(a.get("target_id")) for a in found}
-                if chosen_tids:
-                    hop2_res = await asyncio.gather(
-                        *(
-                            self.ipc.request(
-                                tree=tree,
-                                caller=caller,
-                                target_id=tid,
-                                prompt=enriched_query,
-                                mutate=False,
-                                trace_ctx=trace_ctx,
-                            )
-                            for tid in chosen_tids
+                # Execute BOTH explicit `chosen_tids` AND `followup_q` in parallel (capped at <=4
+                # total Hop-2 targets) so a follow-up search is never silently dropped when the
+                # coordinator also names specific unqueried branch IDs.
+                eff_tids = list(chosen_tids[:3] if (chosen_tids and followup_q) else chosen_tids[:4])
+                rem_slots = max(0, 4 - len(eff_tids))
+                avail_after_tids = max(0, n_branches - len(queried_ids) - len(eff_tids))
+                run_followup = bool(followup_q and rem_slots > 0 and avail_after_tids > 0)
+
+                hop2_tasks: list[Any] = [
+                    self.ipc.request(
+                        tree=tree,
+                        caller=caller,
+                        target_id=tid,
+                        prompt=enriched_query,
+                        mutate=False,
+                        trace_ctx=trace_ctx,
+                    )
+                    for tid in eff_tids
+                ]
+                if run_followup:
+                    hop2_tasks.append(
+                        self.ipc.ask_tree(
+                            tree=tree,
+                            caller=caller,
+                            query=followup_q,
+                            scope=scope,
+                            max_targets=min(rem_slots, avail_after_tids),
+                            exclude_node_ids=queried_ids | set(eff_tids),
+                            shadow_prompt=enriched_query,
+                            trace_ctx=trace_ctx,
                         )
                     )
-                    queried_ids.update(chosen_tids)
-                    for exec_r in hop2_res:
+                if hop2_tasks:
+                    hop2_results = await asyncio.gather(*hop2_tasks)
+                    direct_results = hop2_results[: len(eff_tids)]
+                    queried_ids.update(eff_tids)
+                    for exec_r in direct_results:
                         out_d = exec_r.tool_output
                         if (
                             out_d.get("found_in_branch", True)
@@ -590,24 +625,14 @@ class TreeQueryEngine:
                             if tid and tid not in seen_tids:
                                 seen_tids.add(tid)
                                 found.append(out_d)
-                elif followup_q:
-                    hop2_exec = await self.ipc.ask_tree(
-                        tree=tree,
-                        caller=caller,
-                        query=followup_q,
-                        scope=scope,
-                        max_targets=min(4, max(1, n_branches - len(queried_ids))),
-                        exclude_node_ids=queried_ids,
-                        shadow_prompt=enriched_query,
-                        trace_ctx=trace_ctx,
-                    )
-                    hop2_out = hop2_exec.tool_output
-                    queried_ids.update(hop2_out.get("targets_queried") or [])
-                    for a in self._extract_found(hop2_out):
-                        tid = str(a.get("target_id") or "")
-                        if tid and tid not in seen_tids:
-                            seen_tids.add(tid)
-                            found.append(a)
+                    if run_followup:
+                        hop2_out = hop2_results[-1].tool_output
+                        queried_ids.update(hop2_out.get("targets_queried") or [])
+                        for a in self._extract_found(hop2_out):
+                            tid = str(a.get("target_id") or "")
+                            if tid and tid not in seen_tids:
+                                seen_tids.add(tid)
+                                found.append(a)
 
         synth_tokens_in = 0
         has_fallback_evidence = not is_mock and bool(summary_map_text or retrieved_facts_text)
