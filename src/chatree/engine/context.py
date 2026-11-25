@@ -6,7 +6,14 @@ from chatree.config import AblationConfig
 from chatree.providers.mock import estimate_messages_tokens
 from chatree.storage.repository import SQLiteRepository
 from chatree.tools import STATIC_SYSTEM_PROMPT
-from chatree.types import MailboxItemModel, MessageModel, NodeModel, SearchHit, TreeModel
+from chatree.types import (
+    DEFAULT_SESSION_ID,
+    MailboxItemModel,
+    MessageModel,
+    NodeModel,
+    SearchHit,
+    TreeModel,
+)
 
 
 def _escape_envelope_text(text: str) -> str:
@@ -183,6 +190,7 @@ class ContextAssembler:
         tree: TreeModel,
         node: NodeModel,
         *,
+        session_id: str = DEFAULT_SESSION_ID,
         speculative_hits: list[SearchHit] | None = None,
         fact_hits: list[SearchHit] | None = None,
         unread_mailbox: list[MailboxItemModel] | None = None,
@@ -199,9 +207,17 @@ class ContextAssembler:
             for n in all_nodes
             if n.parent_id == node.parent_id and n.id != node.id and node.parent_id is not None
         ]
-        reflog_entries = await self.repo.list_reflog(tree.id, limit=24)
+        reflog_entries = await self.repo.list_reflog(tree.id, limit=24, session_id=session_id)
         invariants = await self.repo.list_tree_invariants(tree.id)
-        cues = await self.repo.get_unconsumed_orientation_cues(tree.id, node.id)
+        cues = await self.repo.get_unconsumed_orientation_cues(
+            tree.id, node.id, session_id=session_id
+        )
+        all_sessions = (
+            await self.repo.list_sessions(tree.id)
+            if hasattr(self.repo, "list_sessions")
+            else []
+        )
+        other_sessions = [s for s in all_sessions if s.id != session_id]
         running_jobs = (
             [
                 j
@@ -378,6 +394,21 @@ class ContextAssembler:
                 lines.append('FACTS [id "title" | dated atomic fact (verify via query_branch if critical)]:')
                 lines.extend(fact_lines)
 
+        if other_sessions:
+            sess_strs: list[str] = []
+            for osess in other_sessions[:6]:
+                head_n = nodes_by_id.get(osess.head_node_id) if osess.head_node_id else None
+                head_lbl = (
+                    f'{head_n.id} "{_escape_envelope_text(head_n.title)}"'
+                    if head_n
+                    else (osess.head_node_id or "NONE")
+                )
+                same_tag = " (SAME NODE)" if osess.head_node_id == node.id else ""
+                sess_strs.append(
+                    f'"{_escape_envelope_text(osess.title)}" ({osess.id}, {osess.kind}) at {head_lbl}{same_tag}'
+                )
+            lines.append("SESSIONS [other visitors on this tree]: " + "; ".join(sess_strs))
+
         if running_jobs:
             job_strs = [
                 f'{j.child_node_id} "{_escape_envelope_text(j.title)}" (parent={j.parent_node_id})'
@@ -417,11 +448,13 @@ class ContextAssembler:
         speculative_hits: list[SearchHit] | None = None,
         fact_hits: list[SearchHit] | None = None,
         unread_mailbox: list[MailboxItemModel] | None = None,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
         prefix = await self.build_static_prefix(node, exclude_last_seq=newest_user_msg.seq)
         envelope, cue_ids, notices = await self.build_ephemeral_envelope(
             tree,
             node,
+            session_id=session_id,
             speculative_hits=speculative_hits,
             fact_hits=fact_hits,
             unread_mailbox=unread_mailbox,

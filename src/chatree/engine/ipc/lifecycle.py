@@ -14,6 +14,7 @@ from chatree.tools import (
     TOOL_REQUEST,
 )
 from chatree.types import (
+    DEFAULT_SESSION_ID,
     ChildContextMode,
     NodeModel,
     ReflogEntryModel,
@@ -59,6 +60,7 @@ class IpcLifecycleMixin:
         title: str | None = None,
         reason: str = "",
         switch_head: bool = True,
+        session_id: str = DEFAULT_SESSION_ID,
         trace_ctx: TraceContext | None = None,
     ) -> IpcExecutionResult:
         """
@@ -161,6 +163,7 @@ class IpcLifecycleMixin:
                 note=note_txt,
                 orientation_cue=cue,
                 update_head=True,
+                session_id=session_id,
             )
             head_changed = (updated_source.id, cont_node.id, entry)
 
@@ -312,6 +315,7 @@ class IpcLifecycleMixin:
         reason: str = "",
         switch_to_parent: bool = True,
         is_shadow: bool = False,
+        session_id: str = DEFAULT_SESSION_ID,
         trace_ctx: TraceContext | None = None,
     ) -> IpcExecutionResult:
         """
@@ -382,9 +386,9 @@ class IpcLifecycleMixin:
 
         head_changed: tuple[str, str, ReflogEntryModel] | None = None
         switched_to_id: str | None = None
-        if switch_to_parent and archived.parent_id and (
-            tree.head_node_id == archived.id or caller.id == archived.id
-        ):
+        cur_session = await self.repo.get_session(tree.id, session_id)
+        cur_head_id = cur_session.head_node_id if cur_session is not None else tree.head_node_id
+        if switch_to_parent and archived.parent_id:
             parent = await self.repo.get_node(archived.parent_id)
             if parent is not None:
                 note_txt = reason.strip() or f"Archived dead-end branch '{archived.title}'"
@@ -392,17 +396,32 @@ class IpcLifecycleMixin:
                     f"Archived dead-end branch {archived.id} ('{archived.title}') — quarantined from "
                     f"active search. Returned HEAD to '{parent.title}'."
                 )
-                entry = await self.reflog.record_transition(
-                    tree_id=tree.id,
-                    from_node=archived,
-                    to_node=parent,
-                    action="return",
-                    note=note_txt,
-                    orientation_cue=cue,
-                    update_head=True,
-                )
-                head_changed = (archived.id, parent.id, entry)
-                switched_to_id = parent.id
+                if cur_head_id == archived.id or caller.id == archived.id:
+                    entry = await self.reflog.record_transition(
+                        tree_id=tree.id,
+                        from_node=archived,
+                        to_node=parent,
+                        action="return",
+                        note=note_txt,
+                        orientation_cue=cue,
+                        update_head=True,
+                        session_id=session_id,
+                    )
+                    head_changed = (archived.id, parent.id, entry)
+                    switched_to_id = parent.id
+                # Ensure no OTHER visitor session is left stranded on the archived node
+                for other_s in await self.repo.list_sessions(tree.id):
+                    if other_s.id != session_id and other_s.head_node_id == archived.id:
+                        await self.reflog.record_transition(
+                            tree_id=tree.id,
+                            from_node=archived,
+                            to_node=parent,
+                            action="return",
+                            note=note_txt,
+                            orientation_cue=cue,
+                            update_head=True,
+                            session_id=other_s.id,
+                        )
 
         out: dict[str, Any] = {
             "ok": True,

@@ -37,7 +37,13 @@ class TreesNodesMessagesMixin:
             summary: str,
             rollup_summary: str,
         ) -> None: ...
-        async def list_reflog(self, tree_id: str, limit: int = 100) -> list[ReflogEntryModel]: ...
+        async def list_reflog(
+            self,
+            tree_id: str,
+            limit: int = 100,
+            *,
+            session_id: str | None = "default",
+        ) -> list[ReflogEntryModel]: ...
         async def compute_stale_dependencies_map(
             self,
             tree_id: str,
@@ -101,13 +107,23 @@ class TreesNodesMessagesMixin:
             )
             await self._upsert_node_fts(root_id, tree_id, title, goal, "", "")
 
+            await self.conn.execute(
+                """
+                INSERT INTO tree_sessions (
+                    tree_id, id, title, kind, head_node_id, reflog_cursor,
+                    is_default, created_at, updated_at
+                ) VALUES (?, 'default', 'Main Session', 'human', ?, 0, 1, ?, ?)
+                """,
+                (tree_id, root_id, now, now),
+            )
+
             rf_id = new_id("rf")
             await self.conn.execute(
                 """
                 INSERT INTO reflog (
-                    id, tree_id, seq, from_node_id, to_node_id, action,
+                    id, tree_id, session_id, seq, from_node_id, to_node_id, action,
                     note, orientation_cue, cue_consumed, created_at
-                ) VALUES (?, ?, 1, NULL, ?, 'init', ?, '', 1, ?)
+                ) VALUES (?, ?, 'default', 1, NULL, ?, 'init', ?, '', 1, ?)
                 """,
                 (rf_id, tree_id, root_id, f"Created tree '{title}'", now),
             )

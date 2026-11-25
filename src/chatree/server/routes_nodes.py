@@ -80,6 +80,7 @@ async def stream_turn(
         async for ev in c.orchestrator.run_turn_stream(
             node_id=node_id,
             user_content=body.content,
+            session_id=body.session_id,
             max_hop_depth=body.max_hop_depth or rt.max_hop_depth,
             token_budget=body.token_budget or rt.token_budget,
             model_override=body.model_override,
@@ -113,6 +114,7 @@ async def spawn_child(
         model_override=body.model_override,
         tool_permission=body.tool_permission,
         switch_head=body.switch_head,
+        session_id=body.session_id,
     )
     child_id = res.tool_output.get("child_id")
     child = await c.repo.get_node(child_id) if child_id else None
@@ -171,17 +173,19 @@ async def finish_node(
         artifacts=body.artifacts,
         auto_commit=body.auto_commit,
         return_to_parent=body.return_to_parent,
+        session_id=body.session_id,
     )
     updated_node = await c.repo.get_node(node_id)
-    updated_tree = await c.repo.get_tree(node.tree_id)
+    updated_sess = await c.repo.get_session(node.tree_id, body.session_id)
+    next_head_id = updated_sess.head_node_id if updated_sess else None
     return {
         "node": updated_node.model_dump() if updated_node else None,
         "result": fin["result"],
         "handoff_pending": fin["handoff_pending"].model_dump() if fin["handoff_pending"] else None,
         "ipc_event": fin["ipc_event"].model_dump() if fin["ipc_event"] else None,
         "head_changed": (
-            {"from_node_id": node_id, "to_node_id": updated_tree.head_node_id}
-            if updated_tree and updated_tree.head_node_id != node_id
+            {"from_node_id": node_id, "to_node_id": next_head_id}
+            if next_head_id and next_head_id != node_id
             else None
         ),
     }
@@ -201,6 +205,7 @@ async def compact_node(
         title=body.title,
         reason=body.reason,
         switch_head=body.switch_head,
+        session_id=body.session_id,
     )
     return info
 
@@ -217,6 +222,7 @@ async def archive_node(
         node_id=node_id,
         reason=body.reason,
         switch_to_parent=body.switch_to_parent,
+        session_id=body.session_id,
     )
     if out.get("error"):
         raise HTTPException(status_code=400, detail=str(out.get("detail") or out["error"]))
@@ -340,6 +346,7 @@ async def commit_handoff(
             edited_summary=body.summary,
             edited_artifacts=body.artifacts,
             return_head_to_target=body.return_head_to_target,
+            session_id=body.session_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

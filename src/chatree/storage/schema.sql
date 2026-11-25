@@ -137,9 +137,25 @@ CREATE TABLE IF NOT EXISTS shadow_cache (
 CREATE INDEX IF NOT EXISTS idx_shadow_cache_lookup
     ON shadow_cache(target_node_id, target_msg_seq, model, prompt_hash);
 
+CREATE TABLE IF NOT EXISTS tree_sessions (
+    tree_id TEXT NOT NULL REFERENCES trees(id) ON DELETE CASCADE,
+    id TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT 'Main Session',
+    kind TEXT NOT NULL DEFAULT 'human' CHECK(kind IN ('human', 'agent')),
+    head_node_id TEXT REFERENCES nodes(id) ON DELETE SET NULL,
+    reflog_cursor INTEGER NOT NULL DEFAULT 0,
+    is_default INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (tree_id, id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tree_sessions_tree ON tree_sessions(tree_id, updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS reflog (
     id TEXT PRIMARY KEY,
     tree_id TEXT NOT NULL REFERENCES trees(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL DEFAULT 'default',
     seq INTEGER NOT NULL,
     from_node_id TEXT REFERENCES nodes(id) ON DELETE SET NULL,
     to_node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
@@ -154,6 +170,7 @@ CREATE TABLE IF NOT EXISTS reflog (
 );
 
 CREATE INDEX IF NOT EXISTS idx_reflog_tree_seq ON reflog(tree_id, seq DESC);
+CREATE INDEX IF NOT EXISTS idx_reflog_tree_session_seq ON reflog(tree_id, session_id, seq DESC);
 
 CREATE TABLE IF NOT EXISTS artifacts (
     id TEXT PRIMARY KEY,

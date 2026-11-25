@@ -29,6 +29,7 @@ import type {
 export function App() {
   const [trees, setTrees] = useState<TreeModel[]>([])
   const [snapshot, setSnapshot] = useState<TreeSnapshotResponse | null>(null)
+  const [activeSessionId, setActiveSessionId] = useState<string>('default')
   const [nodeDetail, setNodeDetail] = useState<NodeDetailResponse | null>(null)
   const [invariants, setInvariants] = useState<TreeInvariantModel[]>([])
   const [facts, setFacts] = useState<BranchFactModel[]>([])
@@ -63,17 +64,30 @@ export function App() {
   }, [])
 
   const loadTreeAndHead = useCallback(
-    async (treeId: string, preferredNodeId?: string, includeArch?: boolean) => {
+    async (
+      treeId: string,
+      preferredNodeId?: string,
+      includeArch?: boolean,
+      sessionIdOverride?: string
+    ) => {
       const showArch = includeArch ?? includeArchivedFacts
+      const sessId = sessionIdOverride ?? activeSessionId
       const [snap, invList, factList] = await Promise.all([
-        api.getTreeSnapshot(treeId),
+        api.getTreeSnapshot(treeId, sessId),
         api.listInvariants(treeId).catch(() => [] as TreeInvariantModel[]),
         api.listFacts(treeId, { includeArchived: showArch }).catch(() => [] as BranchFactModel[]),
       ])
+      const resolvedSessId = snap.active_session_id || 'default'
+      setActiveSessionId(resolvedSessId)
       setSnapshot(snap)
       setInvariants(invList)
       setFacts(factList)
-      const targetNodeId = preferredNodeId || snap.tree.head_node_id || snap.tree.root_node_id
+      const activeSess = (snap.sessions ?? []).find((s) => s.id === resolvedSessId)
+      const targetNodeId =
+        preferredNodeId ||
+        activeSess?.head_node_id ||
+        snap.tree.head_node_id ||
+        snap.tree.root_node_id
       if (targetNodeId) {
         const detail = await api.getNodeDetail(targetNodeId)
         setNodeDetail(detail)
@@ -81,7 +95,7 @@ export function App() {
         setNodeDetail(null)
       }
     },
-    [includeArchivedFacts]
+    [includeArchivedFacts, activeSessionId]
   )
 
   const bootstrap = useCallback(async () => {
@@ -112,20 +126,50 @@ export function App() {
 
   const activeTree = snapshot?.tree ?? null
   const activeNode = nodeDetail?.node ?? null
+  const sessions = snapshot?.sessions ?? []
+  const activeSession = sessions.find((s) => s.id === activeSessionId) ?? sessions[0] ?? null
 
   const handleJump = useCallback(
     async (target: string, note = '') => {
       if (!activeTree) return
       try {
-        const res = await api.reflogJump(activeTree.id, target, note)
+        const res = await api.reflogJump(activeTree.id, target, note, activeSessionId)
         setEphemeralNotices([])
-        await loadTreeAndHead(activeTree.id, res.head_node.id)
+        await loadTreeAndHead(activeTree.id, res.head_node.id, undefined, activeSessionId)
       } catch (err) {
         showToast(String(err))
       }
     },
-    [activeTree, loadTreeAndHead, showToast]
+    [activeTree, activeSessionId, loadTreeAndHead, showToast]
   )
+
+  const handleSelectSession = async (sessionId: string) => {
+    if (!activeTree) return
+    setEphemeralNotices([])
+    setActiveSessionId(sessionId)
+    await loadTreeAndHead(activeTree.id, undefined, undefined, sessionId)
+  }
+
+  const handleCreateSession = async (title: string) => {
+    if (!activeTree) return
+    const created = await api.createSession(activeTree.id, {
+      title,
+      start_node_id: activeNode?.id ?? activeTree.root_node_id,
+    })
+    setActiveSessionId(created.id)
+    setEphemeralNotices([])
+    await loadTreeAndHead(activeTree.id, created.head_node_id ?? undefined, undefined, created.id)
+    showToast(`Opened visitor session “${created.title}”`)
+  }
+
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!activeTree) return
+    await api.deleteSession(activeTree.id, sessionId)
+    const nextSess = sessionId === activeSessionId ? 'default' : activeSessionId
+    setActiveSessionId(nextSess)
+    await loadTreeAndHead(activeTree.id, undefined, undefined, nextSess)
+    showToast('Closed visitor session')
+  }
 
   useKeyboardNav({
     onBack: () => handleJump('back'),
@@ -135,7 +179,8 @@ export function App() {
 
   const handleSelectTree = async (treeId: string) => {
     setEphemeralNotices([])
-    await loadTreeAndHead(treeId)
+    setActiveSessionId('default')
+    await loadTreeAndHead(treeId, undefined, undefined, 'default')
   }
 
   const handleCreateTree = async (title: string, goal: string) => {
@@ -170,40 +215,46 @@ export function App() {
     let nextHeadId: string | null = null
 
     try {
-      await api.streamTurn(activeNode.id, content, {
-        onTurnStart: (data) => {
-          setEphemeralNotices(data.ephemeral_notices || [])
-          setNodeDetail((prev) =>
-            prev
-              ? { ...prev, messages: [...prev.messages, data.user_message] }
-              : prev
-          )
-          if (data.reopened) {
-            showToast('Branch reopened — dependent nodes flagged STALE.')
-          }
+      await api.streamTurn(
+        activeNode.id,
+        content,
+        {
+          onTurnStart: (data) => {
+            setEphemeralNotices(data.ephemeral_notices || [])
+            setNodeDetail((prev) =>
+              prev
+                ? { ...prev, messages: [...prev.messages, data.user_message] }
+                : prev
+            )
+            if (data.reopened) {
+              showToast('Branch reopened — dependent nodes flagged STALE.')
+            }
+          },
+          onToken: (delta) => {
+            setStreamingText((prev) => prev + delta)
+          },
+          onIpcActivity: (ev) => {
+            setStreamingIpc((prev) => [...prev, ev])
+          },
+          onHeadChanged: (data) => {
+            nextHeadId = data.to_node_id
+            showToast(`HEAD moved to ${data.to_node_id} (press Alt+← to go back)`)
+          },
+          onHandoffPending: () => {
+            showToast('PR-style handoff ready for review!')
+          },
+          onStalenessUpdated: (data) => {
+            showToast(
+              `Staleness propagated to ${data.stale_node_ids.length} dependent node(s).`
+            )
+          },
+          onError: (err) => {
+            showToast(`${err.code}: ${err.message}`)
+          },
         },
-        onToken: (delta) => {
-          setStreamingText((prev) => prev + delta)
-        },
-        onIpcActivity: (ev) => {
-          setStreamingIpc((prev) => [...prev, ev])
-        },
-        onHeadChanged: (data) => {
-          nextHeadId = data.to_node_id
-          showToast(`HEAD moved to ${data.to_node_id} (press Alt+← to go back)`)
-        },
-        onHandoffPending: () => {
-          showToast('PR-style handoff ready for review!')
-        },
-        onStalenessUpdated: (data) => {
-          showToast(
-            `Staleness propagated to ${data.stale_node_ids.length} dependent node(s).`
-          )
-        },
-        onError: (err) => {
-          showToast(`${err.code}: ${err.message}`)
-        },
-      })
+        undefined,
+        activeSessionId
+      )
     } finally {
       setIsStreaming(false)
       setStreamingText('')
@@ -226,7 +277,10 @@ export function App() {
     switch_head: boolean
   }) => {
     if (!activeTree || !spawnParent) return
-    const res = await api.spawnChild(spawnParent.id, payload)
+    const res = await api.spawnChild(spawnParent.id, {
+      ...payload,
+      session_id: activeSessionId,
+    })
     const nextId =
       payload.switch_head && res.child ? res.child.id : activeNode?.id || spawnParent.id
     await loadTreeAndHead(activeTree.id, nextId)
@@ -242,7 +296,10 @@ export function App() {
     switch_head: boolean
   }) => {
     if (!activeTree || !compactTarget) return
-    const info = await api.compactNode(compactTarget.id, payload)
+    const info = await api.compactNode(compactTarget.id, {
+      ...payload,
+      session_id: activeSessionId,
+    })
     const nextId = info.switched_head ? info.to_node_id : activeNode?.id || compactTarget.id
     await loadTreeAndHead(activeTree.id, nextId)
     showToast(
@@ -258,6 +315,7 @@ export function App() {
       const res = await api.archiveNode(target.id, {
         reason: 'Archived via UI',
         switch_to_parent: true,
+        session_id: activeSessionId,
       })
       const nextId =
         res.switched_head_to ||
@@ -346,7 +404,10 @@ export function App() {
     if (!activeTree || !activeNode || !activeNode.parent_id) return
     setFinishing(true)
     try {
-      const res = await api.finishNode(activeNode.id, { return_to_parent: true })
+      const res = await api.finishNode(activeNode.id, {
+        return_to_parent: true,
+        session_id: activeSessionId,
+      })
       const nextNodeId = res.head_changed?.to_node_id || activeNode.id
       await loadTreeAndHead(activeTree.id, nextNodeId)
       if (res.handoff_pending) {
@@ -370,6 +431,7 @@ export function App() {
     const res = await api.commitHandoff(mailboxId, {
       summary,
       return_head_to_target: returnHead,
+      session_id: activeSessionId,
     })
     await loadTreeAndHead(
       activeTree.id,
@@ -497,6 +559,8 @@ export function App() {
         trees={trees}
         activeTree={activeTree}
         nodes={snapshot?.nodes ?? []}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
         activeNodeId={activeNode?.id ?? null}
         onSelectTree={handleSelectTree}
         onCreateTree={() => setNewTreeOpen(true)}
@@ -516,10 +580,16 @@ export function App() {
       <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full overflow-hidden relative">
         <BreadcrumbBar
           tree={activeTree}
+          nodes={snapshot?.nodes ?? []}
+          sessions={sessions}
+          activeSessionId={activeSessionId}
           ancestors={nodeDetail?.ancestors ?? []}
           activeNode={activeNode}
           estimatedTokens={nodeDetail?.estimated_context_tokens ?? 0}
           inspectorOpen={inspectorOpen}
+          onSelectSession={handleSelectSession}
+          onCreateSession={handleCreateSession}
+          onDeleteSession={handleDeleteSession}
           onBack={() => handleJump('back')}
           onForward={() => handleJump('forward')}
           onSelectNode={(nodeId) => handleJump(nodeId)}
@@ -577,7 +647,7 @@ export function App() {
         <InspectorDrawer
           nodes={snapshot?.nodes ?? []}
           reflog={snapshot?.reflog ?? []}
-          reflogCursor={activeTree?.reflog_cursor ?? 0}
+          reflogCursor={activeSession?.reflog_cursor ?? activeTree?.reflog_cursor ?? 0}
           ipcEvents={snapshot?.recent_ipc ?? []}
           artifacts={snapshot?.artifacts ?? []}
           invariants={invariants}

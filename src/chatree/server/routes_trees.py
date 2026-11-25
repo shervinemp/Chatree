@@ -9,6 +9,7 @@ from chatree.sdk.client import Chatree
 from chatree.server.dtos import (
     AddFactsRequest,
     CreateArtifactRequest,
+    CreateSessionRequest,
     CreateTreeRequest,
     PinInvariantRequest,
     ReflogJumpRequest,
@@ -19,6 +20,7 @@ from chatree.server.dtos import (
     get_client,
 )
 from chatree.types import (
+    DEFAULT_SESSION_ID,
     ArtifactInput,
     ArtifactModel,
     BackgroundJobModel,
@@ -31,6 +33,7 @@ from chatree.types import (
     TreeInvariantModel,
     TreeMetrics,
     TreeModel,
+    TreeSessionModel,
 )
 
 router = APIRouter()
@@ -57,8 +60,51 @@ async def create_tree(
 
 
 @router.get("/api/trees/{tree_id}", response_model=TreeSnapshotResponse)
-async def get_tree(tree_id: str, c: Chatree = Depends(get_client)) -> TreeSnapshotResponse:
-    return await build_tree_snapshot(c, tree_id)
+async def get_tree(
+    tree_id: str,
+    session_id: str = Query(default=DEFAULT_SESSION_ID),
+    c: Chatree = Depends(get_client),
+) -> TreeSnapshotResponse:
+    return await build_tree_snapshot(c, tree_id, session_id=session_id)
+
+
+@router.get("/api/trees/{tree_id}/sessions", response_model=list[TreeSessionModel])
+async def list_sessions(
+    tree_id: str, c: Chatree = Depends(get_client)
+) -> list[TreeSessionModel]:
+    if await c.repo.get_tree(tree_id) is None:
+        raise HTTPException(status_code=404, detail="Tree not found")
+    return await c.repo.list_sessions(tree_id)
+
+
+@router.post("/api/trees/{tree_id}/sessions", response_model=TreeSessionModel, status_code=201)
+async def create_session(
+    tree_id: str, body: CreateSessionRequest, c: Chatree = Depends(get_client)
+) -> TreeSessionModel:
+    try:
+        sess, _ = await c.repo.create_session(
+            tree_id,
+            title=body.title,
+            kind=body.kind,
+            start_node_id=body.start_node_id,
+            session_id=body.session_id,
+        )
+        return sess
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/api/trees/{tree_id}/sessions/{session_id}")
+async def delete_session(
+    tree_id: str, session_id: str, c: Chatree = Depends(get_client)
+) -> dict[str, bool]:
+    try:
+        deleted = await c.repo.delete_session(tree_id, session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"deleted": True}
 
 
 @router.patch("/api/trees/{tree_id}", response_model=TreeModel)
@@ -131,9 +177,15 @@ async def search_tree(
 
 @router.get("/api/trees/{tree_id}/reflog", response_model=list[ReflogEntryModel])
 async def list_reflog(
-    tree_id: str, limit: int = Query(default=100, ge=1, le=500), c: Chatree = Depends(get_client)
+    tree_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    session_id: str = Query(default=DEFAULT_SESSION_ID),
+    all_sessions: bool = Query(default=False),
+    c: Chatree = Depends(get_client),
 ) -> list[ReflogEntryModel]:
-    return await c.repo.list_reflog(tree_id, limit=limit)
+    return await c.repo.list_reflog(
+        tree_id, limit=limit, session_id=None if all_sessions else session_id
+    )
 
 
 @router.post("/api/trees/{tree_id}/reflog/jump")
@@ -141,10 +193,13 @@ async def jump_reflog(
     tree_id: str, body: ReflogJumpRequest, c: Chatree = Depends(get_client)
 ) -> dict[str, Any]:
     try:
-        dest, entry, cursor = await c.reflog.jump(tree_id, body.target, note=body.note)
+        dest, entry, cursor = await c.reflog.jump(
+            tree_id, body.target, note=body.note, session_id=body.session_id
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
+        "session_id": body.session_id,
         "head_node": dest.model_dump(),
         "reflog_entry": entry.model_dump() if entry else None,
         "reflog_cursor": cursor,

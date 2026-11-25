@@ -13,10 +13,12 @@ import type {
   RuntimeSettingsModel,
   SearchHit,
   SearchScope,
+  SessionKind,
   StreamCallbacks,
   ToolPermission,
   TreeInvariantModel,
   TreeModel,
+  TreeSessionModel,
   TreeSnapshotResponse,
 } from '../types'
 
@@ -53,8 +55,28 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  getTreeSnapshot: (treeId: string) =>
-    jsonFetch<TreeSnapshotResponse>(`/api/trees/${treeId}`),
+  getTreeSnapshot: (treeId: string, sessionId = 'default') =>
+    jsonFetch<TreeSnapshotResponse>(
+      `/api/trees/${treeId}?session_id=${encodeURIComponent(sessionId)}`
+    ),
+
+  listSessions: (treeId: string) =>
+    jsonFetch<TreeSessionModel[]>(`/api/trees/${treeId}/sessions`),
+
+  createSession: (
+    treeId: string,
+    payload: { title: string; kind?: SessionKind; start_node_id?: string | null }
+  ) =>
+    jsonFetch<TreeSessionModel>(`/api/trees/${treeId}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteSession: (treeId: string, sessionId: string) =>
+    jsonFetch<{ deleted: boolean }>(
+      `/api/trees/${treeId}/sessions/${encodeURIComponent(sessionId)}`,
+      { method: 'DELETE' }
+    ),
 
   updateTree: (
     treeId: string,
@@ -103,6 +125,7 @@ export const api = {
       model_override?: string | null
       tool_permission?: ToolPermission | null
       switch_head?: boolean
+      session_id?: string
     }
   ) =>
     jsonFetch<{
@@ -121,6 +144,7 @@ export const api = {
       artifacts?: Array<{ slug: string; title: string; kind: string; content: string; summary?: string }>
       auto_commit?: boolean
       return_to_parent?: boolean
+      session_id?: string
     }
   ) =>
     jsonFetch<{
@@ -158,7 +182,13 @@ export const api = {
 
   compactNode: (
     nodeId: string,
-    payload: { keep_recent_turns?: number | null; title?: string | null; reason?: string; switch_head?: boolean }
+    payload: {
+      keep_recent_turns?: number | null
+      title?: string | null
+      reason?: string
+      switch_head?: boolean
+      session_id?: string
+    }
   ) =>
     jsonFetch<CompactBranchResponse>(`/api/nodes/${nodeId}/compact`, {
       method: 'POST',
@@ -167,7 +197,7 @@ export const api = {
 
   archiveNode: (
     nodeId: string,
-    payload: { reason?: string; switch_to_parent?: boolean }
+    payload: { reason?: string; switch_to_parent?: boolean; session_id?: string }
   ) =>
     jsonFetch<ArchiveBranchResponse>(`/api/nodes/${nodeId}/archive`, {
       method: 'POST',
@@ -224,6 +254,7 @@ export const api = {
     payload: {
       summary?: string
       return_head_to_target?: boolean
+      session_id?: string
     }
   ) =>
     jsonFetch<{
@@ -239,13 +270,14 @@ export const api = {
       method: 'POST',
     }),
 
-  reflogJump: (treeId: string, target: string, note = '') =>
+  reflogJump: (treeId: string, target: string, note = '', sessionId = 'default') =>
     jsonFetch<{
+      session_id?: string
       head_node: NodeModel
       reflog_cursor: number
     }>(`/api/trees/${treeId}/reflog/jump`, {
       method: 'POST',
-      body: JSON.stringify({ target, note }),
+      body: JSON.stringify({ target, note, session_id: sessionId }),
     }),
 
   searchTree: (treeId: string, q: string, scope: SearchScope = 'all', nodeId?: string) => {
@@ -292,12 +324,13 @@ export const api = {
     nodeId: string,
     content: string,
     callbacks: StreamCallbacks,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    sessionId = 'default'
   ): Promise<void> {
     const res = await fetch(`/api/nodes/${nodeId}/turns/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, session_id: sessionId }),
       signal,
     })
 

@@ -17,6 +17,7 @@ from chatree.providers.mock import estimate_messages_tokens
 from chatree.storage.repository import SQLiteRepository
 from chatree.tools import TOOL_SEND, ToolRegistry
 from chatree.types import (
+    DEFAULT_SESSION_ID,
     IpcEventModel,
     LLMResponse,
     MailboxItemModel,
@@ -69,6 +70,7 @@ class TurnOrchestrator:
         node_id: str,
         user_content: str,
         *,
+        session_id: str = DEFAULT_SESSION_ID,
         max_hop_depth: int | None = None,
         token_budget: int | None = None,
         model_override: str | None = None,
@@ -92,6 +94,7 @@ class TurnOrchestrator:
         async for ev in self.run_turn_stream(
             node_id=node_id,
             user_content=user_content,
+            session_id=session_id,
             max_hop_depth=max_hop_depth,
             token_budget=token_budget,
             model_override=model_override,
@@ -129,6 +132,7 @@ class TurnOrchestrator:
             trace_id=trace_id,
             node_id=actual_node_id,
             head_node_id=head_node_id,
+            session_id=session_id,
             user_message=user_msg,
             assistant_message=assistant_msg,
             content=assistant_msg.content if assistant_msg else "",
@@ -147,6 +151,8 @@ class TurnOrchestrator:
         tree: TreeModel,
         node: NodeModel,
         trace_ctx: TraceContext,
+        *,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> tuple[TreeModel, NodeModel, list[dict[str, Any]]]:
         """Run non-destructive auto-compaction if `node` crossed the configured token threshold."""
         events: list[dict[str, Any]] = []
@@ -172,6 +178,7 @@ class TurnOrchestrator:
             keep_recent_turns=self.guardrails.auto_compact_keep_recent_turns,
             reason=f"Auto-compacted at {live_tokens} tokens >= threshold {eff_threshold}",
             switch_head=True,
+            session_id=session_id,
             trace_ctx=trace_ctx,
         )
         events.append({"event": "branch_compacted", "data": comp_res.tool_output})
@@ -255,6 +262,7 @@ class TurnOrchestrator:
         node_id: str,
         user_content: str,
         *,
+        session_id: str = DEFAULT_SESSION_ID,
         max_hop_depth: int | None = None,
         token_budget: int | None = None,
         model_override: str | None = None,
@@ -284,7 +292,9 @@ class TurnOrchestrator:
         )
 
         # Auto-compact / non-destructive split threshold for unbounded infinite-context sessions
-        tree, node, compact_events = await self._maybe_auto_compact(tree, node, trace_ctx)
+        tree, node, compact_events = await self._maybe_auto_compact(
+            tree, node, trace_ctx, session_id=session_id
+        )
         node_id = node.id
         for cev in compact_events:
             yield cev
@@ -311,12 +321,15 @@ class TurnOrchestrator:
                 action="reopen",
                 note=f"Reopened '{node.title}' for new turn",
                 update_head=True,
+                session_id=session_id,
             )
             reopened = True
 
-        if tree.head_node_id != node.id:
+        cur_session = await self.repo.get_session(tree.id, session_id)
+        session_head_id = cur_session.head_node_id if cur_session is not None else tree.head_node_id
+        if session_head_id != node.id:
             prev_head = (
-                await self.repo.get_node(tree.head_node_id) if tree.head_node_id else None
+                await self.repo.get_node(session_head_id) if session_head_id else None
             )
             await self.reflog.record_transition(
                 tree_id=tree.id,
@@ -325,6 +338,7 @@ class TurnOrchestrator:
                 action="jump",
                 note=f"Focused node '{node.title}'",
                 update_head=True,
+                session_id=session_id,
             )
             tree = await self.repo.get_tree(tree.id)
             assert tree is not None
@@ -364,9 +378,11 @@ class TurnOrchestrator:
             speculative_hits=speculative_hits,
             fact_hits=fact_hits,
             unread_mailbox=unread_mailbox,
+            session_id=session_id,
         )
         turn_start_data = {
             "trace_id": trace_ctx.trace_id,
+            "session_id": session_id,
             "node_id": node.id,
             "user_message": user_msg.model_dump(),
             "ephemeral_notices": notices,
@@ -531,6 +547,7 @@ class TurnOrchestrator:
                     caller=current_node,
                     tool_calls=response.tool_calls,
                     trace_ctx=trace_ctx,
+                    session_id=session_id,
                 )
 
                 for tc, ipc_res in batch_results:
@@ -624,12 +641,19 @@ class TurnOrchestrator:
         await self.rag.index_node_chunks(node.id)
 
         updated_node = await self.repo.get_node(node.id)
+        updated_session = await self.repo.get_session(tree.id, session_id)
         updated_tree = await self.repo.get_tree(tree.id)
+        final_head_id = (
+            updated_session.head_node_id
+            if updated_session and updated_session.head_node_id
+            else (updated_tree.head_node_id if updated_tree else node.id)
+        )
         complete_data = {
             "trace_id": trace_ctx.trace_id,
+            "session_id": session_id,
             "assistant_message": final_assistant_msg.model_dump() if final_assistant_msg else None,
             "node": updated_node.model_dump() if updated_node else None,
-            "head_node_id": updated_tree.head_node_id if updated_tree else node.id,
+            "head_node_id": final_head_id,
             "trace_summary": {
                 "tokens_used": trace_ctx.ledger.tokens_used,
                 "token_budget": trace_ctx.ledger.token_budget,

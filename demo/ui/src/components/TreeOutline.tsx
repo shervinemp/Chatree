@@ -15,12 +15,14 @@ import {
   Sparkles,
   Trash2,
 } from 'lucide-react'
-import type { NodeModel, TreeModel } from '../types'
+import type { NodeModel, TreeModel, TreeSessionModel } from '../types'
 
 interface TreeOutlineProps {
   trees: TreeModel[]
   activeTree: TreeModel | null
   nodes: NodeModel[]
+  sessions?: TreeSessionModel[]
+  activeSessionId?: string
   activeNodeId: string | null
   onSelectTree: (treeId: string) => void
   onCreateTree: () => void
@@ -36,6 +38,8 @@ export function TreeOutline({
   trees,
   activeTree,
   nodes,
+  sessions = [],
+  activeSessionId = 'default',
   activeNodeId,
   onSelectTree,
   onCreateTree,
@@ -87,6 +91,9 @@ export function TreeOutline({
     const kids = childrenByParent[node.id] ?? []
     const isCollapsed = !!collapsed[node.id]
     const isHead = node.id === activeNodeId
+    const otherVisitors = sessions.filter(
+      (s) => s.id !== activeSessionId && s.head_node_id === node.id
+    )
     const isStale = node.stale_dependencies.length > 0
     const hasPending = node.pending_handoffs_count > 0
 
@@ -141,6 +148,14 @@ export function TreeOutline({
               {isHead && (
                 <span className="px-1 py-0.2 rounded bg-indigo-500/25 text-indigo-300 font-mono text-[9px] uppercase tracking-wider shrink-0">
                   HEAD
+                </span>
+              )}
+              {otherVisitors.length > 0 && (
+                <span
+                  title={`Other visitor session(s) here: ${otherVisitors.map((s) => s.title).join(', ')}`}
+                  className="px-1 py-0.2 rounded bg-violet-500/20 text-violet-300 font-mono text-[9px] truncate max-w-[64px] shrink-0"
+                >
+                  ● {otherVisitors.length === 1 ? otherVisitors[0].title : `${otherVisitors.length} sess`}
                 </span>
               )}
               {node.node_kind === 'subagent' && (

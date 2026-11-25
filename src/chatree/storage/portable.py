@@ -16,6 +16,7 @@ from chatree.types import (
     ReflogEntryModel,
     TreeInvariantModel,
     TreeModel,
+    TreeSessionModel,
 )
 
 _KIND_EXT: dict[str, str] = {
@@ -66,7 +67,8 @@ class DialogueDirectoryStore:
         arts_dir.mkdir(parents=True, exist_ok=True)
 
         nodes = await repo.list_nodes(tree_id)
-        reflog = await repo.list_reflog(tree_id, limit=100_000)
+        sessions = await repo.list_sessions(tree_id)
+        reflog = await repo.list_reflog(tree_id, limit=100_000, session_id=None)
         ipc_events = await repo.list_ipc_events(tree_id, limit=100_000)
         artifacts = await repo.list_artifacts(tree_id)
         mailbox_items = await repo.list_mailbox_items(tree_id)
@@ -112,6 +114,10 @@ class DialogueDirectoryStore:
         )
         (out / "invariants.json").write_text(
             json.dumps([inv.model_dump() for inv in invariants], indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (out / "sessions.json").write_text(
+            json.dumps([s.model_dump() for s in sessions], indent=2) + "\n",
             encoding="utf-8",
         )
 
@@ -319,6 +325,47 @@ class DialogueDirectoryStore:
                             (m.id, m.tree_id, m.node_id, str(m.seq), m.content),
                         )
 
+        # Restore visitor sessions (or backfill default session for pre-session exports)
+        sess_path = in_dir / "sessions.json"
+        if sess_path.exists():
+            for raw_s in json.loads(sess_path.read_text(encoding="utf-8")):
+                sess = TreeSessionModel(**raw_s)
+                await repo.conn.execute(
+                    """
+                    INSERT OR REPLACE INTO tree_sessions (
+                        tree_id, id, title, kind, head_node_id, reflog_cursor,
+                        is_default, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        sess.tree_id,
+                        sess.id,
+                        sess.title,
+                        sess.kind,
+                        sess.head_node_id,
+                        sess.reflog_cursor,
+                        1 if sess.is_default else 0,
+                        sess.created_at,
+                        sess.updated_at,
+                    ),
+                )
+        else:
+            await repo.conn.execute(
+                """
+                INSERT OR IGNORE INTO tree_sessions (
+                    tree_id, id, title, kind, head_node_id, reflog_cursor,
+                    is_default, created_at, updated_at
+                ) VALUES (?, 'default', 'Main Session', 'human', ?, ?, 1, ?, ?)
+                """,
+                (
+                    tree.id,
+                    tree.head_node_id,
+                    tree.reflog_cursor,
+                    tree.created_at,
+                    tree.updated_at,
+                ),
+            )
+
         # Restore reflog
         rf_path = in_dir / "reflog.jsonl"
         if rf_path.exists():
@@ -329,13 +376,14 @@ class DialogueDirectoryStore:
                 await repo.conn.execute(
                     """
                     INSERT INTO reflog (
-                        id, tree_id, seq, from_node_id, to_node_id, action,
+                        id, tree_id, session_id, seq, from_node_id, to_node_id, action,
                         note, orientation_cue, cue_consumed, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         rf.id,
                         rf.tree_id,
+                        rf.session_id,
                         rf.seq,
                         rf.from_node_id,
                         rf.to_node_id,

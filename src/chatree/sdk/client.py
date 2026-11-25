@@ -32,6 +32,7 @@ from chatree.storage.portable import DialogueDirectoryStore
 from chatree.storage.repository import SQLiteRepository
 from chatree.tools import STATIC_SYSTEM_PROMPT, ToolRegistry, ToolSideEffect
 from chatree.types import (
+    DEFAULT_SESSION_ID,
     ArtifactInput,
     ArtifactModel,
     BackgroundJobModel,
@@ -49,10 +50,12 @@ from chatree.types import (
     RuntimeSettingsModel,
     SearchHit,
     SearchScope,
+    SessionKind,
     StaleDependencyInfo,
     TreeInvariantModel,
     TreeMetrics,
     TreeModel,
+    TreeSessionModel,
     TurnResult,
 )
 
@@ -475,18 +478,51 @@ class DialogueTree:
             raise ValueError(f"Tree not found: {self.id}")
         return t
 
-    async def head(self) -> NodeHandle:
+    async def head(self, *, session_id: str = DEFAULT_SESSION_ID) -> NodeHandle:
+        sess = await self._ct.repo.get_session(self.id, session_id)
+        if sess is not None and sess.head_node_id:
+            return NodeHandle(self, sess.head_node_id, session_id=session_id)
         t = await self.model()
         assert t.head_node_id is not None
-        return NodeHandle(self, t.head_node_id)
+        return NodeHandle(self, t.head_node_id, session_id=session_id)
+
+    def session(self, session_id: str = DEFAULT_SESSION_ID) -> TreeSession:
+        """Return a stateful visitor/cursor handle scoped to `session_id` on this tree."""
+        return TreeSession(self, session_id)
+
+    async def create_session(
+        self,
+        title: str = "New Session",
+        *,
+        kind: SessionKind = "human",
+        start_node_id: str | None = None,
+        session_id: str | None = None,
+    ) -> TreeSession:
+        """Open a new concurrent visitor session (independent HEAD & reflog) on this shared tree."""
+        sess, _ = await self._ct.repo.create_session(
+            self.id,
+            title=title,
+            kind=kind,
+            start_node_id=start_node_id,
+            session_id=session_id,
+        )
+        return TreeSession(self, sess.id)
+
+    async def sessions(self) -> list[TreeSessionModel]:
+        """List all visitor sessions attached to this tree."""
+        return await self._ct.repo.list_sessions(self.id)
+
+    async def delete_session(self, session_id: str) -> bool:
+        """Close and remove a non-default visitor session and its private reflog trail."""
+        return await self._ct.repo.delete_session(self.id, session_id)
 
     async def root(self) -> NodeHandle:
         t = await self.model()
         assert t.root_node_id is not None
         return NodeHandle(self, t.root_node_id)
 
-    def node(self, node_id: str) -> NodeHandle:
-        return NodeHandle(self, node_id)
+    def node(self, node_id: str, *, session_id: str = DEFAULT_SESSION_ID) -> NodeHandle:
+        return NodeHandle(self, node_id, session_id=session_id)
 
     async def nodes(self) -> list[NodeModel]:
         return await self._ct.repo.list_nodes(self.id)
@@ -508,16 +544,22 @@ class DialogueTree:
         content: str,
         *,
         node_id: str | None = None,
+        session_id: str = DEFAULT_SESSION_ID,
         model_override: str | None = None,
         max_hop_depth: int | None = None,
         token_budget: int | None = None,
         include_core_tools: bool = True,
     ) -> TurnResult:
-        target_id = node_id or (await self.model()).head_node_id
+        if node_id is None:
+            sess = await self._ct.repo.get_session(self.id, session_id)
+            target_id = (sess.head_node_id if sess else None) or (await self.model()).head_node_id
+        else:
+            target_id = node_id
         assert target_id is not None
         return await self._ct.orchestrator.run_turn(
             target_id,
             content,
+            session_id=session_id,
             model_override=model_override,
             max_hop_depth=max_hop_depth,
             token_budget=token_budget,
@@ -529,16 +571,22 @@ class DialogueTree:
         content: str,
         *,
         node_id: str | None = None,
+        session_id: str = DEFAULT_SESSION_ID,
         model_override: str | None = None,
         max_hop_depth: int | None = None,
         token_budget: int | None = None,
         include_core_tools: bool = True,
     ) -> AsyncIterator[dict[str, Any]]:
-        target_id = node_id or (await self.model()).head_node_id
+        if node_id is None:
+            sess = await self._ct.repo.get_session(self.id, session_id)
+            target_id = (sess.head_node_id if sess else None) or (await self.model()).head_node_id
+        else:
+            target_id = node_id
         assert target_id is not None
         async for ev in self._ct.orchestrator.run_turn_stream(
             target_id,
             content,
+            session_id=session_id,
             model_override=model_override,
             max_hop_depth=max_hop_depth,
             token_budget=token_budget,
@@ -560,9 +608,14 @@ class DialogueTree:
         permission: ToolPermission | None = None,
         node_kind: NodeKind | None = None,
         switch_head: bool = True,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> NodeHandle:
         t = await self.model()
-        pid = parent_id or t.head_node_id or t.root_node_id
+        if parent_id is None:
+            sess = await self._ct.repo.get_session(self.id, session_id)
+            pid = (sess.head_node_id if sess else None) or t.head_node_id or t.root_node_id
+        else:
+            pid = parent_id
         assert pid is not None
         parent = await self._ct.repo.get_node(pid)
         if parent is None:
@@ -580,6 +633,7 @@ class DialogueTree:
             tool_permission=permission,
             node_kind=node_kind,
             switch_head=switch_head,
+            session_id=session_id,
         )
         if res.tool_output.get("error"):
             raise RuntimeError(f"{res.tool_output['error']}: {res.tool_output.get('detail')}")
@@ -590,7 +644,7 @@ class DialogueTree:
             and res.tool_output.get("tool_permission") == "read_write"
         ):
             await self._ct.sandbox.create_workspace(child_id, base_node_id=parent.id)
-        return NodeHandle(self, child_id)
+        return NodeHandle(self, child_id, session_id=session_id)
 
     def workspace(self, node_id: str) -> SandboxWorkspace | None:
         if self._ct.sandbox is None:
@@ -699,10 +753,14 @@ class DialogueTree:
             granularities=granularities,
         )
 
-    async def jump(self, target: str, note: str = "") -> NodeHandle:
-        prev_tree = await self.model()
-        prev_head_id = prev_tree.head_node_id
-        dest, _, _ = await self._ct.reflog.jump(self.id, target, note=note)
+    async def jump(
+        self, target: str, note: str = "", *, session_id: str = DEFAULT_SESSION_ID
+    ) -> NodeHandle:
+        prev_sess = await self._ct.repo.get_session(self.id, session_id)
+        prev_head_id = (
+            prev_sess.head_node_id if prev_sess is not None else (await self.model()).head_node_id
+        )
+        dest, _, _ = await self._ct.reflog.jump(self.id, target, note=note, session_id=session_id)
         if (
             self._ct.config.auto_background_summarize_on_switch
             and prev_head_id
@@ -711,7 +769,7 @@ class DialogueTree:
             prev_node = await self._ct.repo.get_node(prev_head_id)
             if prev_node is not None and prev_node.parent_id is not None and prev_node.is_dirty:
                 self._ct._schedule_bg_summary(self.id, prev_head_id)
-        return NodeHandle(self, dest.id)
+        return NodeHandle(self, dest.id, session_id=session_id)
 
     def refresh_summary_background(self, node_id: str) -> asyncio.Task[str]:
         """Trigger a non-blocking background Tier-2 summary refresh for `node_id` without closing it."""
@@ -725,13 +783,15 @@ class DialogueTree:
         title: str | None = None,
         reason: str = "",
         switch_head: bool = True,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> tuple[NodeHandle, dict[str, Any]]:
         """
-        Non-destructively compact `node_id` (defaults to HEAD) into a linked continuation child
+        Non-destructively compact `node_id` (defaults to session HEAD) into a linked continuation child
         branch while preserving the previous branch's verbatim messages & KV cache untouched.
         """
         t = await self.model()
-        nid = node_id or t.head_node_id or t.root_node_id
+        sess = await self._ct.repo.get_session(self.id, session_id)
+        nid = node_id or (sess.head_node_id if sess else None) or t.head_node_id or t.root_node_id
         assert nid is not None
         src = await self._ct.repo.get_node(nid)
         if src is None:
@@ -743,8 +803,11 @@ class DialogueTree:
             title=title,
             reason=reason,
             switch_head=switch_head,
+            session_id=session_id,
         )
-        return NodeHandle(self, str(res.tool_output["to_node_id"])), res.tool_output
+        return NodeHandle(
+            self, str(res.tool_output["to_node_id"]), session_id=session_id
+        ), res.tool_output
 
     async def archive(
         self,
@@ -752,13 +815,16 @@ class DialogueTree:
         *,
         reason: str = "",
         switch_to_parent: bool = True,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> dict[str, Any]:
         """Archive a non-root dead-end branch, quarantining its chunks/facts from default active search."""
         t = await self.model()
-        nid = node_id or t.head_node_id
+        sess = await self._ct.repo.get_session(self.id, session_id)
+        sess_head = (sess.head_node_id if sess else None) or t.head_node_id
+        nid = node_id or sess_head
         if not nid:
             raise ValueError("No branch node specified or active.")
-        caller_id = t.head_node_id or t.root_node_id or nid
+        caller_id = sess_head or t.root_node_id or nid
         caller = await self._ct.repo.get_node(caller_id)
         if caller is None:
             raise ValueError(f"Node not found: {caller_id}")
@@ -768,6 +834,7 @@ class DialogueTree:
             target_id=nid,
             reason=reason,
             switch_to_parent=switch_to_parent,
+            session_id=session_id,
         )
         return res.tool_output
 
@@ -817,14 +884,16 @@ class DialogueTree:
         await self._ct.rag.index_node_facts(node_id)
         return created
 
-    async def back(self) -> NodeHandle:
-        return await self.jump("back")
+    async def back(self, *, session_id: str = DEFAULT_SESSION_ID) -> NodeHandle:
+        return await self.jump("back", session_id=session_id)
 
-    async def forward(self) -> NodeHandle:
-        return await self.jump("forward")
+    async def forward(self, *, session_id: str = DEFAULT_SESSION_ID) -> NodeHandle:
+        return await self.jump("forward", session_id=session_id)
 
-    async def reflog(self, limit: int = 100) -> list[ReflogEntryModel]:
-        return await self._ct.repo.list_reflog(self.id, limit=limit)
+    async def reflog(
+        self, limit: int = 100, *, session_id: str | None = DEFAULT_SESSION_ID
+    ) -> list[ReflogEntryModel]:
+        return await self._ct.repo.list_reflog(self.id, limit=limit, session_id=session_id)
 
     async def ipc_log(self, limit: int = 100) -> list[IpcEventModel]:
         return await self._ct.repo.list_ipc_events(self.id, limit=limit)
@@ -1100,12 +1169,165 @@ class DialogueTree:
         )
 
 
-class NodeHandle:
-    """Ergonomic handle for interacting directly with a specific tree node."""
+class TreeSession:
+    """
+    Stateful Visitor / Cursor handle attached to a `DialogueTree`.
 
-    def __init__(self, tree: DialogueTree, node_id: str) -> None:
+    Each `TreeSession` walks the shared tree with its own independent `HEAD` focus,
+    `Back`/`Forward` reflog trail, and orientation cues while sharing all nodes,
+    4-tier RAG indexes, artifacts, `PINNED` invariants, and IPC provenance.
+    """
+
+    def __init__(self, tree: DialogueTree, session_id: str = DEFAULT_SESSION_ID) -> None:
+        self.tree = tree
+        self.id = session_id
+
+    async def model(self) -> TreeSessionModel:
+        s = await self.tree._ct.repo.get_session(self.tree.id, self.id)
+        if s is None:
+            raise ValueError(f"Session '{self.id}' not found in tree '{self.tree.id}'")
+        return s
+
+    async def head(self) -> NodeHandle:
+        return await self.tree.head(session_id=self.id)
+
+    async def chat(
+        self,
+        content: str,
+        *,
+        node_id: str | None = None,
+        model_override: str | None = None,
+        max_hop_depth: int | None = None,
+        token_budget: int | None = None,
+        include_core_tools: bool = True,
+    ) -> TurnResult:
+        return await self.tree.chat(
+            content,
+            node_id=node_id,
+            session_id=self.id,
+            model_override=model_override,
+            max_hop_depth=max_hop_depth,
+            token_budget=token_budget,
+            include_core_tools=include_core_tools,
+        )
+
+    async def stream(
+        self,
+        content: str,
+        *,
+        node_id: str | None = None,
+        model_override: str | None = None,
+        max_hop_depth: int | None = None,
+        token_budget: int | None = None,
+        include_core_tools: bool = True,
+    ) -> AsyncIterator[dict[str, Any]]:
+        async for ev in self.tree.stream(
+            content,
+            node_id=node_id,
+            session_id=self.id,
+            model_override=model_override,
+            max_hop_depth=max_hop_depth,
+            token_budget=token_budget,
+            include_core_tools=include_core_tools,
+        ):
+            yield ev
+
+    async def spawn(
+        self,
+        goal: str,
+        *,
+        parent_id: str | None = None,
+        title: str | None = None,
+        mode: ChildContextMode = "fork",
+        summary_brief: str = "",
+        slice_turns: int = 6,
+        autonomous: bool = False,
+        model: str | None = None,
+        permission: ToolPermission | None = None,
+        node_kind: NodeKind | None = None,
+        switch_head: bool = True,
+    ) -> NodeHandle:
+        return await self.tree.spawn(
+            goal,
+            parent_id=parent_id,
+            title=title,
+            mode=mode,
+            summary_brief=summary_brief,
+            slice_turns=slice_turns,
+            autonomous=autonomous,
+            model=model,
+            permission=permission,
+            node_kind=node_kind,
+            switch_head=switch_head,
+            session_id=self.id,
+        )
+
+    async def jump(self, target: str, note: str = "") -> NodeHandle:
+        return await self.tree.jump(target, note=note, session_id=self.id)
+
+    async def back(self) -> NodeHandle:
+        return await self.tree.back(session_id=self.id)
+
+    async def forward(self) -> NodeHandle:
+        return await self.tree.forward(session_id=self.id)
+
+    async def reflog(self, limit: int = 100) -> list[ReflogEntryModel]:
+        return await self.tree.reflog(limit=limit, session_id=self.id)
+
+    async def ask(self, query: str, **kwargs: Any) -> dict[str, Any]:
+        if "caller_id" not in kwargs or kwargs["caller_id"] is None:
+            kwargs["caller_id"] = (await self.head()).id
+        return await self.tree.ask(query, **kwargs)
+
+    async def request(
+        self, target_id: str, *, prompt: str | None = None, mutate: bool = False
+    ) -> dict[str, Any]:
+        return await self.tree.request(
+            target_id, prompt=prompt, mutate=mutate, caller_id=(await self.head()).id
+        )
+
+    async def compact(
+        self,
+        *,
+        node_id: str | None = None,
+        keep_recent_turns: int | None = None,
+        title: str | None = None,
+        reason: str = "",
+        switch_head: bool = True,
+    ) -> tuple[NodeHandle, dict[str, Any]]:
+        return await self.tree.compact(
+            node_id=node_id,
+            keep_recent_turns=keep_recent_turns,
+            title=title,
+            reason=reason,
+            switch_head=switch_head,
+            session_id=self.id,
+        )
+
+    async def archive(
+        self,
+        node_id: str | None = None,
+        *,
+        reason: str = "",
+        switch_to_parent: bool = True,
+    ) -> dict[str, Any]:
+        return await self.tree.archive(
+            node_id=node_id,
+            reason=reason,
+            switch_to_parent=switch_to_parent,
+            session_id=self.id,
+        )
+
+
+class NodeHandle:
+    """Ergonomic handle for interacting directly with a specific tree node (bound to a visitor session)."""
+
+    def __init__(
+        self, tree: DialogueTree, node_id: str, *, session_id: str = DEFAULT_SESSION_ID
+    ) -> None:
         self.tree = tree
         self.id = node_id
+        self.session_id = session_id
 
     async def model(self) -> NodeModel:
         n = await self.tree._ct.repo.get_node(self.id)
@@ -1127,9 +1349,11 @@ class NodeHandle:
         return (await self.model()).stale_dependencies
 
     async def chat(self, content: str, **kwargs: Any) -> TurnResult:
+        kwargs.setdefault("session_id", self.session_id)
         return await self.tree.chat(content, node_id=self.id, **kwargs)
 
     async def spawn(self, goal: str, **kwargs: Any) -> NodeHandle:
+        kwargs.setdefault("session_id", self.session_id)
         return await self.tree.spawn(goal, parent_id=self.id, **kwargs)
 
     async def spawn_background(
@@ -1144,6 +1368,7 @@ class NodeHandle:
         title: str | None = None,
         reason: str = "",
         switch_head: bool = True,
+        session_id: str | None = None,
     ) -> tuple[NodeHandle, dict[str, Any]]:
         """Non-destructively compact this branch into a linked continuation child branch."""
         return await self.tree.compact(
@@ -1152,6 +1377,7 @@ class NodeHandle:
             title=title,
             reason=reason,
             switch_head=switch_head,
+            session_id=session_id or self.session_id,
         )
 
     async def archive(
@@ -1159,12 +1385,14 @@ class NodeHandle:
         *,
         reason: str = "",
         switch_to_parent: bool = True,
+        session_id: str | None = None,
     ) -> dict[str, Any]:
         """Mark this non-root branch ARCHIVED to quarantine its turns/facts from active search."""
         return await self.tree.archive(
             node_id=self.id,
             reason=reason,
             switch_to_parent=switch_to_parent,
+            session_id=session_id or self.session_id,
         )
 
     async def request(
@@ -1181,6 +1409,7 @@ class NodeHandle:
         artifacts: list[ArtifactInput] | None = None,
         auto_commit: bool | None = None,
         return_to_parent: bool = True,
+        session_id: str | None = None,
     ) -> dict[str, Any]:
         node = await self.model()
         if not node.parent_id:
@@ -1217,6 +1446,7 @@ class NodeHandle:
             finish=True,
             auto_commit_override=auto_commit,
             return_to_parent=return_to_parent,
+            session_id=session_id or self.session_id,
         )
         return {
             "result": res.tool_output,

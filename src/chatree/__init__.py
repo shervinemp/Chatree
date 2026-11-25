@@ -133,7 +133,7 @@ from chatree.providers.tokenizer import (
     set_default_token_counter,
 )
 from chatree.sandbox import BranchSandbox, GitWorktreeSandbox, SandboxWorkspace
-from chatree.sdk.client import Chatree, DialogueTree, NodeHandle
+from chatree.sdk.client import Chatree, DialogueTree, NodeHandle, TreeSession
 from chatree.storage.portable import DialogueDirectoryStore
 from chatree.tools import (
     BACKGROUND_ACTOR_BLOCKED_CORE_TOOLS,
@@ -158,6 +158,7 @@ from chatree.tools import (
     format_namespaced_tool,
 )
 from chatree.types import (
+    DEFAULT_SESSION_ID,
     ArtifactInput,
     ArtifactModel,
     ArtifactRef,
@@ -178,10 +179,12 @@ from chatree.types import (
     ReflogEntryModel,
     SearchHit,
     SearchScope,
+    SessionKind,
     StaleDependencyInfo,
     TreeInvariantModel,
     TreeMetrics,
     TreeModel,
+    TreeSessionModel,
     TurnResult,
 )
 
@@ -211,6 +214,7 @@ __all__ = [
     "CORE_TOOL_DEFINITIONS",
     "CORE_TOOL_NAMES",
     "CORE_TOOL_NAMESPACE",
+    "DEFAULT_SESSION_ID",
     "CallableLLMProvider",
     "Chatree",
     "ChatreeConfig",
@@ -309,6 +313,7 @@ __all__ = [
     "ScenarioStep",
     "SearchHit",
     "SearchScope",
+    "SessionKind",
     "SpawnPolicy",
     "StaleDependencyInfo",
     "StorageBackend",
@@ -326,6 +331,8 @@ __all__ = [
     "TreeMetrics",
     "TreeModel",
     "TreeQueryEngine",
+    "TreeSession",
+    "TreeSessionModel",
     "TreeSummaryOnlyAdapter",
     "TurnResult",
     "__version__",

@@ -79,7 +79,7 @@ Context envelope (`<dialogue_tree_context>`):
 - `TREE` = structural hierarchy (parent, siblings, children; `*` = dirty uncommitted turns; `[subagent]` = non-chat worker node).
 - `REFLOG` = interactive `HEAD`-only focus history (`HEAD@{{0}}` current chat branch, `HEAD@{{1}}` previous chat branch).
 - `BRANCH SUMMARIES` = compact Tier-2 overview of other summarized branches; `PINNED` = tree-wide locked invariants (verify any marked `[STALE]`); `FACTS` = relevant provenance-tagged atomic dated facts from sibling branches.
-- `STALE` = previously read branches modified since last check; `RELATED` = search pointers; `SUBAGENTS` = currently running background workers (when active); `MAILBOX` = delivered handoffs.
+- `STALE` = previously read branches modified since last check; `RELATED` = search pointers; `SESSIONS` = other visitors on this tree (when present); `SUBAGENTS` = currently running background workers (when active); `MAILBOX` = delivered handoffs.
 
 Tool routing (`{CORE_TOOL_NAMESPACE}_*` — see JSON schemas for parameters):
 - Stay in-branch and answer directly when this branch or clean `BRANCH SUMMARIES` already suffice; avoid speculative cross-branch calls on routine turns.

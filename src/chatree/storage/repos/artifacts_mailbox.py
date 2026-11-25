@@ -11,6 +11,7 @@ from chatree.storage.repos.base import (
     utc_now,
 )
 from chatree.types import (
+    DEFAULT_SESSION_ID,
     ArtifactInput,
     ArtifactModel,
     ArtifactRef,
@@ -19,14 +20,207 @@ from chatree.types import (
     MailboxStatus,
     ReflogAction,
     ReflogEntryModel,
+    SessionKind,
+    TreeSessionModel,
 )
+
+
+def _row_to_session(row: Any) -> TreeSessionModel:
+    return TreeSessionModel(
+        id=str(row["id"]),
+        tree_id=str(row["tree_id"]),
+        title=str(row["title"]),
+        kind=row["kind"],
+        head_node_id=row["head_node_id"],
+        reflog_cursor=int(row["reflog_cursor"] or 0),
+        is_default=bool(row["is_default"]),
+        created_at=str(row["created_at"]),
+        updated_at=str(row["updated_at"]),
+    )
 
 
 class ReflogArtifactsMailboxMixin:
     db: Any
     conn: Any
 
-    # Reflog
+    # Tree Sessions (Stateful Visitors / Cursors)
+    # ------------------------------------------------------------------
+
+    async def create_session(
+        self,
+        tree_id: str,
+        *,
+        title: str = "New Session",
+        kind: SessionKind = "human",
+        start_node_id: str | None = None,
+        session_id: str | None = None,
+    ) -> tuple[TreeSessionModel, ReflogEntryModel]:
+        cur = await self.conn.execute(
+            "SELECT id, root_node_id, head_node_id FROM trees WHERE id = ?", (tree_id,)
+        )
+        t_row = await cur.fetchone()
+        if t_row is None:
+            raise ValueError(f"Tree not found: {tree_id}")
+
+        target_node_id = start_node_id or t_row["root_node_id"] or t_row["head_node_id"]
+        if not target_node_id:
+            raise ValueError(f"Tree '{tree_id}' has no nodes to attach session to.")
+
+        n_cur = await self.conn.execute(
+            "SELECT id, title FROM nodes WHERE id = ? AND tree_id = ?", (target_node_id, tree_id)
+        )
+        n_row = await n_cur.fetchone()
+        if n_row is None:
+            raise ValueError(f"Start node '{target_node_id}' not found in tree '{tree_id}'.")
+
+        sid = (session_id or "").strip() or new_id("s")
+        clean_title = (title or "").strip() or "New Session"
+        now = utc_now()
+        rf_id = new_id("rf")
+
+        async with self.db.write_transaction():
+            await self.conn.execute(
+                """
+                INSERT INTO tree_sessions (
+                    tree_id, id, title, kind, head_node_id, reflog_cursor,
+                    is_default, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
+                """,
+                (
+                    tree_id,
+                    sid,
+                    clean_title,
+                    kind,
+                    target_node_id,
+                    1 if sid == DEFAULT_SESSION_ID else 0,
+                    now,
+                    now,
+                ),
+            )
+            seq_cur = await self.conn.execute(
+                "SELECT COALESCE(MAX(seq), 0) AS max_seq FROM reflog WHERE tree_id = ?",
+                (tree_id,),
+            )
+            next_seq = (await seq_cur.fetchone())["max_seq"] + 1
+            await self.conn.execute(
+                """
+                INSERT INTO reflog (
+                    id, tree_id, session_id, seq, from_node_id, to_node_id, action,
+                    note, orientation_cue, cue_consumed, created_at
+                ) VALUES (?, ?, ?, ?, NULL, ?, 'init', ?, '', 1, ?)
+                """,
+                (
+                    rf_id,
+                    tree_id,
+                    sid,
+                    next_seq,
+                    target_node_id,
+                    f"Opened session '{clean_title}' at '{n_row['title']}'",
+                    now,
+                ),
+            )
+        sess = await self.get_session(tree_id, sid)
+        entries = await self.list_reflog(tree_id, limit=1, session_id=sid)
+        assert sess is not None and entries
+        return sess, entries[0]
+
+    async def get_session(
+        self, tree_id: str, session_id: str = DEFAULT_SESSION_ID
+    ) -> TreeSessionModel | None:
+        cur = await self.conn.execute(
+            "SELECT * FROM tree_sessions WHERE tree_id = ? AND id = ?",
+            (tree_id, session_id),
+        )
+        row = await cur.fetchone()
+        if row is not None:
+            return _row_to_session(row)
+        if session_id == DEFAULT_SESSION_ID:
+            t_cur = await self.conn.execute("SELECT * FROM trees WHERE id = ?", (tree_id,))
+            t_row = await t_cur.fetchone()
+            if t_row is None:
+                return None
+            async with self.db.write_transaction():
+                await self.conn.execute(
+                    """
+                    INSERT OR IGNORE INTO tree_sessions (
+                        tree_id, id, title, kind, head_node_id, reflog_cursor,
+                        is_default, created_at, updated_at
+                    ) VALUES (?, 'default', 'Main Session', 'human', ?, ?, 1, ?, ?)
+                    """,
+                    (
+                        tree_id,
+                        t_row["head_node_id"],
+                        t_row["reflog_cursor"],
+                        t_row["created_at"],
+                        t_row["updated_at"],
+                    ),
+                )
+            cur2 = await self.conn.execute(
+                "SELECT * FROM tree_sessions WHERE tree_id = ? AND id = 'default'", (tree_id,)
+            )
+            row2 = await cur2.fetchone()
+            return _row_to_session(row2) if row2 is not None else None
+        return None
+
+    async def list_sessions(self, tree_id: str) -> list[TreeSessionModel]:
+        # Ensure primary default session exists for legacy/imported trees
+        await self.get_session(tree_id, DEFAULT_SESSION_ID)
+        cur = await self.conn.execute(
+            """
+            SELECT * FROM tree_sessions
+            WHERE tree_id = ?
+            ORDER BY is_default DESC, created_at ASC
+            """,
+            (tree_id,),
+        )
+        return [_row_to_session(r) for r in await cur.fetchall()]
+
+    async def update_session(
+        self, tree_id: str, session_id: str, **fields: Any
+    ) -> TreeSessionModel | None:
+        allowed = {"title", "kind", "head_node_id", "reflog_cursor"}
+        updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+        if not updates:
+            return await self.get_session(tree_id, session_id)
+        now = utc_now()
+        updates["updated_at"] = now
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        async with self.db.write_transaction():
+            await self.conn.execute(
+                f"UPDATE tree_sessions SET {set_clause} WHERE tree_id = ? AND id = ?",
+                [*updates.values(), tree_id, session_id],
+            )
+            if session_id == DEFAULT_SESSION_ID:
+                tree_sync: dict[str, Any] = {}
+                if "head_node_id" in updates:
+                    tree_sync["head_node_id"] = updates["head_node_id"]
+                if "reflog_cursor" in updates:
+                    tree_sync["reflog_cursor"] = updates["reflog_cursor"]
+                if tree_sync:
+                    tree_sync["updated_at"] = now
+                    t_set = ", ".join(f"{k} = ?" for k in tree_sync)
+                    await self.conn.execute(
+                        f"UPDATE trees SET {t_set} WHERE id = ?",
+                        [*tree_sync.values(), tree_id],
+                    )
+        return await self.get_session(tree_id, session_id)
+
+    async def delete_session(self, tree_id: str, session_id: str) -> bool:
+        if session_id == DEFAULT_SESSION_ID:
+            raise ValueError("Cannot delete the primary 'default' session of a tree.")
+        async with self.db.write_transaction():
+            await self.conn.execute(
+                "DELETE FROM reflog WHERE tree_id = ? AND session_id = ?",
+                (tree_id, session_id),
+            )
+            cur = await self.conn.execute(
+                "DELETE FROM tree_sessions WHERE tree_id = ? AND id = ?",
+                (tree_id, session_id),
+            )
+            deleted = bool((cur.rowcount or 0) > 0)
+        return deleted
+
+    # Reflog (Session-Scoped Visitor Walk Trail)
     # ------------------------------------------------------------------
 
     async def append_reflog(
@@ -38,6 +232,7 @@ class ReflogArtifactsMailboxMixin:
         note: str = "",
         orientation_cue: str = "",
         update_head: bool = True,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> ReflogEntryModel:
         rf_id = new_id("rf")
         now = utc_now()
@@ -52,13 +247,14 @@ class ReflogArtifactsMailboxMixin:
             await self.conn.execute(
                 """
                 INSERT INTO reflog (
-                    id, tree_id, seq, from_node_id, to_node_id, action,
+                    id, tree_id, session_id, seq, from_node_id, to_node_id, action,
                     note, orientation_cue, cue_consumed, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     rf_id,
                     tree_id,
+                    session_id,
                     next_seq,
                     from_node_id,
                     to_node_id,
@@ -71,22 +267,48 @@ class ReflogArtifactsMailboxMixin:
             )
             if update_head:
                 await self.conn.execute(
-                    "UPDATE trees SET head_node_id = ?, reflog_cursor = 0, updated_at = ? WHERE id = ?",
-                    (to_node_id, now, tree_id),
+                    """
+                    UPDATE tree_sessions
+                    SET head_node_id = ?, reflog_cursor = 0, updated_at = ?
+                    WHERE tree_id = ? AND id = ?
+                    """,
+                    (to_node_id, now, tree_id, session_id),
                 )
-        entries = await self.list_reflog(tree_id, limit=1)
+                if session_id == DEFAULT_SESSION_ID:
+                    await self.conn.execute(
+                        "UPDATE trees SET head_node_id = ?, reflog_cursor = 0, updated_at = ? WHERE id = ?",
+                        (to_node_id, now, tree_id),
+                    )
+        entries = await self.list_reflog(tree_id, limit=1, session_id=session_id)
         return entries[0]
 
-    async def list_reflog(self, tree_id: str, limit: int = 100) -> list[ReflogEntryModel]:
-        cur = await self.conn.execute(
-            "SELECT * FROM reflog WHERE tree_id = ? ORDER BY seq DESC LIMIT ?",
-            (tree_id, limit),
-        )
+    async def list_reflog(
+        self,
+        tree_id: str,
+        limit: int = 100,
+        *,
+        session_id: str | None = DEFAULT_SESSION_ID,
+    ) -> list[ReflogEntryModel]:
+        if session_id is not None:
+            cur = await self.conn.execute(
+                "SELECT * FROM reflog WHERE tree_id = ? AND session_id = ? ORDER BY seq DESC LIMIT ?",
+                (tree_id, session_id, limit),
+            )
+        else:
+            cur = await self.conn.execute(
+                "SELECT * FROM reflog WHERE tree_id = ? ORDER BY seq DESC LIMIT ?",
+                (tree_id, limit),
+            )
         rows = await cur.fetchall()
         return [
             ReflogEntryModel(
                 id=r["id"],
                 tree_id=r["tree_id"],
+                session_id=(
+                    str(r["session_id"])
+                    if "session_id" in r.keys() and r["session_id"]
+                    else DEFAULT_SESSION_ID
+                ),
                 seq=r["seq"],
                 head_ref=f"HEAD@{{{idx}}}",
                 from_node_id=r["from_node_id"],
@@ -101,21 +323,31 @@ class ReflogArtifactsMailboxMixin:
         ]
 
     async def get_unconsumed_orientation_cues(
-        self, tree_id: str, node_id: str
+        self,
+        tree_id: str,
+        node_id: str,
+        *,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> list[ReflogEntryModel]:
         cur = await self.conn.execute(
             """
             SELECT * FROM reflog
-            WHERE tree_id = ? AND to_node_id = ? AND cue_consumed = 0 AND orientation_cue != ''
+            WHERE tree_id = ? AND session_id = ? AND to_node_id = ?
+              AND cue_consumed = 0 AND orientation_cue != ''
             ORDER BY seq DESC
             LIMIT 3
             """,
-            (tree_id, node_id),
+            (tree_id, session_id, node_id),
         )
         return [
             ReflogEntryModel(
                 id=r["id"],
                 tree_id=r["tree_id"],
+                session_id=(
+                    str(r["session_id"])
+                    if "session_id" in r.keys() and r["session_id"]
+                    else DEFAULT_SESSION_ID
+                ),
                 seq=r["seq"],
                 head_ref="HEAD@{0}",
                 from_node_id=r["from_node_id"],

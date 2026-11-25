@@ -9,6 +9,7 @@ from chatree.engine.guardrails import TraceContext
 from chatree.engine.ipc.types import IpcExecutionResult
 from chatree.providers.mock import estimate_messages_tokens
 from chatree.types import (
+    DEFAULT_SESSION_ID,
     ArtifactInput,
     ArtifactRef,
     ChildContextMode,
@@ -55,6 +56,7 @@ class IpcBranchingMixin:
         node_kind: NodeKind | None = None,
         switch_head: bool = True,
         initiated_by_model: bool = False,
+        session_id: str = DEFAULT_SESSION_ID,
         trace_ctx: TraceContext | None = None,
     ) -> IpcExecutionResult:
         ctx = trace_ctx or TraceContext.start(
@@ -229,6 +231,7 @@ class IpcBranchingMixin:
                 action="spawn",
                 note=f"Spawned {context_mode} branch: {child.title}",
                 update_head=True,
+                session_id=session_id,
             )
             head_changed = (parent.id, child.id, entry)
             if (
@@ -317,6 +320,7 @@ class IpcBranchingMixin:
         finish: bool = False,
         auto_commit_override: bool | None = None,
         return_to_parent: bool = True,
+        session_id: str = DEFAULT_SESSION_ID,
         trace_ctx: TraceContext | None = None,
     ) -> IpcExecutionResult:
         ctx = trace_ctx or TraceContext.start(
@@ -441,6 +445,7 @@ class IpcBranchingMixin:
                         action="return",
                         note=f"Auto-merged summary v{updated_sender.summary_version}",
                         update_head=True,
+                        session_id=session_id,
                     )
                     head_changed = (sender.id, target.id, rf)
 
@@ -513,6 +518,7 @@ class IpcBranchingMixin:
         edited_summary: str | None = None,
         edited_artifacts: list[ArtifactInput] | None = None,
         return_head_to_target: bool = True,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> tuple[MailboxItemModel, NodeModel, ReflogEntryModel | None]:
         mb = await self.repo.get_mailbox_item(mailbox_id)
         if mb is None:
@@ -581,6 +587,7 @@ class IpcBranchingMixin:
                 action="return",
                 note=f"Merged handoff v{sender.summary_version} from '{sender.title}'",
                 update_head=True,
+                session_id=session_id,
             )
 
         refreshed_target = await self.repo.get_node(target.id)
@@ -643,6 +650,7 @@ class IpcBranchingMixin:
         target: str,
         note: str = "",
         follow_up_prompt: str | None = None,
+        session_id: str = DEFAULT_SESSION_ID,
         trace_ctx: TraceContext | None = None,
     ) -> IpcExecutionResult:
         ctx = trace_ctx or TraceContext.start(
@@ -650,7 +658,9 @@ class IpcBranchingMixin:
         )
         t0 = time.perf_counter()
         try:
-            dest, entry, _cursor = await self.reflog.jump(tree.id, target, note=note)
+            dest, entry, _cursor = await self.reflog.jump(
+                tree.id, target, note=note, session_id=session_id
+            )
         except ValueError as exc:
             return IpcExecutionResult(
                 tool_output={"error": "REFLOG_JUMP_FAILED", "detail": str(exc)}

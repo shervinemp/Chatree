@@ -11,6 +11,8 @@ ContextMode = Literal["root", "fork", "slice", "clean"]
 ChildContextMode = Literal["fork", "slice", "clean"]
 NodeStatus = Literal["ACTIVE", "COMPLETED", "ARCHIVED"]
 NodeKind = Literal["chat", "subagent"]
+SessionKind = Literal["human", "agent"]
+DEFAULT_SESSION_ID = "default"
 ReflogAction = Literal[
     "init",
     "spawn",
@@ -105,6 +107,20 @@ class TreeModel(BaseModel):
     updated_at: str
 
 
+class TreeSessionModel(BaseModel):
+    """Stateful visitor/cursor walking a DialogueTree with its own HEAD and reflog trail."""
+
+    id: str
+    tree_id: str
+    title: str = "Main Session"
+    kind: SessionKind = "human"
+    head_node_id: str | None = None
+    reflog_cursor: int = 0
+    is_default: bool = False
+    created_at: str
+    updated_at: str
+
+
 class NodeModel(BaseModel):
     id: str
     tree_id: str
@@ -180,6 +196,7 @@ class IpcEventModel(BaseModel):
 class ReflogEntryModel(BaseModel):
     id: str
     tree_id: str
+    session_id: str = DEFAULT_SESSION_ID
     seq: int
     head_ref: str
     from_node_id: str | None = None
@@ -327,6 +344,7 @@ class TurnResult(BaseModel):
     trace_id: str
     node_id: str
     head_node_id: str
+    session_id: str = DEFAULT_SESSION_ID
     user_message: MessageModel | None = None
     assistant_message: MessageModel | None = None
     content: str = ""

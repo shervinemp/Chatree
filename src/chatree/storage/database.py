@@ -124,6 +124,44 @@ class Database:
         )
         await conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS tree_sessions (
+                tree_id TEXT NOT NULL REFERENCES trees(id) ON DELETE CASCADE,
+                id TEXT NOT NULL,
+                title TEXT NOT NULL DEFAULT 'Main Session',
+                kind TEXT NOT NULL DEFAULT 'human' CHECK(kind IN ('human', 'agent')),
+                head_node_id TEXT REFERENCES nodes(id) ON DELETE SET NULL,
+                reflog_cursor INTEGER NOT NULL DEFAULT 0,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (tree_id, id)
+            )
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tree_sessions_tree ON tree_sessions(tree_id, updated_at DESC)"
+        )
+        rf_cur = await conn.execute("PRAGMA table_info(reflog)")
+        rf_cols = {row["name"] for row in await rf_cur.fetchall()}
+        if "session_id" not in rf_cols:
+            await conn.execute(
+                "ALTER TABLE reflog ADD COLUMN session_id TEXT NOT NULL DEFAULT 'default'"
+            )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_reflog_tree_session_seq ON reflog(tree_id, session_id, seq DESC)"
+        )
+        # Backfill primary 'default' visitor session for any pre-existing trees
+        await conn.execute(
+            """
+            INSERT OR IGNORE INTO tree_sessions (
+                tree_id, id, title, kind, head_node_id, reflog_cursor, is_default, created_at, updated_at
+            )
+            SELECT id, 'default', 'Main Session', 'human', head_node_id, reflog_cursor, 1, created_at, updated_at
+            FROM trees
+            """
+        )
+        await conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS tree_invariants (
                 tree_id TEXT NOT NULL REFERENCES trees(id) ON DELETE CASCADE,
                 key TEXT NOT NULL,

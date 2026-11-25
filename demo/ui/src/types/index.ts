@@ -2,6 +2,7 @@ export type ContextMode = 'root' | 'fork' | 'slice' | 'clean'
 export type ChildContextMode = 'fork' | 'slice' | 'clean'
 export type NodeStatus = 'ACTIVE' | 'COMPLETED' | 'ARCHIVED'
 export type NodeKind = 'chat' | 'subagent'
+export type SessionKind = 'human' | 'agent'
 export type ToolPermission = 'read_only' | 'read_write'
 export type LLMBackendKind = 'auto' | 'litellm' | 'openai_compat' | 'mock'
 export type ReflogAction = 'init' | 'spawn' | 'jump' | 'return' | 'close' | 'reopen' | 'fork_edit'
@@ -61,6 +62,18 @@ export interface TreeModel {
   summary_model: string
   auto_commit_handoffs: boolean
   reflog_cursor: number
+  created_at: string
+  updated_at: string
+}
+
+export interface TreeSessionModel {
+  id: string
+  tree_id: string
+  title: string
+  kind: SessionKind
+  head_node_id: string | null
+  reflog_cursor: number
+  is_default: boolean
   created_at: string
   updated_at: string
 }
@@ -248,6 +261,8 @@ export interface TreeSnapshotResponse {
   pending_handoffs: MailboxItemModel[]
   artifacts: ArtifactModel[]
   recent_ipc: IpcEventModel[]
+  sessions?: TreeSessionModel[]
+  active_session_id?: string
 }
 
 export interface NodeDetailResponse {

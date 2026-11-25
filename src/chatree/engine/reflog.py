@@ -4,11 +4,11 @@ import re
 
 from chatree.hooks import HookBus
 from chatree.storage.repository import SQLiteRepository
-from chatree.types import NodeModel, ReflogAction, ReflogEntryModel
+from chatree.types import DEFAULT_SESSION_ID, NodeModel, ReflogAction, ReflogEntryModel
 
 
 class ReflogService:
-    """Git-style append-only navigation ledger + IDE back/forward cursor stepping."""
+    """Git-style append-only per-session navigation ledger + IDE back/forward cursor stepping."""
 
     def __init__(self, repo: SQLiteRepository, hooks: HookBus | None = None) -> None:
         self.repo = repo
@@ -23,6 +23,7 @@ class ReflogService:
         note: str = "",
         orientation_cue: str | None = None,
         update_head: bool = True,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> ReflogEntryModel:
         if orientation_cue is None:
             orientation_cue = self._build_default_cue(from_node, to_node, action, note)
@@ -34,12 +35,14 @@ class ReflogService:
             note=note,
             orientation_cue=orientation_cue,
             update_head=update_head,
+            session_id=session_id,
         )
         if self.hooks is not None:
             await self.hooks.emit(
                 "reflog_jump",
                 {
                     "tree_id": tree_id,
+                    "session_id": session_id,
                     "action": action,
                     "from_node_id": from_node.id if from_node else None,
                     "to_node_id": to_node.id,
@@ -49,15 +52,24 @@ class ReflogService:
         return entry
 
     async def jump(
-        self, tree_id: str, target: str, note: str = ""
+        self,
+        tree_id: str,
+        target: str,
+        note: str = "",
+        *,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> tuple[NodeModel, ReflogEntryModel | None, int]:
         tree = await self.repo.get_tree(tree_id)
         if tree is None:
             raise ValueError(f"Tree not found: {tree_id}")
+        session = await self.repo.get_session(tree_id, session_id)
+        if session is None:
+            raise ValueError(f"Session '{session_id}' not found in tree {tree_id}")
 
-        entries = await self.repo.list_reflog(tree_id, limit=200)
+        entries = await self.repo.list_reflog(tree_id, limit=200, session_id=session_id)
+        current_head_id = session.head_node_id
         current_head = (
-            await self.repo.get_node(tree.head_node_id) if tree.head_node_id else None
+            await self.repo.get_node(current_head_id) if current_head_id else None
         )
         clean_target = target.strip()
 
@@ -66,7 +78,7 @@ class ReflogService:
                 if current_head is None:
                     raise ValueError("Tree has no nodes.")
                 return current_head, None, 0
-            cur_idx = max(0, min(tree.reflog_cursor, len(entries) - 1))
+            cur_idx = max(0, min(session.reflog_cursor, len(entries) - 1))
             step = 1 if clean_target == "back" else -1
             new_idx = cur_idx
             while 0 <= new_idx + step < len(entries):
@@ -77,7 +89,9 @@ class ReflogService:
             dest_node = await self.repo.get_node(dest_entry.to_node_id)
             if dest_node is None:
                 raise ValueError(f"Reflog target node no longer exists: {dest_entry.to_node_id}")
-            await self.repo.update_tree(tree_id, head_node_id=dest_node.id, reflog_cursor=new_idx)
+            await self.repo.update_session(
+                tree_id, session_id, head_node_id=dest_node.id, reflog_cursor=new_idx
+            )
             return dest_node, dest_entry, new_idx
 
         ref_match = re.fullmatch(r"HEAD@\{(\d+)\}", clean_target, flags=re.IGNORECASE)
@@ -98,7 +112,9 @@ class ReflogService:
             raise ValueError(f"Node not found in tree {tree_id}: {dest_id}")
 
         if current_head and current_head.id == dest_node.id:
-            await self.repo.update_tree(tree_id, head_node_id=dest_node.id, reflog_cursor=0)
+            await self.repo.update_session(
+                tree_id, session_id, head_node_id=dest_node.id, reflog_cursor=0
+            )
             return dest_node, entries[0] if entries else None, 0
 
         entry = await self.record_transition(
@@ -108,6 +124,7 @@ class ReflogService:
             action="jump",
             note=default_note,
             update_head=True,
+            session_id=session_id,
         )
         return dest_node, entry, 0
 

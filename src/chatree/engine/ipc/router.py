@@ -35,6 +35,7 @@ from chatree.tools import (
     ToolRegistry,
 )
 from chatree.types import (
+    DEFAULT_SESSION_ID,
     ArtifactInput,
     LLMToolCall,
     NodeModel,
@@ -143,6 +144,8 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
         caller: NodeModel,
         tool_calls: list[LLMToolCall],
         trace_ctx: TraceContext,
+        *,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> list[tuple[LLMToolCall, IpcExecutionResult]]:
         """
         Execute a batch of tool calls from one assistant turn.
@@ -158,7 +161,9 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
             for tc in tool_calls:
                 cur_node = await self.repo.get_node(caller.id) or caller
                 cur_tree = await self.repo.get_tree(tree.id) or tree
-                res = await self.execute_tool(cur_tree, cur_node, tc.name, tc.arguments, trace_ctx)
+                res = await self.execute_tool(
+                    cur_tree, cur_node, tc.name, tc.arguments, trace_ctx, session_id=session_id
+                )
                 results.append((tc, res))
             return results
 
@@ -177,7 +182,12 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
                     batch_res = await asyncio.gather(
                         *(
                             self.execute_tool(
-                                cur_tree, cur_node, tc.name, tc.arguments, trace_ctx
+                                cur_tree,
+                                cur_node,
+                                tc.name,
+                                tc.arguments,
+                                trace_ctx,
+                                session_id=session_id,
                             )
                             for tc in run
                         )
@@ -185,7 +195,12 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
                     out.extend(zip(run, batch_res))
                 else:
                     res = await self.execute_tool(
-                        cur_tree, cur_node, run[0].name, run[0].arguments, trace_ctx
+                        cur_tree,
+                        cur_node,
+                        run[0].name,
+                        run[0].arguments,
+                        trace_ctx,
+                        session_id=session_id,
                     )
                     out.append((run[0], res))
             else:
@@ -193,7 +208,9 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
                 idx += 1
                 cur_node = await self.repo.get_node(caller.id) or caller
                 cur_tree = await self.repo.get_tree(tree.id) or tree
-                res = await self.execute_tool(cur_tree, cur_node, tc.name, tc.arguments, trace_ctx)
+                res = await self.execute_tool(
+                    cur_tree, cur_node, tc.name, tc.arguments, trace_ctx, session_id=session_id
+                )
                 out.append((tc, res))
         return out
 
@@ -206,12 +223,14 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
         trace_ctx: TraceContext,
         *,
         is_shadow: bool = False,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> IpcExecutionResult:
         if self.hooks is not None:
             await self.hooks.emit(
                 "ipc_before",
                 {
                     "tree_id": tree.id,
+                    "session_id": session_id,
                     "caller_id": caller.id,
                     "tool_name": tool_name,
                     "arguments": arguments,
@@ -221,7 +240,13 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
             )
 
         res = await self._dispatch_tool(
-            tree, caller, tool_name, arguments, trace_ctx, is_shadow=is_shadow
+            tree,
+            caller,
+            tool_name,
+            arguments,
+            trace_ctx,
+            is_shadow=is_shadow,
+            session_id=session_id,
         )
 
         if self.hooks is not None:
@@ -229,6 +254,7 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
                 "ipc_after",
                 {
                     "tree_id": tree.id,
+                    "session_id": session_id,
                     "caller_id": caller.id,
                     "tool_name": tool_name,
                     "trace_id": trace_ctx.trace_id,
@@ -247,6 +273,7 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
         trace_ctx: TraceContext,
         *,
         is_shadow: bool = False,
+        session_id: str = DEFAULT_SESSION_ID,
     ) -> IpcExecutionResult:
         if tool_name == TOOL_SPAWN_CHILD:
             perm = arguments.get("permission")
@@ -264,6 +291,7 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
                 model_override=arguments.get("model"),
                 tool_permission=perm,
                 initiated_by_model=True,
+                session_id=session_id,
                 trace_ctx=trace_ctx,
             )
 
@@ -287,6 +315,7 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
                 content=str(arguments.get("content") or ""),
                 artifacts=parsed_arts,
                 finish=bool(arguments.get("finish", False)),
+                session_id=session_id,
                 trace_ctx=trace_ctx,
             )
 
@@ -323,6 +352,7 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
                 target=str(arguments.get("target") or ""),
                 note=str(arguments.get("note") or ""),
                 follow_up_prompt=follow_val,
+                session_id=session_id,
                 trace_ctx=trace_ctx,
             )
 
@@ -335,6 +365,7 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
                 keep_recent_turns=keep_val,
                 title=arguments.get("title"),
                 reason=str(arguments.get("reason") or ""),
+                session_id=session_id,
                 trace_ctx=trace_ctx,
             )
 
@@ -359,6 +390,7 @@ class IPCRouter(IpcBranchingMixin, IpcShadowMixin, IpcLifecycleMixin):
                 reason=str(arguments.get("reason") or ""),
                 switch_to_parent=bool(arguments.get("switch_to_parent", True)),
                 is_shadow=is_shadow,
+                session_id=session_id,
                 trace_ctx=trace_ctx,
             )
 

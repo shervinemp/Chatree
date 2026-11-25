@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from chatree.config import ToolPermission
 from chatree.sdk.client import Chatree
 from chatree.types import (
+    DEFAULT_SESSION_ID,
     ArtifactInput,
     ArtifactModel,
     ChildContextMode,
@@ -16,7 +17,9 @@ from chatree.types import (
     NodeStatus,
     ReflogEntryModel,
     SearchScope,
+    SessionKind,
     TreeModel,
+    TreeSessionModel,
 )
 
 
@@ -27,6 +30,8 @@ class TreeSnapshotResponse(BaseModel):
     pending_handoffs: list[MailboxItemModel]
     artifacts: list[ArtifactModel]
     recent_ipc: list[IpcEventModel]
+    sessions: list[TreeSessionModel] = Field(default_factory=list)
+    active_session_id: str = DEFAULT_SESSION_ID
 
 
 class NodeDetailResponse(BaseModel):
@@ -57,6 +62,7 @@ class UpdateTreeRequest(BaseModel):
 
 class CreateTurnRequest(BaseModel):
     content: str = Field(..., min_length=1)
+    session_id: str = DEFAULT_SESSION_ID
     model_override: str | None = None
     max_hop_depth: int | None = Field(default=None, ge=1, le=16)
     token_budget: int | None = Field(default=None, ge=1000, le=500_000)
@@ -71,6 +77,7 @@ class SpawnNodeRequest(BaseModel):
     model_override: str | None = None
     tool_permission: ToolPermission | None = None
     switch_head: bool = True
+    session_id: str = DEFAULT_SESSION_ID
 
 
 class FinishNodeRequest(BaseModel):
@@ -78,6 +85,7 @@ class FinishNodeRequest(BaseModel):
     artifacts: list[ArtifactInput] = Field(default_factory=list)
     auto_commit: bool | None = None
     return_to_parent: bool = True
+    session_id: str = DEFAULT_SESSION_ID
 
 
 class UpdateNodeRequest(BaseModel):
@@ -107,11 +115,13 @@ class CompactBranchRequest(BaseModel):
     title: str | None = None
     reason: str = ""
     switch_head: bool = True
+    session_id: str = DEFAULT_SESSION_ID
 
 
 class ArchiveBranchRequest(BaseModel):
     reason: str = ""
     switch_to_parent: bool = True
+    session_id: str = DEFAULT_SESSION_ID
 
 
 class PinInvariantRequest(BaseModel):
@@ -142,11 +152,20 @@ class CommitHandoffRequest(BaseModel):
     summary: str | None = None
     artifacts: list[ArtifactInput] | None = None
     return_head_to_target: bool = True
+    session_id: str = DEFAULT_SESSION_ID
 
 
 class ReflogJumpRequest(BaseModel):
     target: str
     note: str = ""
+    session_id: str = DEFAULT_SESSION_ID
+
+
+class CreateSessionRequest(BaseModel):
+    title: str = Field(default="New Session", min_length=1, max_length=120)
+    kind: SessionKind = "human"
+    start_node_id: str | None = None
+    session_id: str | None = None
 
 
 class CreateArtifactRequest(BaseModel):
@@ -189,15 +208,23 @@ def get_client(request: Request) -> Chatree:
     return client
 
 
-async def build_tree_snapshot(ct: Chatree, tree_id: str) -> TreeSnapshotResponse:
+async def build_tree_snapshot(
+    ct: Chatree, tree_id: str, *, session_id: str = DEFAULT_SESSION_ID
+) -> TreeSnapshotResponse:
     tree = await ct.repo.get_tree(tree_id)
     if tree is None:
         raise HTTPException(status_code=404, detail="Tree not found")
+    sessions = await ct.repo.list_sessions(tree_id)
+    eff_session_id = (
+        session_id if any(s.id == session_id for s in sessions) else DEFAULT_SESSION_ID
+    )
     return TreeSnapshotResponse(
         tree=tree,
         nodes=await ct.repo.list_nodes(tree_id),
-        reflog=await ct.repo.list_reflog(tree_id, limit=100),
+        reflog=await ct.repo.list_reflog(tree_id, limit=100, session_id=eff_session_id),
         pending_handoffs=await ct.repo.list_mailbox_items(tree_id, status="pending_review"),
         artifacts=await ct.repo.list_artifacts(tree_id),
         recent_ipc=await ct.repo.list_ipc_events(tree_id, limit=100),
+        sessions=sessions,
+        active_session_id=eff_session_id,
     )
