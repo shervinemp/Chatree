@@ -24,7 +24,7 @@ from chatree.protocols import (
     StorageBackend,
 )
 from chatree.providers.embeddings import build_embedder
-from chatree.providers.litellm import LiteLLMProvider
+from chatree.providers.factory import build_llm_provider
 from chatree.sandbox import BranchSandbox, SandboxWorkspace
 from chatree.storage.database import Database
 from chatree.storage.portable import DialogueDirectoryStore
@@ -96,14 +96,19 @@ class Chatree:
         self.hooks = hooks or HookBus()
         self.tools = tools or ToolRegistry()
         self.sandbox = sandbox
-        self.llm: LLMProvider = llm or LiteLLMProvider(
+        self.llm: LLMProvider = llm or build_llm_provider(
+            self.config.llm_provider,
+            model=self.config.default_model,
             api_base=self.config.api_base,
+            api_key=self.config.api_key,
+            extra_headers=self.config.extra_headers or None,
             enable_cache_control=self.config.ablations.enable_provider_cache_control,
         )
         self.embedder: Embedder = embedder or build_embedder(
             model=self.config.rag.embedding_model,
             dimensions=self.config.rag.embedding_dim,
             api_base=self.config.api_base,
+            api_key=self.config.api_key,
         )
         self.router: ModelRouter = router or DefaultModelRouter(
             warm_cache_token_threshold=self.config.guardrails.short_branch_shadow_threshold_tokens,
@@ -205,11 +210,14 @@ class Chatree:
         if hasattr(self.repo, "list_background_jobs"):
             await self.actors.hydrate()
         stored = await self.repo.get_all_settings()
-        if isinstance(self.llm, LiteLLMProvider):
-            if "api_base" in stored:
-                self.llm.api_base = stored["api_base"]
-            if self.config.persist_api_keys_in_db and isinstance(stored.get("api_keys"), dict):
-                self.llm.set_runtime_keys(stored["api_keys"])
+        if "api_base" in stored and hasattr(self.llm, "api_base"):
+            setattr(self.llm, "api_base", stored["api_base"])
+        if (
+            self.config.persist_api_keys_in_db
+            and isinstance(stored.get("api_keys"), dict)
+            and callable(getattr(self.llm, "set_runtime_keys", None))
+        ):
+            self.llm.set_runtime_keys(stored["api_keys"])  # type: ignore[attr-defined]
         return self
 
     def _schedule_bg_summary(self, tree_id: str, node_id: str) -> asyncio.Task[str]:
@@ -368,8 +376,8 @@ class Chatree:
     async def get_runtime_settings(self) -> RuntimeSettingsModel:
         stored = await self.repo.get_all_settings()
         configured = (
-            self.llm.configured_providers()
-            if isinstance(self.llm, LiteLLMProvider)
+            self.llm.configured_providers()  # type: ignore[attr-defined]
+            if callable(getattr(self.llm, "configured_providers", None))
             else {"custom": True}
         )
         return RuntimeSettingsModel(
@@ -400,8 +408,8 @@ class Chatree:
                 val = updates[key]
                 if key == "api_base":
                     val = val or None
-                    if isinstance(self.llm, LiteLLMProvider):
-                        self.llm.api_base = val
+                    if hasattr(self.llm, "api_base"):
+                        setattr(self.llm, "api_base", val)
                 elif key == "max_hop_depth":
                     self.config.guardrails.max_hop_depth = int(val)
                 elif key == "token_budget":
@@ -414,8 +422,8 @@ class Chatree:
                 for k, v in updates["api_keys"].items()
                 if v and str(v).strip()
             }
-            if isinstance(self.llm, LiteLLMProvider):
-                self.llm.set_runtime_keys(clean_keys)
+            if callable(getattr(self.llm, "set_runtime_keys", None)):
+                self.llm.set_runtime_keys(clean_keys)  # type: ignore[attr-defined]
             # Never persist plaintext API keys to SQLite unless explicitly opted in
             if self.config.persist_api_keys_in_db:
                 stored = await self.repo.get_all_settings()

@@ -234,15 +234,88 @@ class FastEmbedEmbedder:
         return await asyncio.to_thread(_run)
 
 
+class OpenAICompatibleEmbedder:
+    """
+    Zero-LiteLLM provider-agnostic embedder calling any OpenAI-compatible `/v1/embeddings`
+    endpoint (OpenAI, Ollama, vLLM, TEI, OpenRouter, Mistral, Together, custom proxies).
+    """
+
+    def __init__(
+        self,
+        model: str,
+        *,
+        dimensions: int = 1536,
+        api_base: str | None = None,
+        api_key: str | None = None,
+        timeout_s: float = 60.0,
+    ) -> None:
+        self.model = model
+        self._dimensions = dimensions
+        self.api_base = api_base
+        self.api_key = api_key
+        self.timeout_s = timeout_s
+
+    @property
+    def dimensions(self) -> int:
+        return self._dimensions
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        import json
+        import urllib.request
+        from chatree.providers.openai_compat import resolve_provider_endpoint
+
+        spec, base_url, key = resolve_provider_endpoint(
+            self.model, api_base=self.api_base, api_key=self.api_key
+        )
+        if not base_url:
+            raise ValueError(
+                f"No base URL resolved for embedding model '{self.model}'. Pass `api_base=`."
+            )
+        clean_base = base_url.rstrip("/")
+        url = clean_base if clean_base.endswith("/embeddings") else f"{clean_base}/embeddings"
+        headers = {"Content-Type": "application/json"}
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+        payload = json.dumps({"model": spec.model_name, "input": texts}).encode("utf-8")
+
+        def _call() -> list[list[float]]:
+            req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            rows = sorted(data.get("data") or [], key=lambda r: int(r.get("index", 0)))
+            return [list(item["embedding"]) for item in rows]
+
+        vectors = await asyncio.to_thread(_call)
+        if vectors:
+            self._dimensions = len(vectors[0])
+        return vectors
+
+
 def build_embedder(
     model: str = "hash/local-128",
     dimensions: int = 128,
     api_base: str | None = None,
+    api_key: str | None = None,
 ) -> Embedder:
     if not model or model.startswith("hash/"):
         return HashEmbedder(dimensions=dimensions)
     if model.startswith("local/") or model.startswith("fastembed/"):
         clean = model.split("/", 1)[1] or "BAAI/bge-small-en-v1.5"
         return FastEmbedEmbedder(model_name=clean)
+    if model.startswith("openai_compat/"):
+        return OpenAICompatibleEmbedder(
+            model=model.removeprefix("openai_compat/"),
+            dimensions=dimensions,
+            api_base=api_base,
+            api_key=api_key,
+        )
+    import importlib.util
+
     clean_model = model.removeprefix("litellm/")
-    return LiteLLMEmbedder(model=clean_model, dimensions=dimensions, api_base=api_base)
+    if importlib.util.find_spec("litellm") is not None:
+        return LiteLLMEmbedder(model=clean_model, dimensions=dimensions, api_base=api_base)
+    return OpenAICompatibleEmbedder(
+        model=clean_model, dimensions=dimensions, api_base=api_base, api_key=api_key
+    )

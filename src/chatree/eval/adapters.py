@@ -16,6 +16,7 @@ _RLM_LOCAL_REPL_LOCK = threading.Lock()
 from chatree.config import AblationConfig, ChatreeConfig
 from chatree.protocols import Embedder, LLMProvider, Reranker
 from chatree.providers.mock import MockLLMProvider
+from chatree.providers.openai_compat import resolve_provider_endpoint
 from chatree.sdk.client import Chatree, DialogueTree
 
 
@@ -789,15 +790,19 @@ class Mem0OfficialAdapter:
         self,
         *,
         name: str = "mem0_official",
-        model: str = "deepseek/deepseek-chat",
+        model: str = "openai/gpt-4o-mini",
         llm: LLMProvider | None = None,
         mem0_config: dict[str, Any] | None = None,
+        api_base: str | None = None,
+        api_key: str | None = None,
         top_k: int = 8,
     ) -> None:
         self._name = name
         self.model = model
         self.llm = llm
         self.mem0_config = mem0_config
+        self.api_base = api_base
+        self.api_key = api_key
         self.top_k = top_k
         self._mem: Any = None
         self._user_id = "eval_user"
@@ -805,6 +810,69 @@ class Mem0OfficialAdapter:
         self._session_buf: dict[str, list[dict[str, str]]] = {}
         self._ingest_tokens_in = 0
         self._ingest_tokens_out = 0
+
+    @staticmethod
+    def build_provider_config(
+        model: str,
+        tmpdir: str,
+        *,
+        api_base: str | None = None,
+        api_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Build a provider-agnostic Mem0 configuration for any LLM provider + local FastEmbed."""
+        spec, resolved_base, resolved_key = resolve_provider_endpoint(
+            model, api_base=api_base, api_key=api_key
+        )
+        # Native Mem0 LLM providers; everything else routes via OpenAI-compatible base_url or litellm
+        native_map = {
+            "openai": "openai",
+            "anthropic": "anthropic",
+            "gemini": "gemini",
+            "google": "gemini",
+            "deepseek": "deepseek",
+            "groq": "groq",
+            "together": "together",
+            "together_ai": "together",
+            "ollama": "ollama",
+            "ollama_chat": "ollama",
+            "azure": "azure_openai",
+            "bedrock": "aws_bedrock",
+            "vllm": "vllm",
+            "hosted_vllm": "vllm",
+        }
+        mem0_provider = native_map.get(spec.provider)
+        llm_cfg: dict[str, Any] = {"model": spec.model_name, "temperature": 0.0}
+        if mem0_provider:
+            if resolved_key:
+                llm_cfg["api_key"] = resolved_key
+            if mem0_provider == "ollama" and resolved_base:
+                llm_cfg["ollama_base_url"] = resolved_base.removesuffix("/v1")
+            elif mem0_provider in ("openai", "vllm") and resolved_base:
+                llm_cfg["openai_base_url"] = resolved_base
+            llm_block = {"provider": mem0_provider, "config": llm_cfg}
+        elif resolved_base:
+            llm_cfg["openai_base_url"] = resolved_base
+            if resolved_key:
+                llm_cfg["api_key"] = resolved_key
+            llm_block = {"provider": "openai", "config": llm_cfg}
+        else:
+            llm_block = {"provider": "litellm", "config": {"model": model, "temperature": 0.0}}
+
+        return {
+            "llm": llm_block,
+            "embedder": {
+                "provider": "fastembed",
+                "config": {"model": "BAAI/bge-small-en-v1.5", "embedding_dims": 384},
+            },
+            "vector_store": {
+                "provider": "qdrant",
+                "config": {
+                    "path": str(Path(tmpdir) / "qdrant"),
+                    "embedding_model_dims": 384,
+                },
+            },
+            "history_db_path": str(Path(tmpdir) / "mem0_history.db"),
+        }
 
     @property
     def name(self) -> str:
@@ -826,23 +894,16 @@ class Mem0OfficialAdapter:
         self._session_buf = {}
         self._ingest_tokens_in = 0
         self._ingest_tokens_out = 0
-        cfg = dict(self.mem0_config or {})
-        if not cfg and "deepseek" in self.model.lower():
-            ds_model = self.model.split("/", 1)[-1] if "/" in self.model else self.model
-            cfg = {
-                "llm": {"provider": "deepseek", "config": {"model": ds_model, "temperature": 0.0}},
-                "embedder": {
-                    "provider": "fastembed",
-                    "config": {"model": "BAAI/bge-small-en-v1.5", "embedding_dims": 384},
-                },
-                "vector_store": {
-                    "provider": "qdrant",
-                    "config": {
-                        "path": str(Path(self._tmpdir.name) / "qdrant"),
-                        "embedding_model_dims": 384,
-                    },
-                },
-            }
+        cfg = (
+            dict(self.mem0_config)
+            if self.mem0_config
+            else self.build_provider_config(
+                self.model,
+                self._tmpdir.name,
+                api_base=self.api_base,
+                api_key=self.api_key,
+            )
+        )
         cfg.setdefault("history_db_path", str(Path(self._tmpdir.name) / "mem0_history.db"))
         self._mem = Memory.from_config(cfg) if cfg else Memory()
 
@@ -1326,8 +1387,8 @@ class RLMOfficialAdapter:
         self,
         *,
         name: str = "rlm_official",
-        model: str = "deepseek/deepseek-chat",
-        backend: str = "openai",
+        model: str = "openai/gpt-4o-mini",
+        backend: str = "auto",
         base_url: str | None = None,
         api_key: str | None = None,
         max_depth: int = 1,
@@ -1379,6 +1440,47 @@ class RLMOfficialAdapter:
             self._sessions.append("\n".join(self._cur_lines))
             self._cur_lines = []
 
+    @staticmethod
+    def resolve_rlm_backend_args(
+        model: str,
+        *,
+        backend: str = "auto",
+        base_url: str | None = None,
+        api_key: str | None = None,
+    ) -> tuple[str, dict[str, Any]]:
+        """Resolve `(rlm_backend, backend_kwargs)` cleanly for ANY provider prefix."""
+        spec, resolved_base, resolved_key = resolve_provider_endpoint(
+            model, api_base=base_url, api_key=api_key
+        )
+        eff_backend = backend
+        if eff_backend == "auto":
+            if spec.provider == "anthropic":
+                eff_backend = "anthropic"
+            elif spec.provider in ("gemini", "google") and not base_url:
+                eff_backend = "gemini"
+            elif spec.provider == "openrouter":
+                eff_backend = "openrouter"
+            elif spec.provider in ("bedrock", "vertex_ai", "azure", "cohere"):
+                eff_backend = "litellm"
+            else:
+                eff_backend = "openai"
+
+        b_kwargs: dict[str, Any] = {
+            "model_name": model if eff_backend == "litellm" else spec.model_name
+        }
+        if resolved_key:
+            b_kwargs["api_key"] = resolved_key
+        if eff_backend == "openai":
+            if resolved_base and resolved_base != "https://api.openai.com/v1":
+                b_kwargs["base_url"] = resolved_base
+            elif base_url:
+                b_kwargs["base_url"] = base_url
+            if spec.provider in ("ollama", "ollama_chat", "vllm", "hosted_vllm", "sglang", "lm_studio", "llamacpp") and "api_key" not in b_kwargs:
+                b_kwargs["api_key"] = "local"
+        elif base_url:
+            b_kwargs["base_url"] = base_url
+        return eff_backend, b_kwargs
+
     def _build_rlm(self) -> Any:
         try:
             from rlm import RLM  # type: ignore[import-not-found]
@@ -1387,22 +1489,11 @@ class RLMOfficialAdapter:
                 "Official RLM adapter requires the upstream package: `uv pip install rlms`."
             ) from exc
 
-        model_name = self.model.split("/", 1)[-1] if "/" in self.model else self.model
-        b_kwargs: dict[str, Any] = {"model_name": model_name}
-        low = self.model.lower()
-        if "deepseek" in low:
-            b_kwargs["base_url"] = self.base_url or os.environ.get("DEEPSEEK_API_BASE") or "https://api.deepseek.com"
-            key = self.api_key or os.environ.get("DEEPSEEK_API_KEY")
-            if key:
-                b_kwargs["api_key"] = key
-        else:
-            if self.base_url:
-                b_kwargs["base_url"] = self.base_url
-            if self.api_key:
-                b_kwargs["api_key"] = self.api_key
-
+        eff_backend, b_kwargs = self.resolve_rlm_backend_args(
+            self.model, backend=self.backend, base_url=self.base_url, api_key=self.api_key
+        )
         return RLM(
-            backend=self.backend,  # type: ignore[arg-type]
+            backend=eff_backend,  # type: ignore[arg-type]
             backend_kwargs=b_kwargs,
             environment="local",
             max_depth=self.max_depth,

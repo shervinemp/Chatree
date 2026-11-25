@@ -17,17 +17,30 @@ class ModelPricing(BaseModel):
 
 
 DEFAULT_PRICING_TABLE: dict[str, ModelPricing] = {
-    # Reference indicative prices (USD per 1M tokens) for normalized cost comparison
+    # Reference indicative prices (USD per 1M tokens) across major hosted & local providers
     "mock/": ModelPricing(input_per_1m=2.50, cached_input_per_1m=0.25, output_per_1m=10.00),
     "gemini/gemini-2.5-flash": ModelPricing(input_per_1m=0.15, cached_input_per_1m=0.0375, output_per_1m=0.60),
     "gemini/gemini-2.5-pro": ModelPricing(input_per_1m=1.25, cached_input_per_1m=0.31, output_per_1m=10.00),
+    "anthropic/claude-opus": ModelPricing(input_per_1m=15.00, cached_input_per_1m=1.50, output_per_1m=75.00),
     "anthropic/claude-sonnet": ModelPricing(input_per_1m=3.00, cached_input_per_1m=0.30, output_per_1m=15.00),
     "anthropic/claude-haiku": ModelPricing(input_per_1m=0.80, cached_input_per_1m=0.08, output_per_1m=4.00),
+    "openai/gpt-5": ModelPricing(input_per_1m=1.25, cached_input_per_1m=0.125, output_per_1m=10.00),
+    "openai/gpt-4.1-mini": ModelPricing(input_per_1m=0.40, cached_input_per_1m=0.10, output_per_1m=1.60),
+    "openai/gpt-4.1": ModelPricing(input_per_1m=2.00, cached_input_per_1m=0.50, output_per_1m=8.00),
     "openai/gpt-4o-mini": ModelPricing(input_per_1m=0.15, cached_input_per_1m=0.075, output_per_1m=0.60),
     "openai/gpt-4o": ModelPricing(input_per_1m=2.50, cached_input_per_1m=1.25, output_per_1m=10.00),
+    "openai/o3": ModelPricing(input_per_1m=2.00, cached_input_per_1m=0.50, output_per_1m=8.00),
     "deepseek/deepseek-chat": ModelPricing(input_per_1m=0.28, cached_input_per_1m=0.028, output_per_1m=0.42),
     "deepseek/deepseek-reasoner": ModelPricing(input_per_1m=0.55, cached_input_per_1m=0.14, output_per_1m=2.19),
+    "groq/": ModelPricing(input_per_1m=0.59, cached_input_per_1m=0.59, output_per_1m=0.79),
+    "mistral/": ModelPricing(input_per_1m=2.00, cached_input_per_1m=2.00, output_per_1m=6.00),
+    "together_ai/": ModelPricing(input_per_1m=0.88, cached_input_per_1m=0.88, output_per_1m=0.88),
+    "xai/": ModelPricing(input_per_1m=3.00, cached_input_per_1m=0.75, output_per_1m=15.00),
     "ollama/": ModelPricing(input_per_1m=0.0, cached_input_per_1m=0.0, output_per_1m=0.0),
+    "vllm/": ModelPricing(input_per_1m=0.0, cached_input_per_1m=0.0, output_per_1m=0.0),
+    "sglang/": ModelPricing(input_per_1m=0.0, cached_input_per_1m=0.0, output_per_1m=0.0),
+    "lm_studio/": ModelPricing(input_per_1m=0.0, cached_input_per_1m=0.0, output_per_1m=0.0),
+    "llamacpp/": ModelPricing(input_per_1m=0.0, cached_input_per_1m=0.0, output_per_1m=0.0),
 }
 
 

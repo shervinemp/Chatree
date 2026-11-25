@@ -9,6 +9,7 @@ import uuid
 from typing import Any, AsyncIterator
 
 from chatree.providers.mock import MockLLMProvider, estimate_messages_tokens, estimate_tokens
+from chatree.providers.openai_compat import _PROVIDER_PREFIX_MAP, resolve_provider_endpoint
 from chatree.types import LLMResponse, LLMStreamEvent, LLMToolCall
 
 
@@ -53,6 +54,8 @@ class LiteLLMProvider:
         self,
         api_base: str | None = None,
         *,
+        api_key: str | None = None,
+        extra_headers: dict[str, str] | None = None,
         enable_cache_control: bool = True,
         max_retries: int = 4,
         retry_base_delay_s: float = 1.0,
@@ -60,6 +63,8 @@ class LiteLLMProvider:
         max_tokens: int | None = None,
     ) -> None:
         self.api_base = api_base
+        self.api_key = api_key
+        self.extra_headers = dict(extra_headers or {})
         self.enable_cache_control = enable_cache_control
         self.max_retries = max(0, max_retries)
         self.retry_base_delay_s = max(0.05, retry_base_delay_s)
@@ -87,33 +92,22 @@ class LiteLLMProvider:
                 self._runtime_keys[k] = str(v).strip()
 
     def _resolve_api_key(self, model: str) -> str | None:
-        low = model.lower()
-        if "anthropic" in low or "claude" in low:
-            env_name = "ANTHROPIC_API_KEY"
-        elif low.startswith("openrouter/"):
-            env_name = "OPENROUTER_API_KEY"
-        elif low.startswith("deepseek/") or "deepseek" in low:
-            env_name = "DEEPSEEK_API_KEY"
-        elif low.startswith("gemini/") or "gemini" in low:
-            env_name = "GEMINI_API_KEY"
-        elif low.startswith("openai/") or low.startswith("gpt-"):
-            env_name = "OPENAI_API_KEY"
-        else:
-            return None
-        return self._runtime_keys.get(env_name) or os.environ.get(env_name)
+        _, _, key = resolve_provider_endpoint(
+            model,
+            api_base=self.api_base,
+            api_key=self.api_key,
+            runtime_keys=self._runtime_keys,
+        )
+        return key
 
     def configured_providers(self) -> dict[str, bool]:
-        key_map = {
-            "openrouter": "OPENROUTER_API_KEY",
-            "deepseek": "DEEPSEEK_API_KEY",
-            "gemini": "GEMINI_API_KEY",
-            "anthropic": "ANTHROPIC_API_KEY",
-            "openai": "OPENAI_API_KEY",
-            "ollama": "OLLAMA_API_BASE",
-        }
-        status = {"mock": True}
-        for name, env_var in key_map.items():
-            status[name] = bool(os.environ.get(env_var) or self._runtime_keys.get(env_var))
+        status: dict[str, bool] = {"mock": True}
+        for name, (key_env, _, base_env) in _PROVIDER_PREFIX_MAP.items():
+            if name in ("google", "together", "fireworks", "ollama_chat", "hosted_vllm", "openai_compat", "custom"):
+                continue
+            has_key = bool(key_env and (os.environ.get(key_env) or self._runtime_keys.get(key_env)))
+            has_base = bool(base_env and os.environ.get(base_env))
+            status[name] = has_key or has_base
         if self.api_base:
             status["custom_api_base"] = True
         return status
@@ -242,16 +236,16 @@ class LiteLLMProvider:
         api_key = self._resolve_api_key(model)
         if api_key:
             kwargs["api_key"] = api_key
+        if self.extra_headers:
+            kwargs["extra_headers"] = dict(self.extra_headers)
         if wire_tools:
             kwargs["tools"] = wire_tools
             kwargs["tool_choice"] = tool_choice if tool_choice is not None else "auto"
-        if self.api_base and (
-            model.startswith("openai/")
-            or model.startswith("ollama/")
-            or model.startswith("deepseek/")
-        ):
+        # Forward explicit `api_base` to ANY provider/proxy (OpenAI, Ollama, vLLM, SGLang, DeepSeek,
+        # Azure, OpenRouter, LM Studio, self-hosted gateways) instead of whitelisting 3 prefixes.
+        if self.api_base:
             kwargs["api_base"] = self.api_base
-        if stream and not model.startswith("ollama/"):
+        if stream and not model.lower().startswith(("ollama/", "ollama_chat/", "cohere/")):
             kwargs["stream_options"] = {"include_usage": True}
         return kwargs
 
@@ -262,20 +256,27 @@ class LiteLLMProvider:
         if usage is None:
             return estimate_messages_tokens(messages), estimate_tokens(content), 0
         if isinstance(usage, dict):
-            tokens_in = int(usage.get("prompt_tokens") or 0)
-            tokens_out = int(usage.get("completion_tokens") or 0)
-            details = usage.get("prompt_tokens_details") or {}
+            tokens_in = int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0)
+            tokens_out = int(usage.get("completion_tokens") or usage.get("output_tokens") or 0)
+            details = usage.get("prompt_tokens_details") or usage.get("input_tokens_details") or {}
+            if not isinstance(details, dict):
+                details = {}
             cache_read = int(
                 details.get("cached_tokens")
                 or usage.get("cache_read_input_tokens")
                 or usage.get("prompt_cache_hit_tokens")
+                or usage.get("cached_content_token_count")
                 or 0
             )
             return tokens_in, tokens_out, cache_read
 
-        tokens_in = int(getattr(usage, "prompt_tokens", 0) or 0)
-        tokens_out = int(getattr(usage, "completion_tokens", 0) or 0)
-        details = getattr(usage, "prompt_tokens_details", None)
+        tokens_in = int(getattr(usage, "prompt_tokens", 0) or getattr(usage, "input_tokens", 0) or 0)
+        tokens_out = int(
+            getattr(usage, "completion_tokens", 0) or getattr(usage, "output_tokens", 0) or 0
+        )
+        details = getattr(usage, "prompt_tokens_details", None) or getattr(
+            usage, "input_tokens_details", None
+        )
         cache_read = 0
         if details is not None:
             cache_read = int(
@@ -290,6 +291,7 @@ class LiteLLMProvider:
             cache_read = int(
                 getattr(usage, "cache_read_input_tokens", 0)
                 or getattr(usage, "prompt_cache_hit_tokens", 0)
+                or getattr(usage, "cached_content_token_count", 0)
                 or 0
             )
         return tokens_in, tokens_out, cache_read

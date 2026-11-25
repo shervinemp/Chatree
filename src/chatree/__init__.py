@@ -9,6 +9,7 @@ from chatree.config import (
     AblationConfig,
     ChatreeConfig,
     GuardrailPolicy,
+    LLMBackendKind,
     RagConfig,
     SpawnPolicy,
     ToolPermission,
@@ -28,11 +29,20 @@ from chatree.providers.embeddings import (
     FastEmbedEmbedder,
     HashEmbedder,
     LiteLLMEmbedder,
+    OpenAICompatibleEmbedder,
     build_embedder,
     resolve_onnx_provider_candidates,
 )
+from chatree.providers.factory import build_llm_provider
 from chatree.providers.litellm import LiteLLMProvider
 from chatree.providers.mock import MockLLMProvider
+from chatree.providers.openai_compat import (
+    CallableLLMProvider,
+    OpenAICompatibleProvider,
+    ProviderSpec,
+    resolve_provider_endpoint,
+    resolve_provider_spec,
+)
 from chatree.providers.rerankers import FastEmbedCrossEncoderReranker, LLMReranker
 from chatree.sandbox import BranchSandbox, GitWorktreeSandbox, SandboxWorkspace
 from chatree.sdk.client import Chatree, DialogueTree, NodeHandle
@@ -191,6 +201,7 @@ __all__ = [
     "CORE_TOOL_DEFINITIONS",
     "CORE_TOOL_NAMES",
     "CORE_TOOL_NAMESPACE",
+    "CallableLLMProvider",
     "Chatree",
     "ChatreeConfig",
     "ChatreeSystemAdapter",
@@ -236,6 +247,7 @@ __all__ = [
     "JumpAroundTurn",
     "JumpAroundTurnKind",
     "JumpAroundTurnTrace",
+    "LLMBackendKind",
     "LLMJudgeScorer",
     "LLMProvider",
     "LLMReranker",
@@ -261,7 +273,10 @@ __all__ = [
     "NodeHandle",
     "NodeModel",
     "NodeStatus",
+    "OpenAICompatibleEmbedder",
+    "OpenAICompatibleProvider",
     "PairedBootstrapResult",
+    "ProviderSpec",
     "QueryEvalResult",
     "RLMOfficialAdapter",
     "RagConfig",
@@ -303,6 +318,7 @@ __all__ = [
     "bootstrap_ci",
     "build_embedder",
     "build_full_eval_suite",
+    "build_llm_provider",
     "crossover_scaling_scenario",
     "default_compaction_scenario",
     "default_jump_around_scenario",
@@ -318,6 +334,8 @@ __all__ = [
     "paired_bootstrap_test",
     "proposal_vs_decision_scenario",
     "resolve_onnx_provider_candidates",
+    "resolve_provider_endpoint",
+    "resolve_provider_spec",
     "token_f1",
     "unscripted_agentic_scenario",
     "write_run_manifest",

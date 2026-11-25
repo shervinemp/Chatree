@@ -3,7 +3,7 @@
 **Hierarchical Actor-Model Dialogue Trees for Bounded-Context, Verifiable, Non-Destructive LLM Conversations**
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 65 Passing](https://img.shields.io/badge/tests-65%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
+[![Tests: 71 Passing](https://img.shields.io/badge/tests-71%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
 [![Local-First SQLite](https://img.shields.io/badge/storage-SQLite%20WAL%20%2B%20FTS5-lightgrey.svg)](#architecture)
 [![MCP Compatible](https://img.shields.io/badge/protocol-MCP%20JSON--RPC%202.0-purple.svg)](#cli-mcp-server--optional-demo-ui)
 
@@ -156,10 +156,15 @@ In accordance with academic artifact-evaluation standards, we explicitly documen
 
 ## Installation & Python SDK Quickstart
 
-Requires **Python 3.12+** and [`uv`](https://docs.astral.sh/uv/) (or `pip`).
+Requires **Python 3.12+** and [`uv`](https://docs.astral.sh/uv/) (or `pip`). Chatree is **100% provider-agnostic** across both LLM inference and embeddings:
+
+- **Zero-LiteLLM `OpenAICompatibleProvider` & `OpenAICompatibleEmbedder`** (built-in, zero extra packages): speaks standard HTTP + SSE `/v1/chat/completions` and `/v1/embeddings` directly with **OpenAI, Ollama, vLLM, SGLang, LM Studio, llama.cpp, OpenRouter, DeepSeek, Groq, Together, Fireworks, Mistral, xAI, Cerebras, SambaNova, HuggingFace Router, and custom proxies**.
+- **`LiteLLMProvider`** (`chatree[litellm]`): routes across 100+ providers with native Anthropic 4-breakpoint prompt caching (`cache_control`), AWS Bedrock, Vertex AI, Azure OpenAI, Gemini, and Cohere.
+- **`CallableLLMProvider` & `LLMProvider` Protocol**: wrap any custom Python function or native vendor SDK (Anthropic SDK, Google GenAI SDK, HuggingFace Transformers, LangChain, etc.) in 3 lines.
+- **Automatic Driver Selection (`llm_provider="auto"`):** uses `LiteLLMProvider` when `litellm` is installed and transparently falls back to `OpenAICompatibleProvider` when it is not.
 
 ```bash
-# Core framework (SQLite WAL + FTS5 + SDK + CLI + MCP, zero external API keys needed)
+# Core framework (SQLite WAL + FTS5 + zero-dep OpenAI-compatible HTTP/SSE + SDK + CLI + MCP)
 uv sync
 
 # Full install with LiteLLM multi-provider routing, local ONNX RAG, sqlite-vec, and FastAPI server
@@ -221,7 +226,7 @@ Runnable examples: [`examples/01_quickstart_sdk.py`](examples/01_quickstart_sdk.
 ## Artifact Evaluation & Reproducibility
 
 ### Step 1: Zero-Key Functional Verification (~40s)
-Runs all **65 unit and integration tests** covering IPC guardrails, copy-on-write forks, shadow memoization, materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, GPU runtime fallback, Tier-2.5 atomic facts, `PINNED` staleness, non-destructive compaction savings guards, negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
+Runs all **71 unit and integration tests** covering IPC guardrails, copy-on-write forks, shadow memoization, materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, GPU runtime fallback, provider-agnostic HTTP/SSE & callable adapters, Tier-2.5 atomic facts, `PINNED` staleness, non-destructive compaction savings guards, negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
 
 ```bash
 uv run pytest -v
@@ -235,22 +240,27 @@ uv run chatree eval --crossover-ks 2,4,8 --latex-out ./out/crossover.tex
 uv run chatree eval --jump-around --out-dir ./out/jump
 ```
 
-### Step 3: Live External & Overflow Benchmarks (Requires `DEEPSEEK_API_KEY` or LiteLLM Provider Key)
-Copy [`.env.example`](.env.example) to `.env` and set your API key (never committed to git). Datasets auto-download into `data/benchmarks/` (gitignored):
+### Step 3: Live External & Overflow Benchmarks (Any LLM Provider)
+Copy [`.env.example`](.env.example) to `.env` and set the API key for whichever provider you choose (or point `--api-base` at local Ollama/vLLM/SGLang with zero API key). Datasets auto-download into `data/benchmarks/` (gitignored):
 
 ```bash
-# Re-judge saved LoCoMo checkpoints with the fixed adversarial rubric or a cross-family judge
-uv run python scripts/run_publishable_deepseek_eval.py \
-  --locomo-convs 10 --locomo-per-cat 5 \
-  --rejudge-locomo-ckpt results/deepseek_eval/exp3_locomo.ckpt.jsonl \
-  --judge-model deepseek/deepseek-chat
-
-# Track 3 (LoCoMo 10 convs / 245 QAs), Track 4 (LongMemEval-S or LongMemEval-M >1M overflow), & Track 6 (Compaction)
-uv run python scripts/run_publishable_deepseek_eval.py \
+# Run Tracks 3, 4, 5, 6 against ANY provider (--model openai/gpt-4o, anthropic/claude-sonnet-4-5,
+# gemini/gemini-2.5-pro, deepseek/deepseek-chat, ollama/llama3.2, vllm/Qwen/Qwen2.5-72B, etc.)
+uv run python scripts/run_publishable_eval.py \
+  --model anthropic/claude-sonnet-4-5 \
+  --judge-model openai/gpt-4o \
   --tracks 3,4,6 --paper-baselines \
   --locomo-convs 10 --locomo-per-cat 5 \
   --lme-split m --lme-per-cat 10 \
   --concurrency 4
+
+# Re-judge saved LoCoMo checkpoints with the fixed adversarial rubric or a cross-family judge
+uv run python scripts/run_publishable_eval.py \
+  --model deepseek/deepseek-chat \
+  --judge-model openai/gpt-4o \
+  --locomo-convs 10 --locomo-per-cat 5 \
+  --rejudge-locomo-ckpt results/deepseek_eval/exp3_locomo.ckpt.jsonl \
+  --out-dir results/deepseek_eval
 ```
 
 Every external run emits crash-safe `*.ckpt.jsonl` checkpoints, paired `McNemar` and bootstrap CI tables (`*.md`, `*.csv`, `*.tex`), and exact provenance manifests (`*_manifest.json` recording model IDs, embedder/reranker versions, git SHA, token totals, and USD costs).
@@ -295,7 +305,7 @@ Chatree/
 │   │   ├── reflog.py              # Git-style HEAD@{k} / back / forward navigation
 │   │   ├── actors.py              # Non-blocking async background child actors
 │   │   └── guardrails.py          # Cycle, hop-depth, and cache-discounted token-budget ledger
-│   ├── providers/                 # LiteLLMProvider, MockLLMProvider, FastEmbed ONNX (GPU fallback)
+│   ├── providers/                 # OpenAICompatibleProvider, CallableLLMProvider, LiteLLMProvider, ONNX GPU fallback
 │   ├── storage/                   # SQLite WAL/FTS5/vector schema, migrations, portable .dialogue/ store
 │   ├── sdk/client.py              # High-level Chatree / DialogueTree / NodeHandle async SDK
 │   ├── eval/                      # Tracks 1-6 runners, SOTA adapters (Mem0/RLM/Letta/Graphiti), stats
@@ -305,7 +315,7 @@ Chatree/
 ├── examples/                      # 5 runnable SDK, custom-tool, ablation, and eval scripts
 ├── scripts/                       # Publishable DeepSeek / multi-provider evaluation runner
 ├── results/deepseek_eval/         # Reproducible benchmark tables, LaTeX exports, and manifests
-└── tests/                         # 65 automated unit & integration tests (zero API keys required)
+└── tests/                         # 71 automated unit & integration tests (zero API keys required)
 ```
 
 ---

@@ -29,7 +29,7 @@ from chatree.eval import (
     write_run_manifest,
 )
 from chatree.providers.embeddings import build_embedder
-from chatree.providers.litellm import LiteLLMProvider
+from chatree.providers.factory import build_llm_provider
 from chatree.providers.rerankers import FastEmbedCrossEncoderReranker, LLMReranker
 from chatree.sdk.client import Chatree
 
@@ -140,6 +140,13 @@ def _build_parser() -> argparse.ArgumentParser:
         default="default",
     )
     p_eval.add_argument("--model", default="mock/chatree-demo")
+    p_eval.add_argument(
+        "--provider",
+        choices=["auto", "litellm", "openai_compat", "mock"],
+        default="auto",
+        help="LLM backend driver (auto uses litellm if installed, else zero-dep openai_compat)",
+    )
+    p_eval.add_argument("--api-base", default=None, help="Optional OpenAI-compatible API base URL (Ollama, vLLM, SGLang, proxy)")
     p_eval.add_argument("--shadow-model", default="inherit")
     p_eval.add_argument("--judge-model", default=None)
     p_eval.add_argument("--embed-model", default="hash/local-128", help="Embedding model (hash/local-128, local/BAAI/bge-small-en-v1.5, litellm/...)")
@@ -176,8 +183,12 @@ async def run_cli_async(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "eval":
-        embedder = build_embedder(model=args.embed_model)
-        llm_inst = None if args.model.startswith("mock/") else LiteLLMProvider()
+        embedder = build_embedder(model=args.embed_model, api_base=args.api_base)
+        llm_inst = (
+            None
+            if args.model.startswith("mock/") and args.provider in ("auto", "mock")
+            else build_llm_provider(args.provider, model=args.model, api_base=args.api_base)
+        )
         reranker = None
         if args.reranker == "local":
             reranker = FastEmbedCrossEncoderReranker()

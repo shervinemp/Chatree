@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ToolPermission = Literal["read_only", "read_write"]
 SpawnPolicy = Literal["auto", "suggest", "manual"]
+LLMBackendKind = Literal["auto", "litellm", "openai_compat", "mock"]
 
 
 class GuardrailPolicy(BaseModel):
@@ -91,10 +92,13 @@ class ChatreeConfig(BaseSettings):
     )
 
     db_path: str = "./data/chatree.db"
+    llm_provider: LLMBackendKind = "auto"
     default_model: str = "mock/chatree-demo"
     shadow_model: str = "inherit"
     summary_model: str = "inherit"
     api_base: str | None = None
+    api_key: str | None = None
+    extra_headers: dict[str, str] = Field(default_factory=dict)
     api_token: str | None = None
     persist_api_keys_in_db: bool = False
     auto_commit_handoffs: bool = False

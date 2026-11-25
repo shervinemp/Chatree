@@ -28,7 +28,7 @@ from chatree.config import ChatreeConfig, GuardrailPolicy
 from chatree.eval.scoring import CostModel, ExactFactScorer
 from chatree.eval.stats import format_latex_table
 from chatree.protocols import Embedder, LLMProvider, Reranker
-from chatree.providers.litellm import LiteLLMProvider
+from chatree.providers.factory import build_llm_provider
 from chatree.providers.mock import MockLLMProvider, estimate_messages_tokens
 from chatree.sdk.client import Chatree
 
@@ -204,7 +204,7 @@ class CompactionBenchmarkRunner:
         self.llm = llm or (
             MockLLMProvider(stream_delay_s=0.0)
             if model.startswith("mock/")
-            else LiteLLMProvider(max_retries=4, retry_base_delay_s=1.0, timeout_s=120.0)
+            else build_llm_provider("auto", model=model, max_retries=4, retry_base_delay_s=1.0, timeout_s=120.0)
         )
         self.embedder = embedder
         self.reranker = reranker
