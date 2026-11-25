@@ -4,6 +4,7 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![Tests: 79 Passing](https://img.shields.io/badge/tests-79%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
+[![Paper: LaTeX + Markdown](https://img.shields.io/badge/paper-LaTeX%20%2B%20MD-blue.svg)](paper/chatree_paper.md)
 [![Local-First SQLite](https://img.shields.io/badge/storage-SQLite%20WAL%20%2B%20FTS5-lightgrey.svg)](#architecture)
 [![MCP Compatible](https://img.shields.io/badge/protocol-MCP%20JSON--RPC%202.0-purple.svg)](#cli-mcp-server--optional-demo-ui)
 
@@ -130,11 +131,16 @@ Stratified across all 6 official categories (5 items/category, 1,429 sessions in
 | `full_context_linear` | 70.0% `[53.3, 86.7]` | **100.0%** | **100.0%** | 20.0% | **100.0%** | 60.0% | 40.0% | 108,772 | \$0.882 (+\$0.000) | 0.0% | **2.40s / 5.03s** | 0.5078 |
 | `rlm_official` | 70.0% `[53.3, 86.7]` | 80.0% | **100.0%** | 40.0% | 80.0% | **80.0%** | 40.0% | 21,373 | \$0.375 (+\$0.000) | 0.0% | 11.23s / 32.58s | 0.5810 |
 | `chatree_two_tier` (v2) | 63.3% `[46.7, 80.0]` | 80.0% | 60.0% | 60.0% | 80.0% | 60.0% | 40.0% | 6,927 | \$0.162 (+\$0.629) | **49.6%** | 5.98s / 8.18s | 0.1797 |
-| `flat_hybrid_rag` | 40.0% `[23.3, 56.7]` | 80.0% | 20.0% | 0.0% | 80.0% | 20.0% | 40.0% | 770 | \$0.005 (+\$0.000) | 0.0% | 8.88s / 277.8s* | **0.0018\*** |
+| `flat_hybrid_rag` | 40.0% `[23.3, 56.7]` | 80.0% | 20.0% | 0.0% | 80.0% | 20.0% | 40.0% | 717 | \$0.004 (+\$0.000) | 39.3% | 3.47s / 7.74s | **0.0018\*** |
 
-> **Key Takeaways:** `chatree_two_tier_v3` ranks **#1 overall at 80.0%** (+16.7 pts over v2, +10.0 pts over both `full_context_linear` and `rlm_official`, and +40.0 pts over `flat_hybrid_rag`, $p = 0.0018^*$), leading all systems on `single-session-preference` (**100.0%** vs. 20–40%) and `multi-session` (**60.0%** vs. 40%). It stays at **17.3× smaller peak context** than `full_context_linear` (`6,295` vs. `108,772`), **3.8× lower query USD** (`\$0.235` vs. `\$0.882`), **4.1× faster p95 latency** than `rlm_official` (`7.92s` vs. `32.58s`), and **31.4% KV-cache hit** vs. **0.0%** across all three baselines. On LongMemEval's single-question-per-history layout, cold ingest (`\$0.884` across 1,429 sessions) is paid once for 1 QA rather than amortized across a multi-turn workspace. *(`flat_hybrid_rag`'s `277.8s` p95 was recorded prior to our bounded-arena + DirectML GPU fix.)*
+> **Key Takeaways:** `chatree_two_tier_v3` ranks **#1 overall at 80.0%** (+16.7 pts over v2, +10.0 pts over both `full_context_linear` and `rlm_official`, and +40.0 pts over `flat_hybrid_rag`, $p = 0.0018^*$), leading all systems on `single-session-preference` (**100.0%** vs. 20–40%) and `multi-session` (**60.0%** vs. 40%). It stays at **17.3× smaller peak context** than `full_context_linear` (`6,295` vs. `108,772`), **3.8× lower query USD** (`\$0.235` vs. `\$0.882`), **4.1× faster p95 latency** than `rlm_official` (`7.92s` vs. `32.58s`), and **31.4% KV-cache hit** vs. **0.0%** for linear and RLM. On LongMemEval's single-question-per-history layout, cold ingest (`\$0.884` across 1,429 sessions) is paid once for 1 QA rather than amortized across a multi-turn workspace.
 
-### 3. Live Multi-Turn Jump-Around & Infinite-Context Compaction (Tracks 5 & 6)
+### 3. Controlled Stress Suites, Ablations & Crossover Scaling (Tracks 1 & 2)
+
+- **Track 1 — 5-Family Stress Suite ([`exp1_suite.md`](results/deepseek_eval/exp1_suite.md)):** `tree_ipc_full` achieved **8/8 (100.0%) strict pass** with **0% leakage** and **0% stale contradiction errors** across all 5 families (including `multihop-revision-staleness`, where `flat_rag`, `tree_summary_only`, and `tree_ipc_no_staleness` all failed with 100% stale contradictions).
+- **Track 2 — 10-Row Ablations & $K$-Scaling Crossover ([`exp2_ablations.md`](results/deepseek_eval/exp2_ablations.md), [`exp2_crossover.md`](results/deepseek_eval/exp2_crossover.md)):** Removing read-only shadow inspection (`no_shadow_turns_folding`) collapsed strict pass rate to **0.0%** (McNemar $p = 0.0312^*$), while disabling staleness/transitivity introduced `14.3%` stale errors. Across $K \in \{2, 4, 8\}$ distractors, `tree_ipc_full` held **100.0% strict pass** and crossed below `linear` on cumulative total tokens at $K=8$ (**29,589 vs. 39,680 tokens**; peak `957` vs. `4,266` tokens; p50 latency `1.19s` vs. `1.42s`).
+
+### 4. Live Multi-Turn Jump-Around & Infinite-Context Compaction (Tracks 5 & 6)
 
 #### Track 6 — Live Multi-Generation Infinite-Context Compaction ([`exp6_compaction_bench.md`](results/deepseek_eval/exp6_compaction_bench.md))
 
@@ -335,8 +341,9 @@ Chatree/
 │   └── server/                    # Modular FastAPI REST + SSE adapter (app, dtos, routes_trees, routes_nodes)
 ├── demo/ui/                       # Optional React + TypeScript IDE-style tree explorer
 ├── examples/                      # 5 runnable SDK, custom-tool, ablation, and eval scripts
-├── scripts/                       # Provider-agnostic publishable evaluation runner
-├── results/deepseek_eval/         # Reproducible benchmark tables, LaTeX exports, and manifests
+├── paper/                         # Camera-ready LaTeX paper (chatree_paper.tex), Markdown report, BibTeX & PDF/PNG/SVG figures
+├── scripts/                       # Provider-agnostic evaluation runner & reproducible figure generator
+├── results/deepseek_eval/         # Reproducible benchmark tables, LaTeX exports, checkpoints & manifests
 └── tests/                         # 79 automated unit & integration tests (zero API keys required)
 ```
 

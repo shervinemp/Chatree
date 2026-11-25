@@ -1,7 +1,7 @@
 {
-  "timestamp_utc": "2026-11-25T06:27:53.198300+00:00",
+  "timestamp_utc": "2026-11-25T06:43:29.746273+00:00",
   "chatree_version": "0.2.0",
-  "git_sha": "9d77dcb",
+  "git_sha": "68e980b",
   "benchmark": "longmemeval",
   "model": "deepseek/deepseek-chat",
   "judge_model": "deepseek/deepseek-chat",
@@ -14,12 +14,13 @@
     "rlm_official",
     "flat_hybrid_rag"
   ],
-  "total_tokens_in": 6622420,
-  "total_tokens_out": 56402,
-  "total_estimated_cost_usd": 1.659368,
+  "total_tokens_in": 6622695,
+  "total_tokens_out": 56409,
+  "total_estimated_cost_usd": 1.657706,
   "extra": {
     "split": "s",
     "per_category": 5,
-    "n_questions": 30
+    "n_questions": 30,
+    "flat_rag_gpu_refreshed": true
   }
 }
