@@ -1,15 +1,17 @@
 """
 Provider-Agnostic Publishable Evaluation Runner for Chatree.
 
-Runs Tracks 1-6 against ANY LLM provider (OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter,
+Runs Tracks 1-7 against ANY LLM provider (OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter,
 Groq, Mistral, Together, xAI, Ollama, vLLM, SGLang, LM Studio, or `mock/chatree-demo`) with
-crash-safe JSONL checkpointing, exact provenance manifests, CSVs, and LaTeX `booktabs` tables:
+crash-safe JSONL checkpointing, dedicated cross-family judge providers, exact provenance
+manifests, Total Lifecycle Cost (Query + Ingest USD) tables, and `--dry-run` budgeting:
   - Track 1: 5-Family Multi-Tangent & Autonomous Tool-Use Suite (6 baselines + LLM Judge)
   - Track 2: Systematic 10-Row Ablation Matrix + K-Scaling Crossover Curve (K=2, 4, 8)
-  - Track 3: Official LoCoMo (ACL 2024) stratified head-to-head
-  - Track 4: Official LongMemEval-S or LongMemEval-M (>1M-token overflow) head-to-head
+  - Track 3: Official LoCoMo (ACL 2024) head-to-head (stratified or full n=1,986)
+  - Track 4: Official LongMemEval-S (n=500) or LongMemEval-M (>1M-token overflow) head-to-head
   - Track 5: Live 18-Turn Jump-Around Chatbot Benchmark (`--natural-prompts` supported)
   - Track 6: Multi-Generation Non-Destructive vs. Destructive Compaction Benchmark
+  - Track 7: Non-Monotonic Software Engineering & Spec-Reversal Benchmark (6 projects, 36 QAs)
 
 Never prints or logs any API keys.
 """
@@ -31,12 +33,15 @@ from chatree import (
     BenchmarkRunner,
     ChatreeSystemAdapter,
     CompactionBenchmarkRunner,
+    ExternalBenchmarkReport,
     ExternalBenchmarkRunner,
     ExternalConversation,
     FastEmbedCrossEncoderReranker,
     FlatHybridRAGAdapter,
     FullContextLinearAdapter,
+    GraphitiOfficialAdapter,
     JumpAroundBenchmarkRunner,
+    LettaOfficialAdapter,
     LoCoMoDataset,
     LongMemEvalDataset,
     Mem0OfficialAdapter,
@@ -47,6 +52,7 @@ from chatree import (
     build_embedder,
     build_full_eval_suite,
     build_llm_provider,
+    build_non_monotonic_engineering_benchmark,
     default_jump_around_scenario,
     natural_jump_around_scenario,
     write_run_manifest,
@@ -59,6 +65,54 @@ DEFAULT_RERANKER_NAME = "Xenova/ms-marco-MiniLM-L-6-v2"
 
 def _slugify_model(model: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", model.lower()).strip("_")[:48] or "eval"
+
+
+def _format_per_category_markdown(report: ExternalBenchmarkReport, title: str) -> str:
+    all_cats = sorted({k for r in report.results for k in r.category_accuracy})
+    if not all_cats:
+        return report.to_markdown_table()
+    cat_lines = [
+        f"\n#### {title}",
+        "| System | " + " | ".join(all_cats) + " |",
+        "|---|" + "|".join("---:" for _ in all_cats) + "|",
+    ]
+    for r in report.results:
+        cat_lines.append(
+            f"| `{r.system_name}` | "
+            + " | ".join(f"{r.category_accuracy.get(c, 0.0) * 100:.1f}%" for c in all_cats)
+            + " |"
+        )
+    return report.to_markdown_table() + "\n" + "\n".join(cat_lines)
+
+
+def _build_judge_llm(
+    solver_llm,
+    *,
+    model: str,
+    judge_model: str,
+    provider: str,
+    judge_provider: str | None,
+    api_base: str | None,
+    judge_api_base: str | None,
+):
+    """Build a dedicated cross-family judge LLM whenever judge_model/provider/base differs."""
+    eff_provider = judge_provider or ("mock" if judge_model.startswith("mock/") else provider)
+    eff_api_base = judge_api_base if judge_api_base is not None else api_base
+    if (
+        judge_model == model
+        and judge_provider is None
+        and judge_api_base is None
+    ):
+        return solver_llm
+    return build_llm_provider(
+        eff_provider,
+        model=judge_model,
+        api_base=eff_api_base,
+        max_retries=4,
+        retry_base_delay_s=1.0,
+        timeout_s=120.0,
+        max_tokens=256,
+    )
 
 
 def select_stratified_locomo(
@@ -89,6 +143,9 @@ def select_stratified_longmemeval(
     picked: list[ExternalConversation] = []
     for cat in sorted(by_cat.keys()):
         items = by_cat[cat]
+        if per_category >= len(items):
+            picked.extend(items)
+            continue
         abs_items = [x for x in items if x.qa_items[0].is_abstention]
         reg_items = [x for x in items if not x.qa_items[0].is_abstention]
         chosen = (abs_items[:1] if abs_items else []) + reg_items
@@ -98,9 +155,105 @@ def select_stratified_longmemeval(
     return picked
 
 
+def build_external_adapters(
+    *,
+    model: str,
+    shadow_model: str,
+    summary_model: str,
+    llm,
+    embedder,
+    reranker,
+    api_base: str | None = None,
+    include_paper_baselines: bool = False,
+    include_graphiti: bool = False,
+    include_letta: bool = False,
+) -> tuple[list, str]:
+    chatree_name = "chatree_two_tier_v3" if include_paper_baselines else "chatree_full"
+    adapters: list = [
+        ChatreeSystemAdapter(
+            name=chatree_name,
+            model=model,
+            shadow_model=shadow_model,
+            summary_model=summary_model,
+            llm=llm,
+            embedder=embedder,
+            reranker=reranker,
+            max_ask_targets=4,
+            generate_session_summaries=include_paper_baselines,
+            use_provided_summaries=False,
+            include_branch_summary_map=include_paper_baselines,
+            concise_synthesis=True,
+            enable_recursive_hop=include_paper_baselines,
+        ),
+        FlatHybridRAGAdapter(
+            name="flat_hybrid_rag",
+            model=model,
+            llm=llm,
+            embedder=embedder,
+            reranker=reranker,
+            top_k=5,
+        ),
+        FullContextLinearAdapter(
+            name="full_context_linear",
+            model=model,
+            llm=llm,
+            max_context_tokens=120_000,
+        ),
+    ]
+    if include_paper_baselines:
+        adapters.extend(
+            [
+                TreeSummaryOnlyAdapter(
+                    name="tree_summary_only",
+                    model=model,
+                    llm=llm,
+                    embedder=embedder,
+                    reranker=reranker,
+                    top_k=6,
+                ),
+                Mem0OfficialAdapter(
+                    name="mem0_official",
+                    model=model,
+                    llm=llm,
+                    api_base=api_base,
+                    top_k=8,
+                ),
+                RLMOfficialAdapter(
+                    name="rlm_official",
+                    model=model,
+                    backend="auto",
+                    base_url=api_base,
+                    max_depth=1,
+                    max_iterations=8,
+                    max_concurrent_subcalls=4,
+                    max_timeout=90.0,
+                ),
+            ]
+        )
+    if include_graphiti:
+        adapters.append(
+            GraphitiOfficialAdapter(
+                name="graphiti_official",
+                model=model,
+                llm=llm,
+                top_k=8,
+            )
+        )
+    if include_letta:
+        adapters.append(
+            LettaOfficialAdapter(
+                name="letta_official",
+                model=model,
+                llm=llm,
+            )
+        )
+    return adapters, chatree_name
+
+
 async def run_track1_and_2(
     out_dir: Path,
     llm,
+    judge_llm,
     embedder,
     reranker,
     *,
@@ -121,6 +274,7 @@ async def run_track1_and_2(
         judge_model=judge_model,
         oracle_routing=False,
         llm=llm,
+        judge_llm=judge_llm,
         embedder=embedder,
         reranker=reranker,
         max_concurrency=6,
@@ -197,9 +351,10 @@ async def run_track1_and_2(
     return summary
 
 
-async def run_track3_and_4(
+async def run_external_tracks(
     out_dir: Path,
     llm,
+    judge_llm,
     embedder,
     reranker,
     *,
@@ -217,78 +372,31 @@ async def run_track3_and_4(
     lme_per_cat: int = 5,
     lme_split: str = "s",
     include_paper_baselines: bool = False,
+    skip_mem0_lme: bool = False,
+    include_graphiti: bool = False,
+    include_letta: bool = False,
+    dry_run: bool = False,
 ) -> dict:
     active = tracks or {"3", "4"}
     summary: dict = {}
     runner = ExternalBenchmarkRunner(
         model=model,
         judge_model=judge_model,
-        judge_llm=llm,
+        judge_llm=judge_llm,
         max_concurrency=concurrency,
     )
-    adapters: list = [
-        ChatreeSystemAdapter(
-            name="chatree_two_tier" if include_paper_baselines else "chatree_full",
-            model=model,
-            shadow_model=shadow_model,
-            summary_model=summary_model,
-            llm=llm,
-            embedder=embedder,
-            reranker=reranker,
-            max_ask_targets=4,
-            generate_session_summaries=include_paper_baselines,
-            use_provided_summaries=False,
-            include_branch_summary_map=include_paper_baselines,
-            concise_synthesis=True,
-            enable_recursive_hop=include_paper_baselines,
-        ),
-        FlatHybridRAGAdapter(
-            name="flat_hybrid_rag",
-            model=model,
-            llm=llm,
-            embedder=embedder,
-            reranker=reranker,
-            top_k=5,
-        ),
-        FullContextLinearAdapter(
-            name="full_context_linear",
-            model=model,
-            llm=llm,
-            max_context_tokens=120_000,
-        ),
-    ]
-    if include_paper_baselines:
-        adapters.extend(
-            [
-                TreeSummaryOnlyAdapter(
-                    name="tree_summary_only",
-                    model=model,
-                    llm=llm,
-                    embedder=embedder,
-                    reranker=reranker,
-                    top_k=6,
-                ),
-                Mem0OfficialAdapter(
-                    name="mem0_official",
-                    model=model,
-                    llm=llm,
-                    api_base=api_base,
-                    top_k=8,
-                ),
-                RLMOfficialAdapter(
-                    name="rlm_official",
-                    model=model,
-                    backend="auto",
-                    base_url=api_base,
-                    max_depth=1,
-                    max_iterations=8,
-                    max_concurrent_subcalls=4,
-                    max_timeout=90.0,
-                ),
-            ]
-        )
-
-    ref_sys = "chatree_two_tier" if include_paper_baselines else "chatree_full"
+    adapters, ref_sys = build_external_adapters(
+        model=model,
+        shadow_model=shadow_model,
+        summary_model=summary_model,
+        llm=llm,
+        embedder=embedder,
+        reranker=reranker,
+        api_base=api_base,
+        include_paper_baselines=include_paper_baselines,
+        include_graphiti=include_graphiti,
+        include_letta=include_letta,
+    )
 
     if "3" in active:
         t0 = time.perf_counter()
@@ -303,41 +411,33 @@ async def run_track3_and_4(
             f"\n=== TRACK 3: Official LoCoMo ({len(loco_convs_list)} convs, {n_loco_q} QAs, model={model}, judge={judge_model}) ===",
             flush=True,
         )
-        print(runner.estimate_cost_dry_run(loco_convs_list, adapters).to_summary(), flush=True)
-        loco_rep = await runner.evaluate(
-            loco_convs_list,
-            adapters,
-            reference_system=ref_sys,
-            checkpoint_path=out_dir / "exp3_locomo.ckpt.jsonl",
-        )
-        loco_rep.save_csv(out_dir / "exp3_locomo.csv")
-        (out_dir / "exp3_locomo.tex").write_text(loco_rep.to_latex_table(), encoding="utf-8")
-        loco_rep.save_manifest(
-            out_dir / "exp3_locomo_manifest.json",
-            judge_model=judge_model,
-            embed_model=embed_model,
-            reranker_name=reranker_name,
-            extra={"per_category_per_conv": locomo_per_cat, "n_questions": n_loco_q},
-        )
-        all_cats3 = sorted({k for r in loco_rep.results for k in r.category_accuracy})
-        cat_lines3 = [
-            "\n#### LoCoMo Per-Category Accuracy",
-            "| System | " + " | ".join(all_cats3) + " |",
-            "|---|" + "|".join("---:" for _ in all_cats3) + "|",
-        ]
-        for r in loco_rep.results:
-            cat_lines3.append(
-                f"| `{r.system_name}` | "
-                + " | ".join(f"{r.category_accuracy.get(c, 0.0) * 100:.1f}%" for c in all_cats3)
-                + " |"
+        est3 = runner.estimate_cost_dry_run(loco_convs_list, adapters)
+        print(est3.to_summary(), flush=True)
+        if dry_run:
+            summary["track3_dry_run_usd"] = round(est3.estimated_cost_usd, 5)
+        else:
+            loco_rep = await runner.evaluate(
+                loco_convs_list,
+                adapters,
+                reference_system=ref_sys,
+                checkpoint_path=out_dir / "exp3_locomo.ckpt.jsonl",
             )
-        full_md3 = loco_rep.to_markdown_table() + "\n" + "\n".join(cat_lines3)
-        (out_dir / "exp3_locomo.md").write_text(full_md3, encoding="utf-8")
-        print(full_md3, flush=True)
-        summary["track3_cost_usd"] = round(
-            sum(r.estimated_cost_usd + r.ingest_cost_usd for r in loco_rep.results), 5
-        )
-        summary["track3_seconds"] = round(time.perf_counter() - t0, 1)
+            loco_rep.save_csv(out_dir / "exp3_locomo.csv")
+            (out_dir / "exp3_locomo.tex").write_text(loco_rep.to_latex_table(), encoding="utf-8")
+            loco_rep.save_manifest(
+                out_dir / "exp3_locomo_manifest.json",
+                judge_model=judge_model,
+                embed_model=embed_model,
+                reranker_name=reranker_name,
+                extra={"per_category_per_conv": locomo_per_cat, "n_questions": n_loco_q},
+            )
+            full_md3 = _format_per_category_markdown(loco_rep, "LoCoMo Per-Category Accuracy")
+            (out_dir / "exp3_locomo.md").write_text(full_md3, encoding="utf-8")
+            print(full_md3, flush=True)
+            summary["track3_cost_usd"] = round(
+                sum(r.estimated_cost_usd + r.ingest_cost_usd for r in loco_rep.results), 5
+            )
+            summary["track3_seconds"] = round(time.perf_counter() - t0, 1)
 
     if "4" in active:
         t1 = time.perf_counter()
@@ -353,43 +453,89 @@ async def run_track3_and_4(
             f"\n=== TRACK 4: Official LongMemEval-{split_clean.upper()} ({n_lme_q} items, model={model}, judge={judge_model}) ===",
             flush=True,
         )
-        lme_adapters = [a for a in adapters if a.name not in ("mem0_official", "tree_summary_only")]
-        print(runner.estimate_cost_dry_run(lme_convs, lme_adapters).to_summary(), flush=True)
-        lme_rep = await runner.evaluate(
-            lme_convs,
-            lme_adapters,
-            reference_system=ref_sys,
-            checkpoint_path=out_dir / f"{pfx}.ckpt.jsonl",
-        )
-        lme_rep.save_csv(out_dir / f"{pfx}.csv")
-        (out_dir / f"{pfx}.tex").write_text(lme_rep.to_latex_table(), encoding="utf-8")
-        lme_rep.save_manifest(
-            out_dir / f"{pfx}_manifest.json",
-            judge_model=judge_model,
-            embed_model=embed_model,
-            reranker_name=reranker_name,
-            extra={"split": split_clean, "per_category": lme_per_cat, "n_questions": n_lme_q},
-        )
-        all_cats4 = sorted({k for r in lme_rep.results for k in r.category_accuracy})
-        cat_lines4 = [
-            f"\n#### LongMemEval-{split_clean.upper()} Per-Category Accuracy",
-            "| System | " + " | ".join(all_cats4) + " |",
-            "|---|" + "|".join("---:" for _ in all_cats4) + "|",
-        ]
-        for r in lme_rep.results:
-            cat_lines4.append(
-                f"| `{r.system_name}` | "
-                + " | ".join(f"{r.category_accuracy.get(c, 0.0) * 100:.1f}%" for c in all_cats4)
-                + " |"
+        excluded_lme = {"tree_summary_only"}
+        if skip_mem0_lme:
+            excluded_lme.add("mem0_official")
+        lme_adapters = [a for a in adapters if a.name not in excluded_lme]
+        est4 = runner.estimate_cost_dry_run(lme_convs, lme_adapters)
+        print(est4.to_summary(), flush=True)
+        if dry_run:
+            summary[f"track4_{split_clean}_dry_run_usd"] = round(est4.estimated_cost_usd, 5)
+        else:
+            lme_rep = await runner.evaluate(
+                lme_convs,
+                lme_adapters,
+                reference_system=ref_sys,
+                checkpoint_path=out_dir / f"{pfx}.ckpt.jsonl",
             )
-        full_md4 = lme_rep.to_markdown_table() + "\n" + "\n".join(cat_lines4)
-        (out_dir / f"{pfx}.md").write_text(full_md4, encoding="utf-8")
-        print(full_md4, flush=True)
-        summary[f"track4_{split_clean}_cost_usd"] = round(
-            sum(r.estimated_cost_usd + r.ingest_cost_usd for r in lme_rep.results), 5
+            lme_rep.save_csv(out_dir / f"{pfx}.csv")
+            (out_dir / f"{pfx}.tex").write_text(lme_rep.to_latex_table(), encoding="utf-8")
+            lme_rep.save_manifest(
+                out_dir / f"{pfx}_manifest.json",
+                judge_model=judge_model,
+                embed_model=embed_model,
+                reranker_name=reranker_name,
+                extra={"split": split_clean, "per_category": lme_per_cat, "n_questions": n_lme_q},
+            )
+            full_md4 = _format_per_category_markdown(
+                lme_rep, f"LongMemEval-{split_clean.upper()} Per-Category Accuracy"
+            )
+            (out_dir / f"{pfx}.md").write_text(full_md4, encoding="utf-8")
+            print(full_md4, flush=True)
+            summary[f"track4_{split_clean}_cost_usd"] = round(
+                sum(r.estimated_cost_usd + r.ingest_cost_usd for r in lme_rep.results), 5
+            )
+            summary[f"track4_{split_clean}_seconds"] = round(time.perf_counter() - t1, 1)
+
+    if "7" in active:
+        t7 = time.perf_counter()
+        eng_convs = build_non_monotonic_engineering_benchmark()
+        n_eng_q = sum(len(c.qa_items) for c in eng_convs)
+        print(
+            f"\n=== TRACK 7: Non-Monotonic Engineering & Spec-Reversal ({len(eng_convs)} projects, {n_eng_q} QAs, model={model}, judge={judge_model}) ===",
+            flush=True,
         )
-        summary[f"track4_{split_clean}_seconds"] = round(time.perf_counter() - t1, 1)
+        est7 = runner.estimate_cost_dry_run(eng_convs, adapters)
+        print(est7.to_summary(), flush=True)
+        if dry_run:
+            summary["track7_dry_run_usd"] = round(est7.estimated_cost_usd, 5)
+        else:
+            eng_rep = await runner.evaluate(
+                eng_convs,
+                adapters,
+                reference_system=ref_sys,
+                checkpoint_path=out_dir / "exp7_non_monotonic.ckpt.jsonl",
+            )
+            eng_rep.save_csv(out_dir / "exp7_non_monotonic.csv")
+            (out_dir / "exp7_non_monotonic.tex").write_text(
+                eng_rep.to_latex_table(
+                    caption=f"Track 7: Non-Monotonic Software Engineering & Spec-Reversal ({model}, judge={judge_model}).",
+                    label="tab:non_monotonic",
+                ),
+                encoding="utf-8",
+            )
+            eng_rep.save_manifest(
+                out_dir / "exp7_non_monotonic_manifest.json",
+                judge_model=judge_model,
+                embed_model=embed_model,
+                reranker_name=reranker_name,
+                extra={"n_projects": len(eng_convs), "n_questions": n_eng_q},
+            )
+            full_md7 = _format_per_category_markdown(
+                eng_rep, "Track 7 Non-Monotonic Engineering Per-Category Accuracy"
+            )
+            (out_dir / "exp7_non_monotonic.md").write_text(full_md7, encoding="utf-8")
+            print(full_md7, flush=True)
+            summary["track7_cost_usd"] = round(
+                sum(r.estimated_cost_usd + r.ingest_cost_usd for r in eng_rep.results), 5
+            )
+            summary["track7_seconds"] = round(time.perf_counter() - t7, 1)
+
     return summary
+
+
+# Backwards-compatible alias for any external caller importing run_track3_and_4
+run_track3_and_4 = run_external_tracks
 
 
 async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | None = None) -> None:
@@ -398,6 +544,13 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
     parser.add_argument("--shadow-model", default="inherit")
     parser.add_argument("--summary-model", default="inherit")
     parser.add_argument("--judge-model", default=None, help="LLM judge model (defaults to --model; set cross-family for audit)")
+    parser.add_argument(
+        "--judge-provider",
+        choices=["auto", "litellm", "openai_compat", "mock"],
+        default=None,
+        help="Optional separate LLM driver for --judge-model (defaults to --provider)",
+    )
+    parser.add_argument("--judge-api-base", default=None, help="Optional custom OpenAI-compatible base URL for --judge-model")
     parser.add_argument("--embed-model", default=DEFAULT_EMBED_MODEL)
     parser.add_argument(
         "--provider",
@@ -406,7 +559,7 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
         help="LLM backend driver (auto uses litellm if installed, else zero-dep openai_compat)",
     )
     parser.add_argument("--api-base", default=None, help="Optional custom OpenAI-compatible base URL (Ollama, vLLM, SGLang, proxy)")
-    parser.add_argument("--tracks", default="1,2,3,4", help="Comma-separated tracks to run (1,2,3,4,5,6)")
+    parser.add_argument("--tracks", default="1,2,3,4", help="Comma-separated tracks to run (1,2,3,4,5,6,7)")
     parser.add_argument("--out-dir", default=default_out_dir)
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--locomo-convs", type=int, default=2)
@@ -414,8 +567,20 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
     parser.add_argument("--lme-per-cat", type=int, default=5)
     parser.add_argument("--lme-split", choices=["s", "m"], default="s")
     parser.add_argument("--natural-prompts", action="store_true", help="Use system-agnostic natural prompts for Track 5")
-    parser.add_argument("--rejudge-locomo-ckpt", default="", help="Re-judge existing LoCoMo checkpoint with fixed rubric / --judge-model")
+    parser.add_argument("--rejudge-ckpt", default="", help="Re-judge any saved Track 3/4/7 JSONL checkpoint with --judge-model")
+    parser.add_argument(
+        "--rejudge-dataset",
+        choices=["locomo", "longmemeval", "non_monotonic"],
+        default="locomo",
+        help="Dataset schema matching --rejudge-ckpt",
+    )
+    parser.add_argument("--rejudge-ref", default="chatree_two_tier_v3", help="Reference system name for McNemar tests during re-judging")
+    parser.add_argument("--rejudge-locomo-ckpt", default="", help="Backwards-compatible alias for --rejudge-ckpt --rejudge-dataset locomo")
     parser.add_argument("--paper-baselines", action="store_true", help="Include Context-Folding, official Mem0, and official MIT RLM")
+    parser.add_argument("--skip-mem0-lme", action="store_true", help="Exclude mem0_official from Track 4 LongMemEval")
+    parser.add_argument("--include-graphiti", action="store_true", help="Include official Graphiti adapter (requires graphiti-core + Neo4j)")
+    parser.add_argument("--include-letta", action="store_true", help="Include official Letta adapter (requires letta)")
+    parser.add_argument("--dry-run", action="store_true", help="Print exact token/USD cost estimates for selected external tracks with 0 API calls")
     args = parser.parse_args(argv)
 
     model = args.model
@@ -433,37 +598,92 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
         timeout_s=120.0,
         max_tokens=512,
     )
+    judge_llm = _build_judge_llm(
+        llm,
+        model=model,
+        judge_model=judge_model,
+        provider=args.provider,
+        judge_provider=args.judge_provider,
+        api_base=args.api_base,
+        judge_api_base=args.judge_api_base,
+    )
 
-    if args.rejudge_locomo_ckpt:
-        loco_convs = select_stratified_locomo(
-            Path("data/benchmarks/locomo10.json"),
-            max_conversations=args.locomo_convs,
-            per_category_per_conv=args.locomo_per_cat,
-        )
+    rejudge_path = args.rejudge_ckpt or args.rejudge_locomo_ckpt
+    rejudge_ds = "locomo" if args.rejudge_locomo_ckpt and not args.rejudge_ckpt else args.rejudge_dataset
+    if rejudge_path:
+        if rejudge_ds == "locomo":
+            convs = select_stratified_locomo(
+                Path("data/benchmarks/locomo10.json"),
+                max_conversations=args.locomo_convs,
+                per_category_per_conv=args.locomo_per_cat,
+            )
+            stem = f"exp3_locomo_rejudged_{_slugify_model(judge_model)}"
+        elif rejudge_ds == "longmemeval":
+            split_clean = "m" if args.lme_split.lower() == "m" else "s"
+            convs = select_stratified_longmemeval(
+                Path(f"data/benchmarks/longmemeval_{split_clean}_cleaned.json"),
+                per_category=args.lme_per_cat,
+            )
+            stem = f"exp4_longmemeval_{split_clean}_rejudged_{_slugify_model(judge_model)}"
+        else:
+            convs = build_non_monotonic_engineering_benchmark()
+            stem = f"exp7_non_monotonic_rejudged_{_slugify_model(judge_model)}"
+
         re_runner = ExternalBenchmarkRunner(
-            model=model, judge_model=judge_model, judge_llm=llm, max_concurrency=args.concurrency
+            model=model, judge_model=judge_model, judge_llm=judge_llm, max_concurrency=args.concurrency
         )
+        if args.dry_run:
+            loaded = ExternalBenchmarkRunner._load_checkpoint(Path(rejudge_path))
+            sys_names = sorted({s for (s, _, _) in loaded.keys()})
+            n_items = len(loaded)
+            j_usd = re_runner.cost_model.estimate_usd(
+                judge_model, tokens_in=n_items * 480, tokens_out=n_items * 55, cache_read_tokens=0
+            )
+            print(
+                f"[DRY RUN REJUDGE] ckpt={rejudge_path} | dataset={rejudge_ds} | judge={judge_model} | "
+                f"systems={', '.join(sys_names)} | cached_items={n_items:,} | est_judge_cost=${j_usd:.4f}",
+                flush=True,
+            )
+            return
+
         re_rep = await re_runner.rejudge_checkpoint(
-            loco_convs,
-            Path(args.rejudge_locomo_ckpt),
-            output_checkpoint_path=out_dir / "exp3_locomo_rejudged.ckpt.jsonl",
-            reference_system="chatree_two_tier",
+            convs,
+            Path(rejudge_path),
+            output_checkpoint_path=out_dir / f"{stem}.ckpt.jsonl",
+            reference_system=args.rejudge_ref,
         )
-        (out_dir / "exp3_locomo_rejudged.md").write_text(re_rep.to_markdown_table(), encoding="utf-8")
-        (out_dir / "exp3_locomo_rejudged.tex").write_text(re_rep.to_latex_table(), encoding="utf-8")
-        print(re_rep.to_markdown_table(), flush=True)
+        re_rep.save_csv(out_dir / f"{stem}.csv")
+        full_md = _format_per_category_markdown(re_rep, f"{rejudge_ds} Per-Category Accuracy (judge={judge_model})")
+        (out_dir / f"{stem}.md").write_text(full_md, encoding="utf-8")
+        (out_dir / f"{stem}.tex").write_text(re_rep.to_latex_table(), encoding="utf-8")
+        re_rep.save_manifest(
+            out_dir / f"{stem}_manifest.json",
+            judge_model=judge_model,
+            embed_model=args.embed_model,
+            extra={"rejudged_from": str(rejudge_path), "dataset": rejudge_ds},
+        )
+        print(full_md, flush=True)
         return
 
-    embedder = build_embedder(args.embed_model, api_base=args.api_base)
-    reranker = FastEmbedCrossEncoderReranker() if not model.startswith("mock/") else None
+    embedder = (
+        build_embedder("hash/local-128")
+        if args.dry_run
+        else build_embedder(args.embed_model, api_base=args.api_base)
+    )
+    reranker = (
+        None
+        if (args.dry_run or model.startswith("mock/"))
+        else FastEmbedCrossEncoderReranker()
+    )
     reranker_name = DEFAULT_RERANKER_NAME if reranker is not None else "none"
 
-    totals: dict = {"model": model, "judge_model": judge_model, "provider": args.provider}
-    if "1" in tracks or "2" in tracks:
+    totals: dict = {"model": model, "judge_model": judge_model, "provider": args.provider, "dry_run": args.dry_run}
+    if ("1" in tracks or "2" in tracks) and not args.dry_run:
         totals.update(
             await run_track1_and_2(
                 out_dir,
                 llm,
+                judge_llm,
                 embedder,
                 reranker,
                 model=model,
@@ -474,11 +694,12 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
                 reranker_name=reranker_name,
             )
         )
-    if "3" in tracks or "4" in tracks:
+    if "3" in tracks or "4" in tracks or "7" in tracks:
         totals.update(
-            await run_track3_and_4(
+            await run_external_tracks(
                 out_dir,
                 llm,
+                judge_llm,
                 embedder,
                 reranker,
                 model=model,
@@ -495,15 +716,20 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
                 lme_per_cat=args.lme_per_cat,
                 lme_split=args.lme_split,
                 include_paper_baselines=args.paper_baselines,
+                skip_mem0_lme=args.skip_mem0_lme,
+                include_graphiti=args.include_graphiti,
+                include_letta=args.include_letta,
+                dry_run=args.dry_run,
             )
         )
-    if "5" in tracks:
+    if "5" in tracks and not args.dry_run:
         t5 = time.perf_counter()
         ja_runner = JumpAroundBenchmarkRunner(
             model=model,
             shadow_model=args.shadow_model,
             judge_model=judge_model,
             llm=llm,
+            judge_llm=judge_llm,
             embedder=embedder,
             reranker=reranker,
         )
@@ -518,7 +744,7 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
         (out_dir / f"{pfx5}.tex").write_text(ja_rep.to_latex_table(), encoding="utf-8")
         print(ja_rep.to_markdown_table(), flush=True)
         totals["track5_seconds"] = round(time.perf_counter() - t5, 1)
-    if "6" in tracks:
+    if "6" in tracks and not args.dry_run:
         t6 = time.perf_counter()
         comp_runner = CompactionBenchmarkRunner(
             model=model, llm=llm, embedder=embedder, reranker=reranker
@@ -530,7 +756,8 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
         print(comp_rep.to_markdown_table(), flush=True)
         totals["track6_seconds"] = round(time.perf_counter() - t6, 1)
 
-    (out_dir / "run_summary.json").write_text(json.dumps(totals, indent=2), encoding="utf-8")
+    if not args.dry_run:
+        (out_dir / "run_summary.json").write_text(json.dumps(totals, indent=2), encoding="utf-8")
     print("\n=== DONE ===", json.dumps(totals, indent=2), flush=True)
 
 

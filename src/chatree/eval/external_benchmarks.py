@@ -60,6 +60,8 @@ class ExternalSession(BaseModel):
     title: str = ""
     date_time: str = ""
     summary: str | None = None
+    archived: bool = False
+    archive_reason: str = ""
     turns: list[ExternalTurn] = Field(default_factory=list)
 
 
@@ -75,7 +77,7 @@ class ExternalQAItem(BaseModel):
 
 class ExternalConversation(BaseModel):
     conversation_id: str
-    benchmark: Literal["locomo", "longmemeval", "custom"] = "custom"
+    benchmark: Literal["locomo", "longmemeval", "non_monotonic", "custom"] = "custom"
     sessions: list[ExternalSession] = Field(default_factory=list)
     qa_items: list[ExternalQAItem] = Field(default_factory=list)
 
@@ -465,11 +467,14 @@ class ExternalBenchmarkReport(BaseModel):
         lines = [
             f"### Publishable External Benchmark: `{self.benchmark}` (model=`{self.model}`)",
             "",
-            "| System | Accuracy (95% CI) | Token F1 | BLEU-1 | Peak Tok | Est. USD | Cache | p50 / p95 ms | McNemar p vs. Ref |",
-            "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "| System | Accuracy (95% CI) | Token F1 | BLEU-1 | Peak Tok | Query / Ingest / Total USD | Ingest s | Cache | p50 / p95 ms | McNemar p vs. Ref |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
         for r in self.results:
             ci_str = f"{r.accuracy * 100:.1f}% [{r.accuracy_ci.ci_low * 100:.1f}, {r.accuracy_ci.ci_high * 100:.1f}]"
+            total_usd = r.estimated_cost_usd + r.ingest_cost_usd
+            cost_str = f"${r.estimated_cost_usd:.4f} / ${r.ingest_cost_usd:.4f} / **${total_usd:.4f}**"
+            ingest_s = f"{r.ingest_latency_ms / 1000.0:.1f}s"
             p_str = (
                 "ref"
                 if r.system_name == self.reference_system
@@ -481,7 +486,7 @@ class ExternalBenchmarkReport(BaseModel):
             )
             lines.append(
                 f"| `{r.system_name}` | {ci_str} | {r.mean_f1:.3f} | {r.mean_bleu1:.3f} "
-                f"| {r.peak_context_tokens} | ${r.estimated_cost_usd:.5f} "
+                f"| {r.peak_context_tokens} | {cost_str} | {ingest_s} "
                 f"| {r.cache_hit_ratio * 100:.1f}% | {r.latency_p50_ms:.1f} / {r.latency_p95_ms:.1f} | {p_str} |"
             )
         return "\n".join(lines)
@@ -498,13 +503,15 @@ class ExternalBenchmarkReport(BaseModel):
             "F1",
             "BLEU-1",
             "Peak Tok",
-            "Cost (USD)",
-            "p50 ms",
+            "Total USD (Q+I)",
+            "p50 / p95 ms",
             "p-val",
         ]
         rows: list[list[str]] = []
         for r in self.results:
             ci_str = f"{r.accuracy * 100:.1f}% [{r.accuracy_ci.ci_low * 100:.1f}, {r.accuracy_ci.ci_high * 100:.1f}]"
+            total_usd = r.estimated_cost_usd + r.ingest_cost_usd
+            cost_str = f"${total_usd:.4f} ({r.estimated_cost_usd:.3f}+{r.ingest_cost_usd:.3f})"
             p_str = (
                 "ref"
                 if r.system_name == self.reference_system
@@ -521,8 +528,8 @@ class ExternalBenchmarkReport(BaseModel):
                     f"{r.mean_f1:.3f}",
                     f"{r.mean_bleu1:.3f}",
                     str(r.peak_context_tokens),
-                    f"${r.estimated_cost_usd:.5f}",
-                    f"{r.latency_p50_ms:.1f}",
+                    cost_str,
+                    f"{r.latency_p50_ms:.0f} / {r.latency_p95_ms:.0f}",
                     p_str,
                 ]
             )
@@ -554,6 +561,7 @@ class ExternalBenchmarkReport(BaseModel):
                 "ingest_tokens_in": r.ingest_tokens_in,
                 "ingest_tokens_out": r.ingest_tokens_out,
                 "ingest_cost_usd": r.ingest_cost_usd,
+                "total_cost_usd": round(r.estimated_cost_usd + r.ingest_cost_usd, 6),
                 "ingest_latency_ms": r.ingest_latency_ms,
                 "latency_p50_ms": r.latency_p50_ms,
                 "latency_p95_ms": r.latency_p95_ms,
@@ -578,6 +586,19 @@ class ExternalBenchmarkReport(BaseModel):
         reranker_name: str = "none",
         extra: dict[str, Any] | None = None,
     ) -> Path:
+        merged_extra = dict(extra or {})
+        merged_extra.setdefault(
+            "total_query_cost_usd", round(sum(r.estimated_cost_usd for r in self.results), 6)
+        )
+        merged_extra.setdefault(
+            "total_ingest_cost_usd", round(sum(r.ingest_cost_usd for r in self.results), 6)
+        )
+        merged_extra.setdefault(
+            "total_ingest_tokens_in", sum(r.ingest_tokens_in for r in self.results)
+        )
+        merged_extra.setdefault(
+            "total_ingest_tokens_out", sum(r.ingest_tokens_out for r in self.results)
+        )
         return write_run_manifest(
             path,
             benchmark=self.benchmark,
@@ -585,11 +606,13 @@ class ExternalBenchmarkReport(BaseModel):
             judge_model=judge_model,
             embed_model=embed_model,
             reranker_name=reranker_name,
-            total_tokens_in=sum(r.total_tokens_in for r in self.results),
-            total_tokens_out=sum(r.total_tokens_out for r in self.results),
-            total_estimated_cost_usd=round(sum(r.estimated_cost_usd for r in self.results), 6),
+            total_tokens_in=sum(r.total_tokens_in + r.ingest_tokens_in for r in self.results),
+            total_tokens_out=sum(r.total_tokens_out + r.ingest_tokens_out for r in self.results),
+            total_estimated_cost_usd=round(
+                sum(r.estimated_cost_usd + r.ingest_cost_usd for r in self.results), 6
+            ),
             systems=[r.system_name for r in self.results],
-            extra=extra,
+            extra=merged_extra,
         )
 
 
@@ -604,14 +627,31 @@ class DryRunEstimate(BaseModel):
     estimated_input_tokens: int
     estimated_output_tokens: int
     estimated_cost_usd: float
+    estimated_ingest_cost_usd: float = 0.0
+    estimated_query_cost_usd: float = 0.0
+    estimated_judge_cost_usd: float = 0.0
+    judge_model: str | None = None
 
     def to_summary(self) -> str:
+        breakdown = (
+            f" (query=${self.estimated_query_cost_usd:.4f}, "
+            f"ingest=${self.estimated_ingest_cost_usd:.4f}, "
+            f"judge=${self.estimated_judge_cost_usd:.4f})"
+            if (self.estimated_ingest_cost_usd > 0 or self.estimated_judge_cost_usd > 0)
+            else ""
+        )
+        offpeak_note = (
+            f" | DeepSeek off-peak (~50%): ~${self.estimated_cost_usd * 0.5:.4f}"
+            if "deepseek" in self.model.lower()
+            else ""
+        )
         return (
-            f"[DRY RUN] benchmark={self.benchmark} | model={self.model} | "
-            f"convs={self.n_conversations} | sessions={self.n_sessions} | questions={self.n_questions} | "
-            f"systems={', '.join(self.systems)} | est_calls={self.estimated_llm_calls} | "
+            f"[DRY RUN] benchmark={self.benchmark} | model={self.model}"
+            + (f" | judge={self.judge_model}" if self.judge_model else "")
+            + f" | convs={self.n_conversations} | sessions={self.n_sessions} | questions={self.n_questions} | "
+            f"systems={', '.join(self.systems)} | est_calls={self.estimated_llm_calls:,} | "
             f"est_tokens={self.estimated_input_tokens:,} in / {self.estimated_output_tokens:,} out | "
-            f"est_cost=${self.estimated_cost_usd:.4f}"
+            f"est_total=${self.estimated_cost_usd:.4f}{breakdown}{offpeak_note}"
         )
 
 
@@ -696,7 +736,7 @@ class ExternalBenchmarkRunner:
         conversations: Sequence[ExternalConversation],
         adapters: Sequence[MemorySystemAdapter],
     ) -> DryRunEstimate:
-        """Estimate API calls, tokens, and USD cost before making a single paid LLM request."""
+        """Estimate API calls, tokens, and Total Lifecycle USD (Query + Ingest + Judge) with 0 API calls."""
         benchmark_name = conversations[0].benchmark if conversations else "custom"
         n_sessions = sum(len(c.sessions) for c in conversations)
         n_questions = sum(len(c.qa_items) for c in conversations)
@@ -706,34 +746,65 @@ class ExternalBenchmarkRunner:
         avg_sess_tokens = max(80, (total_chars // 4) // max(1, n_sessions))
 
         est_calls = 0
-        est_in = 0
-        est_out = 0
+        q_in = 0
+        q_out = 0
+        ing_in = 0
+        ing_out = 0
         for adapter in adapters:
             nm = adapter.name.lower()
             if "linear" in nm:
                 est_calls += n_questions
-                est_in += n_questions * (avg_conv_tokens + 120)
-                est_out += n_questions * 80
+                q_in += n_questions * (avg_conv_tokens + 120)
+                q_out += n_questions * 80
             elif "chatree" in nm:
                 k = int(getattr(adapter, "max_ask_targets", 4))
-                # k parallel shadow turns + 1 concise synthesizer call per question
-                est_calls += n_questions * (k + 1)
-                est_in += n_questions * (k * (avg_sess_tokens + 200) + 600)
-                est_out += n_questions * (k * 60 + 80)
+                # Write-time Tier-2 summary + piggybacked Tier-2.5 atomic facts (1 call/session)
+                if getattr(adapter, "generate_session_summaries", True):
+                    est_calls += n_sessions
+                    ing_in += n_sessions * (avg_sess_tokens + 220)
+                    ing_out += n_sessions * 420
+                # Query-time: k parallel shadow turns + optional Hop-2 + concise synthesizer
+                est_calls += n_questions * (k + 2)
+                q_in += n_questions * (k * (avg_sess_tokens + 350) + 1400)
+                q_out += n_questions * (k * 70 + 100)
+            elif "mem0" in nm:
+                # Write-time fact extraction + memory reconciliation (~2 LLM calls/session)
+                est_calls += n_sessions * 2
+                ing_in += n_sessions * (avg_sess_tokens + 450)
+                ing_out += n_sessions * 380
+                # Query-time single prompt with top-k extracted facts
+                est_calls += n_questions
+                q_in += n_questions * 800
+                q_out += n_questions * 70
+            elif "rlm" in nm:
+                # REPL multi-step recursive exploration
+                est_calls += n_questions * 6
+                q_in += n_questions * min(avg_conv_tokens, 35_000)
+                q_out += n_questions * 1100
             else:
                 est_calls += n_questions
-                est_in += n_questions * 1600
-                est_out += n_questions * 80
+                q_in += n_questions * 1400
+                q_out += n_questions * 80
 
+        j_in = 0
+        j_out = 0
+        judge_usd = 0.0
         if self.judge_model and not self.judge_model.startswith("mock/"):
             judge_calls = n_questions * len(adapters)
             est_calls += judge_calls
-            est_in += judge_calls * 450
-            est_out += judge_calls * 50
+            j_in = judge_calls * 480
+            j_out = judge_calls * 55
+            judge_usd = self.cost_model.estimate_usd(
+                self.judge_model, tokens_in=j_in, tokens_out=j_out, cache_read_tokens=0
+            )
 
-        est_usd = self.cost_model.estimate_usd(
-            self.model, tokens_in=est_in, tokens_out=est_out, cache_read_tokens=0
+        query_usd = self.cost_model.estimate_usd(
+            self.model, tokens_in=q_in, tokens_out=q_out, cache_read_tokens=0
         )
+        ingest_usd = self.cost_model.estimate_usd(
+            self.model, tokens_in=ing_in, tokens_out=ing_out, cache_read_tokens=0
+        )
+        total_usd = round(query_usd + ingest_usd + judge_usd, 6)
         return DryRunEstimate(
             benchmark=benchmark_name,
             model=self.model,
@@ -742,9 +813,13 @@ class ExternalBenchmarkRunner:
             n_questions=n_questions,
             systems=[a.name for a in adapters],
             estimated_llm_calls=est_calls,
-            estimated_input_tokens=est_in,
-            estimated_output_tokens=est_out,
-            estimated_cost_usd=est_usd,
+            estimated_input_tokens=q_in + ing_in + j_in,
+            estimated_output_tokens=q_out + ing_out + j_out,
+            estimated_cost_usd=total_usd,
+            estimated_ingest_cost_usd=round(ingest_usd, 6),
+            estimated_query_cost_usd=round(query_usd, 6),
+            estimated_judge_cost_usd=round(judge_usd, 6),
+            judge_model=self.judge_model,
         )
 
     @staticmethod
@@ -832,6 +907,10 @@ class ExternalBenchmarkRunner:
                                     date_time=turn.date_time or sess.date_time,
                                 )
                             await worker.finish_session(sess.session_id, summary=sess.summary)
+                            if sess.archived:
+                                arch_fn = getattr(worker, "archive_session", None)
+                                if callable(arch_fn):
+                                    await arch_fn(sess.session_id, reason=sess.archive_reason)
                         ingest_ms = round((time.perf_counter() - t_ing0) * 1000.0, 2)
                         get_ingest_fn = getattr(worker, "get_ingest_usage", None)
                         ing_in, ing_out = get_ingest_fn() if callable(get_ingest_fn) else (0, 0)

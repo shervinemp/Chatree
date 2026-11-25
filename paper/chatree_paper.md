@@ -94,22 +94,22 @@ All live experiments run on `deepseek/deepseek-chat` with local ONNX GPU retriev
 ![Official LoCoMo Comparison](figures/fig2_locomo_comparison.png)
 *Figure 2: Official LoCoMo ($n=245$) under the fixed adversarial rubric: (a) overall accuracy with 95% bootstrap CIs and paired McNemar significance vs. Chatree v3; (b) per-category breakdown showing the +30.0 pt multi-hop and +22.0 pt temporal gains from piggybacked Tier-2.5 atomic facts.*
 
-| System | `n` | Accuracy (95% CI) | Single-Hop | Multi-Hop | Temporal | Open-Domain | Adversarial | Peak Tok | KV Cache | McNemar `p` vs. v3 |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **`chatree_two_tier_v3` (+Tier-2.5)** | **245** | **77.1%** `[71.8, 82.5]` | 86.0% | 80.0% | **74.0%** | **57.8%** | 86.0% | **6,390** | **60.0%** | ref |
-| `full_context_linear` | 245 | 76.3% `[71.4, 82.0]` | **88.0%** | **82.0%** | 68.0% | 55.6% | 86.0% | 35,097 | **95.4%** | 0.8744 |
-| `mem0_official` (`mem0ai==2.2.1`) | 245 | 73.5% `[68.2, 79.2]` | 78.0% | 66.0% | **74.0%** | 53.3% | 94.0% | 874 | 0.1% | 0.2225 |
-| `rlm_official` (`rlms==0.1.3`)‡ | 117 | 70.9% `[62.4, 78.6]` | 76.0% | 64.0% | **80.0%** | 55.0% | 77.3% | 28,166 | 0.0% | 0.4725 |
-| `chatree_two_tier` (v2, pre-Facts) | 245 | 64.5% `[58.8, 70.6]` | 78.0% | 50.0% | 52.0% | 44.4% | **96.0%** | 4,250 | 75.5% | **0.0001\*** |
-| `flat_hybrid_rag` | 245 | 48.2% `[42.0, 54.3]` | 46.0% | 26.0% | 40.0% | 33.3% | 94.0% | **725** | 2.3% | **<0.0001\*** |
-| `tree_summary_only` (Folding) | 245 | 41.2% `[35.5, 47.3]` | 40.0% | 32.0% | 16.0% | 31.1% | 86.0% | 1,480 | 11.9% | **<0.0001\*** |
+| System | `n` | Accuracy (95% CI) | Single-Hop | Multi-Hop | Temporal | Open-Domain | Adversarial | Peak Tok | Total USD (Q + Ingest) | p50 / p95 ms | KV Cache | McNemar `p` vs. v3 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **`chatree_two_tier_v3` (+Tier-2.5)** | **245** | **77.1%** `[71.8, 82.5]` | 86.0% | 80.0% | **74.0%** | **57.8%** | 86.0% | **6,390** | \$1.045 (\$0.842 + \$0.203) | 4.94s / 7.76s | **60.0%** | ref |
+| `full_context_linear` | 245 | 76.3% `[71.4, 82.0]` | **88.0%** | **82.0%** | 68.0% | 55.6% | 86.0% | 35,097 | \$0.300 (\$0.300 + \$0.000) | 1.63s / 3.12s | **95.4%** | 0.8744 |
+| `mem0_official` (`mem0ai==2.2.1`) | 245 | 73.5% `[68.2, 79.2]` | 78.0% | 66.0% | **74.0%** | 53.3% | 94.0% | 874 | \$0.204 (\$0.051 + \$0.153) | **1.28s / 2.42s** | 0.1% | 0.2225 |
+| `rlm_official` (`rlms==0.1.3`)‡ | 117 | 70.9% `[62.4, 78.6]` | 76.0% | 64.0% | **80.0%** | 55.0% | 77.3% | 28,166 | \$1.381 (\$1.381 + \$0.000) | 12.13s / 28.32s | 0.0% | 0.4725 |
+| `chatree_two_tier` (v2, pre-Facts) | 245 | 64.5% `[58.8, 70.6]` | 78.0% | 50.0% | 52.0% | 44.4% | **96.0%** | 4,250 | \$0.666 (\$0.570 + \$0.095) | 5.73s / 8.39s | 75.5% | **0.0001\*** |
+| `flat_hybrid_rag` | 245 | 48.2% `[42.0, 54.3]` | 46.0% | 26.0% | 40.0% | 33.3% | 94.0% | **725** | **\$0.046** (\$0.046 + \$0.000) | 1.70s / 3.12s | 2.3% | **<0.0001\*** |
+| `tree_summary_only` (Folding) | 245 | 41.2% `[35.5, 47.3]` | 40.0% | 32.0% | 16.0% | 31.1% | 86.0% | 1,480 | \$0.062 (\$0.062 + \$0.000) | 1.41s / 2.13s | 11.9% | **<0.0001\*** |
 
-*‡Partial checkpoint ($n=117$); paired McNemar computed strictly over the exact 117-QA intersection.*
+*‡Partial checkpoint ($n=117$); paired McNemar computed strictly over the exact 117-QA intersection. Total lifecycle cost exposes write-time extraction overhead (`mem0_official` spends \$0.153 on ingest vs. \$0.051 on queries — 3.0× its query cost — and 965.1s wall-clock).*
 
 ### 4.2 Track 4: Official LongMemEval-S (ICLR 2025 — $n = 30$, ~115k Tokens/Item)
 
-![Pareto Frontier across LoCoMo and LongMemEval-S](figures/fig3_pareto_efficiency.png)
-*Figure 3: Accuracy vs. Peak Context Window (log scale) across (a) Official LoCoMo ($n=245$) and (b) Official LongMemEval-S ($n=30$). Chatree v3 occupies the upper-left Pareto-optimal frontier on both benchmarks.*
+![Pareto Frontier and Total Lifecycle Cost](figures/fig3_pareto_efficiency.png)
+*Figure 3: (a) Official LoCoMo ($n=245$) peak-context Pareto frontier, (b) Official LongMemEval-S ($n=30$) peak-context Pareto frontier, and (c) LoCoMo Total Lifecycle Cost (Query + Write-Time Ingest USD) with p95 latency. Chatree v3 occupies the upper-left Pareto-optimal corner on both benchmarks while transparently surfacing both write-time and query-time costs.*
 
 | System | Accuracy (95% CI) | S-User | S-Asst | Pref | Update | Temporal | Multi | Peak Tok | Query USD (+Ingest) | KV Cache | p50 / p95 ms | McNemar `p` |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -145,7 +145,7 @@ On **Track 5 (`natural-jump-around-18t`)**, with zero tool jargon in user prompt
 ## 5. Limitations & Threats to Validity
 
 1. **Interactive orchestrator vs. `TreeQueryEngine`:** External benchmarks and `tree.ask(..., deep=True)` share the exact `TreeQueryEngine` pipeline, while interactive turns choose tools autonomously inside `TurnOrchestrator`; unscripted full-LoCoMo tool policies remain future work.
-2. **Single-model & self-judging bias:** Live runs used `deepseek/deepseek-chat` for generation and judging on a single seed; cross-family judge audits (`--judge-model`) and Cohen's $\kappa$ validation are supported by the harness and planned for multi-vendor evaluation.
+2. **Single-model & self-judging bias:** Live runs used `deepseek/deepseek-chat` for generation and judging on a single seed; the runner provides a dedicated cross-family judge provider (`--judge-model`, `--judge-provider`, `--judge-api-base`), universal checkpoint re-judging (`--rejudge-ckpt --rejudge-dataset {locomo,longmemeval,non_monotonic}`), and a 36-item Track 7 Non-Monotonic Software Engineering & Spec-Reversal benchmark (`--tracks 7`) ready for off-peak full-split execution and Cohen's $\kappa$ validation.
 3. **Context-overflow regime (`LongMemEval-M`):** Live LongMemEval runs used the ~115k-token `S` split; running the 2.6 GB `M` split (~1.5M tokens/query) via `--lme-split m` remains future work.
 4. **Partial `rlm_official` LoCoMo checkpoint:** `rlm_official` completed $n=117/245$ LoCoMo QAs; its paired McNemar test is restricted strictly to the exact 117-QA intersection.
 5. **Hosted KV-cache TTL & SQLite scale:** Hosted prefix caches expire in ~5–10 minutes (non-destructive compaction preserves *verbatim prefixes* indefinitely rather than hosted VRAM), single-process SQLite suits local/workspace scale rather than multi-tenant 100k+ chunk clusters, and `GitWorktreeSandbox` provides git-level rather than OS/container isolation.
@@ -155,7 +155,7 @@ On **Track 5 (`natural-jump-around-18t`)**, with zero tool jargon in user prompt
 ## 6. Reproducibility
 
 ```bash
-# 1. Zero-key test suite (87 tests)
+# 1. Zero-key test suite (92 tests)
 uv run pytest -v
 
 # 2. Regenerate all 5 publication figures directly from results/deepseek_eval/

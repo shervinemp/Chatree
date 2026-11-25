@@ -658,6 +658,7 @@ class JumpAroundBenchmarkRunner:
         judge_model: str | None = None,
         sliding_window_messages: int = 8,
         llm: LLMProvider | None = None,
+        judge_llm: LLMProvider | None = None,
         embedder: Embedder | None = None,
         reranker: Reranker | None = None,
         cost_model: CostModel | None = None,
@@ -667,6 +668,7 @@ class JumpAroundBenchmarkRunner:
         self.judge_model = judge_model
         self.sliding_window_messages = sliding_window_messages
         self.llm = llm
+        self.judge_llm = judge_llm
         self.embedder = embedder
         self.reranker = reranker
         self.cost_model = cost_model or CostModel()
@@ -728,7 +730,7 @@ class JumpAroundBenchmarkRunner:
         self, scenario: JumpAroundScenario, system: JumpAroundSystemName
     ) -> JumpAroundSystemResult:
         llm = self._effective_llm()
-        judge = LLMJudgeScorer(llm, self.judge_model) if self.judge_model else None
+        judge = LLMJudgeScorer(self.judge_llm or llm, self.judge_model) if self.judge_model else None
 
         if system == "chatree_live":
             return await self._run_chatree_live(scenario, llm, judge)

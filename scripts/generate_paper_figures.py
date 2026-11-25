@@ -280,13 +280,15 @@ def make_fig2_locomo() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Figure 3: Accuracy vs. Peak Context Pareto Frontier (LoCoMo + LongMemEval-S)
+# Figure 3: Accuracy vs. Peak Context Pareto Frontier + Total Lifecycle Cost
 # ---------------------------------------------------------------------------
 def make_fig3_pareto() -> None:
     loco_rows = _read_csv(RESULTS_DIR / "exp3_locomo_rejudged_v3.csv")
     lme_rows = _read_csv(RESULTS_DIR / "exp4_longmemeval_v3.csv")
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11.2, 4.3))
+    fig, (ax1, ax2, ax3) = plt.subplots(
+        1, 3, figsize=(15.6, 4.6), gridspec_kw={"width_ratios": [1.05, 1.05, 1.25]}
+    )
 
     def plot_panel(ax, rows, title, offsets):
         for r in rows:
@@ -298,7 +300,7 @@ def make_fig3_pareto() -> None:
             ax.scatter(
                 pk,
                 acc,
-                s=220 if is_hero else 120,
+                s=220 if is_hero else 115,
                 marker="*" if is_hero else "o",
                 color=COLORS[s],
                 edgecolors="#0f172a",
@@ -308,13 +310,13 @@ def make_fig3_pareto() -> None:
             dx, dy, ha = offsets.get(s, (0, 8, "center"))
             short = DISPLAY_NAMES[s].replace("\n", " ")
             ax.annotate(
-                f"{short}\n{acc:.1f}% · {pk/1000:.1f}k tok ({cache:.0f}% cache)",
+                f"{short}\n{acc:.1f}% · {pk/1000:.1f}k ({cache:.0f}%)",
                 xy=(pk, acc),
                 xytext=(dx, dy),
                 textcoords="offset points",
                 ha=ha,
                 va="center",
-                fontsize=7.3,
+                fontsize=7.0,
                 fontweight="bold" if is_hero else "normal",
                 color="#1d4ed8" if is_hero else "#1e293b",
                 arrowprops=dict(arrowstyle="-", color="#94a3b8", lw=0.7) if abs(dx) > 12 or abs(dy) > 12 else None,
@@ -322,7 +324,7 @@ def make_fig3_pareto() -> None:
         ax.set_xscale("log")
         ax.set_xlabel("Peak Context Window (tokens, log scale)")
         ax.set_ylabel("Accuracy (%)")
-        ax.set_title(title)
+        ax.set_title(title, fontsize=9.8)
         ax.grid(True, which="both", linestyle="--", alpha=0.35, zorder=0)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
@@ -330,34 +332,34 @@ def make_fig3_pareto() -> None:
     plot_panel(
         ax1,
         loco_rows,
-        "(a) Official LoCoMo (n = 245): Pareto Frontier",
+        "(a) LoCoMo (n = 245): Peak-Context Pareto",
         {
-            "chatree_two_tier_v3": (-16, 20, "right"),
-            "full_context_linear": (-6, 21, "right"),
+            "chatree_two_tier_v3": (-14, 21, "right"),
+            "full_context_linear": (-6, 20, "right"),
             "mem0_official": (12, 8, "left"),
             "rlm_official": (-10, -20, "right"),
-            "chatree_two_tier": (-12, -16, "right"),
+            "chatree_two_tier": (-10, -17, "right"),
             "flat_hybrid_rag": (12, 4, "left"),
             "tree_summary_only": (12, -6, "left"),
         },
     )
-    ax1.set_xlim(450, 72000)
-    ax1.set_ylim(34, 92)
+    ax1.set_xlim(420, 86000)
+    ax1.set_ylim(34, 93)
 
     plot_panel(
         ax2,
         lme_rows,
-        "(b) Official LongMemEval-S (n = 30): Pareto Frontier",
+        "(b) LongMemEval-S (n = 30): Peak-Context Pareto",
         {
-            "chatree_two_tier_v3": (-14, 14, "right"),
-            "full_context_linear": (-10, -20, "right"),
+            "chatree_two_tier_v3": (-12, 16, "right"),
+            "full_context_linear": (-10, -21, "right"),
             "rlm_official": (-10, 18, "right"),
             "chatree_two_tier": (12, -14, "left"),
             "flat_hybrid_rag": (12, 4, "left"),
         },
     )
-    ax2.set_xlim(400, 195000)
-    ax2.set_ylim(32, 95)
+    ax2.set_xlim(380, 210000)
+    ax2.set_ylim(32, 96)
     ax2.annotate(
         "",
         xy=(6800, 80.5),
@@ -365,16 +367,86 @@ def make_fig3_pareto() -> None:
         arrowprops=dict(arrowstyle="<->", color="#2563eb", lw=1.25),
     )
     ax2.text(
-        26000, 83.2,
-        "17.3× smaller peak context (+10 pts)",
-        fontsize=7.6,
+        26000, 84.0,
+        "17.3× smaller peak (+10 pts)",
+        fontsize=7.3,
         fontweight="bold",
         color="#1d4ed8",
         ha="center",
         bbox=dict(boxstyle="round,pad=0.22", facecolor="#eff6ff", edgecolor="#93c5fd", lw=0.7),
     )
 
-    fig.tight_layout(w_pad=2.4)
+    # Panel (c): Total Lifecycle Cost (Query + Write-Time Ingest USD) & P95 Latency on LoCoMo
+    cost_order = [
+        "chatree_two_tier_v3",
+        "full_context_linear",
+        "mem0_official",
+        "rlm_official",
+        "chatree_two_tier",
+        "flat_hybrid_rag",
+        "tree_summary_only",
+    ]
+    by_sys = {r["system"]: r for r in loco_rows}
+    ordered = [by_sys[s] for s in cost_order if s in by_sys]
+    y = np.arange(len(ordered))
+    q_costs = [float(r["estimated_cost_usd"]) for r in ordered]
+    i_costs = [float(r["ingest_cost_usd"]) for r in ordered]
+    p95_s = [float(r["latency_p95_ms"]) / 1000.0 for r in ordered]
+    short_labels = [
+        "Chatree v3" if r["system"] == "chatree_two_tier_v3"
+        else "Chatree v2" if r["system"] == "chatree_two_tier"
+        else "Full Linear" if r["system"] == "full_context_linear"
+        else "Mem0 (Official)" if r["system"] == "mem0_official"
+        else "MIT RLM‡" if r["system"] == "rlm_official"
+        else "Flat RAG" if r["system"] == "flat_hybrid_rag"
+        else "Summary Folding"
+        for r in ordered
+    ]
+
+    ax3.barh(
+        y, q_costs, height=0.58, label="Query Cost (USD)",
+        color="#3b82f6", edgecolor="#1e293b", linewidth=0.55, zorder=3,
+    )
+    ax3.barh(
+        y, i_costs, left=q_costs, height=0.58, label="Write-Time Ingest Cost (USD)",
+        color="#f59e0b", hatch="///", edgecolor="#1e293b", linewidth=0.55, zorder=3,
+    )
+    for idx, (qc, ic, p95, r) in enumerate(zip(q_costs, i_costs, p95_s, ordered)):
+        tot = qc + ic
+        if ic > 0.001:
+            lbl = f"${tot:.2f} (${qc:.2f}+${ic:.2f}) · p95 {p95:.1f}s"
+        else:
+            lbl = f"${tot:.2f} · p95 {p95:.1f}s"
+        ax3.text(
+            tot + 0.03,
+            idx,
+            lbl,
+            va="center",
+            ha="left",
+            fontsize=7.0,
+            parse_math=False,
+            fontweight="bold" if r["system"] in ("chatree_two_tier_v3", "mem0_official") else "normal",
+            color="#1d4ed8" if r["system"] == "chatree_two_tier_v3" else "#047857" if r["system"] == "mem0_official" else "#1e293b",
+        )
+
+    ax3.set_yticks(y)
+    ax3.set_yticklabels(short_labels, fontsize=7.8)
+    ax3.invert_yaxis()
+    ax3.set_xlim(0, 2.60)
+    ax3.set_ylim(len(ordered) - 0.15, -0.65)
+    ax3.set_xlabel("Total Lifecycle Cost on LoCoMo (USD: Query + Ingest)")
+    ax3.set_title("(c) LoCoMo Total Lifecycle Cost & P95 Latency", fontsize=9.8)
+    ax3.grid(axis="x", linestyle="--", alpha=0.35, zorder=0)
+    ax3.spines["top"].set_visible(False)
+    ax3.spines["right"].set_visible(False)
+    ax3.legend(loc="lower right", fontsize=7.2)
+    ax3.text(
+        0.5, -0.22,
+        "Note: Mem0 write-time ingest ($0.153) = 3.0× its query cost ($0.051)  |  ‡RLM n = 117",
+        transform=ax3.transAxes, ha="center", va="top", fontsize=6.9, color="#475569", parse_math=False,
+    )
+
+    fig.tight_layout(w_pad=2.0)
     _save(fig, "fig3_pareto_efficiency")
 
 

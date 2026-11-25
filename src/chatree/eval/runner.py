@@ -226,6 +226,7 @@ class BenchmarkRunner:
         sliding_window_messages: int = 6,
         oracle_routing: bool = False,
         llm: LLMProvider | None = None,
+        judge_llm: LLMProvider | None = None,
         embedder: Embedder | None = None,
         reranker: Reranker | None = None,
         cost_model: CostModel | None = None,
@@ -238,6 +239,7 @@ class BenchmarkRunner:
         self.sliding_window_messages = sliding_window_messages
         self.oracle_routing = oracle_routing
         self.llm = llm
+        self.judge_llm = judge_llm
         self.embedder = embedder
         self.reranker = reranker
         self.cost_model = cost_model or CostModel()
@@ -313,8 +315,12 @@ class BenchmarkRunner:
             root = await tree.root()
             judge: LLMJudgeScorer | None = None
             if self.judge_model:
-                judge_llm = self.llm or ct.llm
-                if not isinstance(judge_llm, LiteLLMProvider) and self.judge_model.startswith("mock/"):
+                judge_llm = self.judge_llm or self.llm or ct.llm
+                if (
+                    self.judge_llm is None
+                    and not isinstance(judge_llm, LiteLLMProvider)
+                    and self.judge_model.startswith("mock/")
+                ):
                     judge_llm = ct.llm
                 judge = LLMJudgeScorer(judge_llm, self.judge_model)
 

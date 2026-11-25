@@ -5,7 +5,7 @@
 [![CI](https://github.com/shervinemp/Chatree/actions/workflows/ci.yml/badge.svg)](https://github.com/shervinemp/Chatree/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 87 Passing](https://img.shields.io/badge/tests-87%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
+[![Tests: 92 Passing](https://img.shields.io/badge/tests-92%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
 [![Paper: LaTeX + Markdown](https://img.shields.io/badge/paper-LaTeX%20%2B%20MD-blue.svg)](paper/chatree_paper.md)
 [![Local-First SQLite](https://img.shields.io/badge/storage-SQLite%20WAL%20%2B%20FTS5-lightgrey.svg)](#architecture)
 [![MCP Compatible](https://img.shields.io/badge/protocol-MCP%20JSON--RPC%202.0-purple.svg)](#cli-mcp-server--optional-demo-ui)
@@ -108,18 +108,19 @@ All live benchmarks below were executed with `deepseek/deepseek-chat` and zero-A
 
 Stratified macro-balanced selection (`5 QAs/category/conv` across all 10 conversations; 272 sessions total; exact paired evaluation under the fixed distractor-separated adversarial rubric, [`exp3_locomo_rejudged_v3.md`](results/deepseek_eval/exp3_locomo_rejudged_v3.md)):
 
-| System | `n` | Accuracy (95% Bootstrap CI) | Single-Hop | Multi-Hop | Temporal | Open-Domain | Adversarial | Peak Tok | KV Cache | McNemar `p` vs. v3 |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **`chatree_two_tier_v3` (+Tier-2.5 Facts)** | **245** | **77.1%** `[71.8, 82.5]` | 86.0% | 80.0% | **74.0%** | **57.8%** | 86.0% | **6,390** | **60.0%** | ref |
-| `full_context_linear` | 245 | 76.3% `[71.4, 82.0]` | **88.0%** | **82.0%** | 68.0% | 55.6% | 86.0% | 35,097 | 95.4% | 0.8744 |
-| `mem0_official` (`mem0ai==2.2.1`) | 245 | 73.5% `[68.2, 79.2]` | 78.0% | 66.0% | **74.0%** | 53.3% | 94.0% | 874 | 0.1% | 0.2225 |
-| `rlm_official` (`rlms==0.1.3`)‡ | 117 | 70.9% `[62.4, 78.6]` | 76.0% | 64.0% | **80.0%** | 55.0% | 77.3% | 28,166 | 0.0% | 0.4725 |
-| `chatree_two_tier` (v2, pre-Tier-2.5) | 245 | 64.5% `[58.8, 70.6]` | 78.0% | 50.0% | 52.0% | 44.4% | **96.0%** | **4,250** | **75.5%** | **0.0001\*** |
-| `flat_hybrid_rag` | 245 | 48.2% `[42.0, 54.3]` | 46.0% | 26.0% | 40.0% | 33.3% | 94.0% | 725 | 2.3% | **<0.0001\*** |
-| `tree_summary_only` (Context-Folding) | 245 | 41.2% `[35.5, 47.3]` | 40.0% | 32.0% | 16.0% | 31.1% | 86.0% | 1,480 | 11.9% | **<0.0001\*** |
+| System | `n` | Accuracy (95% Bootstrap CI) | Single-Hop | Multi-Hop | Temporal | Open-Domain | Adversarial | Peak Tok | Total USD (Q + Ingest) | p50 / p95 ms | KV Cache | McNemar `p` vs. v3 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **`chatree_two_tier_v3` (+Tier-2.5 Facts)** | **245** | **77.1%** `[71.8, 82.5]` | 86.0% | 80.0% | **74.0%** | **57.8%** | 86.0% | **6,390** | \$1.045 (\$0.842 + \$0.203) | 4.94s / 7.76s | **60.0%** | ref |
+| `full_context_linear` | 245 | 76.3% `[71.4, 82.0]` | **88.0%** | **82.0%** | 68.0% | 55.6% | 86.0% | 35,097 | \$0.300 (\$0.300 + \$0.000) | 1.63s / 3.12s | 95.4% | 0.8744 |
+| `mem0_official` (`mem0ai==2.2.1`) | 245 | 73.5% `[68.2, 79.2]` | 78.0% | 66.0% | **74.0%** | 53.3% | 94.0% | 874 | \$0.204 (\$0.051 + \$0.153) | **1.28s / 2.42s** | 0.1% | 0.2225 |
+| `rlm_official` (`rlms==0.1.3`)‡ | 117 | 70.9% `[62.4, 78.6]` | 76.0% | 64.0% | **80.0%** | 55.0% | 77.3% | 28,166 | \$1.381 (\$1.381 + \$0.000) | 12.13s / 28.32s | 0.0% | 0.4725 |
+| `chatree_two_tier` (v2, pre-Tier-2.5) | 245 | 64.5% `[58.8, 70.6]` | 78.0% | 50.0% | 52.0% | 44.4% | **96.0%** | **4,250** | \$0.666 (\$0.570 + \$0.095) | 5.73s / 8.39s | **75.5%** | **0.0001\*** |
+| `flat_hybrid_rag` | 245 | 48.2% `[42.0, 54.3]` | 46.0% | 26.0% | 40.0% | 33.3% | 94.0% | 725 | **\$0.046** (\$0.046 + \$0.000) | 1.70s / 3.12s | 2.3% | **<0.0001\*** |
+| `tree_summary_only` (Context-Folding) | 245 | 41.2% `[35.5, 47.3]` | 40.0% | 32.0% | 16.0% | 31.1% | 86.0% | 1,480 | \$0.062 (\$0.062 + \$0.000) | 1.41s / 2.13s | 11.9% | **<0.0001\*** |
 
 > **Methodological Notes:**
 > - **#1 Overall at 5.5× Smaller Peak Context (`n=245`):** `chatree_two_tier_v3` (**77.1%**) surpasses `full_context_linear` (`76.3%`, 35,097 vs. 6,390 peak tokens), `mem0_official` (`73.5%`, including **+14.0 pts on `multi_hop`** and **+8.0 pts on `single_hop`**, with **60.0% vs. 0.1%** KV cache hit), `rlm_official` (`70.9%`, 4.4× smaller peak context), `flat_hybrid_rag` (`48.2%`, **+28.9 pts**, $p < 10^{-4}$), and `tree_summary_only` (`41.2%`, **+35.9 pts**, $p < 10^{-4}$).
+> - **Total Lifecycle Cost & Latency Transparency:** Query-only reporting hides write-time extraction bills: `mem0_official`'s write-time ingest (`\$0.153`, `965.1s` wall-clock across 272 sessions) is **3.0× its query cost (`\$0.051`)**, while `chatree_two_tier_v3` spends `\$0.203` on piggybacked Tier-2/2.5 ingest + `\$0.842` across 245 read-only shadow queries (`\$1.045` total, **3.6× faster p95 latency** than `rlm_official` at `7.76s` vs. `28.32s`).
 > - **Tier-2.5 Piggybacked Atomic Facts Ablation (`v3` vs. `v2`, `n=245` paired):** Adding zero-extra-call piggybacked dated atomic facts delivered a highly significant **+12.6 pt overall lift** (`64.5% -> 77.1%`, McNemar $p = 0.0001^*$), driving **+30.0 pts on `multi_hop`** (`50.0% -> 80.0%`), **+22.0 pts on `temporal`** (`52.0% -> 74.0%`), **+13.4 pts on `open_domain`** (`44.4% -> 57.8%`), and **+8.0 pts on `single_hop`** (`78.0% -> 86.0%`).
 > - **Fixed Adversarial Rubric:** All 7 systems above were re-scored under the fixed rubric in [`external_benchmarks.py`](src/chatree/eval/external_benchmarks.py) (separating `distractor_answer` from `ground_truth` and crediting truthful false-premise corrections). ‡`rlm_official` (`n=117`) reflects its partial checkpoint; its McNemar $p$-value (`0.4725`) is computed strictly over the exact 117-QA paired intersection with `chatree_two_tier_v3`.
 
@@ -165,7 +166,7 @@ Stratified across all 6 official categories (5 items/category, 1,429 sessions in
 In accordance with academic artifact-evaluation standards, we explicitly document known limitations and active research gaps:
 
 1. **Interactive orchestrator vs. structured `TreeQueryEngine`:** External benchmarks (`ChatreeSystemAdapter`) and `tree.ask(..., deep=True)` now share the unified [`TreeQueryEngine`](src/chatree/engine/query.py) pipeline, whereas interactive turns in `TurnOrchestrator` choose tools autonomously. Tier-2.5 ephemeral `FACTS` hints are wired into `TurnOrchestrator`, but end-to-end unscripted live-agent LoCoMo/LongMemEval evaluation remains future work.
-2. **Single-model & self-judging bias:** Live evaluations thus far used `deepseek/deepseek-chat` for both generation and LLM judging on a single seed. The runner supports `--judge-model <cross-family-model>` (e.g., Claude / GPT-4o) and `--rejudge-locomo-ckpt` for cross-family judge audits and Cohen's $\kappa$ validation.
+2. **Single-model & self-judging bias:** Live evaluations thus far used `deepseek/deepseek-chat` for both generation and LLM judging on a single seed. The runner provides a dedicated cross-family judge provider (`--judge-model`, `--judge-provider`, `--judge-api-base`), universal checkpoint re-judging (`--rejudge-ckpt --rejudge-dataset {locomo,longmemeval,non_monotonic}`), and **Track 7** ([`non_monotonic_bench.py`](src/chatree/eval/non_monotonic_bench.py): 6 realistic software-engineering projects, 36 QAs covering `spec_reversal`, `dead_end_quarantine`, `downstream_staleness`, `verbatim_under_noise`, and `cross_branch_synthesis`) ready for off-peak full-split and cross-family evaluation.
 3. **Context-overflow regime (`LongMemEval-M`, >1M tokens):** Live LongMemEval runs above used `LongMemEval-S` (~115k tokens, inside DeepSeek's 128k window). `LongMemEval-M` support (`--lme-split m`, 2.6 GB dataset, ~500 sessions / ~1.5M tokens per query) is implemented for >1M-token overflow testing.
 4. **Hosted-API KV-cache TTL:** On hosted providers (Anthropic, DeepSeek, OpenAI), server-side KV caches expire after ~5–10 minutes; non-destructive compaction preserves *verbatim message prefixes* indefinitely (enabling warm cache hits within TTL and instant reload on self-hosted RadixAttention / LMCache engines), not permanent hosted VRAM residency.
 5. **Single-process SQLite storage & $O(N)$ vector scan:** `SQLiteRepository` uses WAL + in-process `asyncio.Lock` and serves per-tree vector queries via `sqlite-vec` or a strongly consistent pre-normalized NumPy matrix cache (`unit_mat @ q`, <1 ms at 5k chunks). Multi-tenant / 100k+ chunk deployments will require an ANN index (HNSW) or a Postgres/`pgvector` `StorageBackend` implementation.
@@ -245,7 +246,7 @@ Runnable examples: [`examples/01_quickstart_sdk.py`](examples/01_quickstart_sdk.
 ## Artifact Evaluation & Reproducibility
 
 ### Step 1: Zero-Key Functional Verification (~45s)
-Runs all **87 unit and integration tests** covering IPC guardrails, copy-on-write forks, shadow memoization, materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, `chat` vs. promotable `subagent` node kinds, strict `HEAD`-only `reflog` + MRU envelope + supervisor worker cancellation cascade, multi-session `TreeSession` visitors with independent `HEAD`/reflog/cues, GPU runtime fallback, provider-agnostic HTTP/SSE & callable adapters, unified `TreeQueryEngine`, cached NumPy vector index, pluggable `TokenCounter`, Tier-2.5 atomic facts, `PINNED` staleness, portable v3 `.dialogue/` round-trips, CLI/MCP/REST API parity, non-destructive compaction savings guards, negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
+Runs all **92 unit and integration tests** covering IPC guardrails, copy-on-write forks, shadow memoization, materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, `chat` vs. promotable `subagent` node kinds, strict `HEAD`-only `reflog` + MRU envelope + supervisor worker cancellation cascade, multi-session `TreeSession` visitors with independent `HEAD`/reflog/cues, Track 7 non-monotonic engineering benchmark & Total Lifecycle Cost reporting, cross-family `judge_llm` wiring, GPU runtime fallback, provider-agnostic HTTP/SSE & callable adapters, unified `TreeQueryEngine`, cached NumPy vector index, pluggable `TokenCounter`, Tier-2.5 atomic facts, `PINNED` staleness, portable v3 `.dialogue/` round-trips, CLI/MCP/REST API parity, non-destructive compaction savings guards, negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
 
 ```bash
 uv run pytest -v
@@ -263,22 +264,31 @@ uv run chatree eval --jump-around --csv-out ./out/jump.csv --jsonl-out ./out/jum
 Copy [`.env.example`](.env.example) to `.env` and set the API key for whichever provider you choose (or point `--api-base` at local Ollama/vLLM/SGLang with zero API key). Datasets auto-download into `data/benchmarks/` (gitignored):
 
 ```bash
-# Run Tracks 3, 4, 5, 6 against ANY provider (--model openai/gpt-4o, anthropic/claude-sonnet-4-5,
-# gemini/gemini-2.5-pro, deepseek/deepseek-chat, ollama/llama3.2, vllm/Qwen/Qwen2.5-72B, etc.)
+# Preview exact Query + Ingest + Judge USD cost before any API call (--dry-run)
+uv run python scripts/run_publishable_eval.py \
+  --model deepseek/deepseek-chat \
+  --judge-model openai/gpt-4o \
+  --tracks 3,4,7 --paper-baselines \
+  --locomo-convs 10 --locomo-per-cat 500 \
+  --lme-split s --lme-per-cat 100 \
+  --dry-run
+
+# Run Tracks 3, 4, 6, 7 (incl. Track 7 Non-Monotonic Engineering & Mem0 on LongMemEval-S)
 uv run python scripts/run_publishable_eval.py \
   --model anthropic/claude-sonnet-4-5 \
   --judge-model openai/gpt-4o \
-  --tracks 3,4,6 --paper-baselines \
+  --tracks 3,4,6,7 --paper-baselines \
   --locomo-convs 10 --locomo-per-cat 5 \
-  --lme-split m --lme-per-cat 10 \
+  --lme-split s --lme-per-cat 10 \
   --concurrency 4
 
-# Re-judge saved LoCoMo checkpoints with the fixed adversarial rubric or a cross-family judge
+# Universally re-judge any saved Track 3 / 4 / 7 checkpoint with a cross-family judge (zero re-ingest)
 uv run python scripts/run_publishable_eval.py \
   --model deepseek/deepseek-chat \
   --judge-model openai/gpt-4o \
   --locomo-convs 10 --locomo-per-cat 5 \
-  --rejudge-locomo-ckpt results/deepseek_eval/exp3_locomo.ckpt.jsonl \
+  --rejudge-ckpt results/deepseek_eval/exp3_locomo_rejudged_v3.ckpt.jsonl \
+  --rejudge-dataset locomo \
   --out-dir results/deepseek_eval
 ```
 
@@ -338,7 +348,7 @@ Chatree/
 │   ├── sdk/client.py              # High-level Chatree / DialogueTree / NodeHandle async SDK
 │   ├── eval/
 │   │   ├── adapters/              # Modular adapters (base, chatree, baselines, sota Mem0/RLM/Letta/Graphiti)
-│   │   └── *.py                   # Tracks 1-6 runners, LoCoMo/LongMemEval loaders, bootstrap/McNemar stats
+│   │   └── *.py                   # Tracks 1-7 runners (incl. Track 7 non-monotonic bench), LoCoMo/LongMemEval loaders, stats
 │   ├── cli.py / mcp_server.py     # Full-parity CLI entrypoint & zero-dependency MCP stdio server
 │   └── server/                    # Modular FastAPI REST + SSE adapter (app, dtos, routes_trees, routes_nodes)
 ├── demo/ui/                       # Optional React + TypeScript IDE-style tree explorer
@@ -346,7 +356,7 @@ Chatree/
 ├── paper/                         # Camera-ready LaTeX paper (chatree_paper.tex), Markdown report, BibTeX & PDF/PNG/SVG figures
 ├── scripts/                       # Provider-agnostic evaluation runner & reproducible figure generator
 ├── results/deepseek_eval/         # Reproducible benchmark tables, LaTeX exports, checkpoints & manifests
-└── tests/                         # 87 automated unit & integration tests (zero API keys required)
+└── tests/                         # 92 automated unit & integration tests (zero API keys required)
 ```
 
 ---

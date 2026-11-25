@@ -81,6 +81,15 @@ class ChatreeSystemAdapter:
     def get_ingest_usage(self) -> tuple[int, int]:
         return self._ingest_tokens_in, self._ingest_tokens_out
 
+    async def archive_session(self, session_id: str, *, reason: str = "") -> None:
+        """Quarantine a scrapped/dead-end session using Chatree's native `archive_branch` primitive."""
+        assert self._tree is not None
+        nid = self._session_nodes.get(session_id)
+        if not nid or nid == self._root_id:
+            return
+        await self._tree.archive(nid, reason=reason, switch_to_parent=False)
+        self._node_summaries.pop(nid, None)
+
     @property
     def name(self) -> str:
         return self._name

@@ -52,6 +52,7 @@ from chatree.eval.jump_around import (
     default_jump_around_scenario,
     natural_jump_around_scenario,
 )
+from chatree.eval.non_monotonic_bench import build_non_monotonic_engineering_benchmark
 from chatree.eval.runner import (
     ALL_BASELINE_MODES,
     BaselineMode,
@@ -156,6 +157,7 @@ __all__ = [
     "bleu1",
     "bootstrap_ci",
     "build_full_eval_suite",
+    "build_non_monotonic_engineering_benchmark",
     "crossover_scaling_scenario",
     "default_compaction_scenario",
     "default_jump_around_scenario",

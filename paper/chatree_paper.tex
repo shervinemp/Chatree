@@ -225,21 +225,21 @@ Table~\ref{tab:locomo} and Figure~\ref{fig:locomo} summarize the 7-system compar
 
 \begin{table*}[t]
 \centering
-\caption{Official LoCoMo (ACL 2024) head-to-head evaluation ($n=245$ stratified balanced QAs across 10 conversations / 272 sessions; fixed adversarial rubric; \texttt{deepseek-chat} + local ONNX retrieval). Bold denotes best per column; $^*$ denotes $p < 0.05$ by exact paired McNemar test vs.\ \texttt{chatree\_two\_tier\_v3}. $\ddagger$Partial checkpoint ($n=117$); McNemar computed over exact paired intersection.}
+\caption{Official LoCoMo (ACL 2024) head-to-head evaluation ($n=245$ stratified balanced QAs across 10 conversations / 272 sessions; fixed adversarial rubric; \texttt{deepseek-chat} + local ONNX retrieval). Total lifecycle cost reports both query USD and write-time ingest USD (\texttt{Q+I}); bold denotes best per column; $^*$ denotes $p < 0.05$ by exact paired McNemar test vs.\ \texttt{chatree\_two\_tier\_v3}. $\ddagger$Partial checkpoint ($n=117$); McNemar computed over exact paired intersection.}
 \label{tab:locomo}
 \small
-\setlength{\tabcolsep}{4.0pt}
-\begin{tabular}{@{}lrcccccccrr@{}}
+\setlength{\tabcolsep}{3.0pt}
+\begin{tabular}{@{}lrcccccccrrrc@{}}
 \toprule
-\textbf{System} & \textbf{$n$} & \textbf{Overall (95\% CI)} & \textbf{Single} & \textbf{Multi} & \textbf{Temp.} & \textbf{Open} & \textbf{Adv.} & \textbf{Peak Tok} & \textbf{Cache} & \textbf{$p$ vs.\ v3} \\
+\textbf{System} & \textbf{$n$} & \textbf{Overall (95\% CI)} & \textbf{Sgl} & \textbf{Mlt} & \textbf{Tmp} & \textbf{Opn} & \textbf{Adv} & \textbf{Peak} & \textbf{Total USD (Q+I)} & \textbf{p95} & \textbf{Cache} & \textbf{$p$} \\
 \midrule
-\textbf{\texttt{chatree\_two\_tier\_v3} (+Tier-2.5)} & 245 & \textbf{77.1\%} {\scriptsize[71.8, 82.5]} & 86.0\% & 80.0\% & 74.0\% & \textbf{57.8\%} & 86.0\% & 6,390 & 60.0\% & ref \\
-\texttt{full\_context\_linear} & 245 & 76.3\% {\scriptsize[71.4, 82.0]} & \textbf{88.0\%} & \textbf{82.0\%} & 68.0\% & 55.6\% & 86.0\% & 35,097 & \textbf{95.4\%} & 0.8744 \\
-\texttt{mem0\_official} (\texttt{2.2.1}) & 245 & 73.5\% {\scriptsize[68.2, 79.2]} & 78.0\% & 66.0\% & 74.0\% & 53.3\% & 94.0\% & 874 & 0.1\% & 0.2225 \\
-\texttt{rlm\_official} (\texttt{0.1.3})$^\ddagger$ & 117 & 70.9\% {\scriptsize[62.4, 78.6]} & 76.0\% & 64.0\% & \textbf{80.0\%} & 55.0\% & 77.3\% & 28,166 & 0.0\% & 0.4725 \\
-\texttt{chatree\_two\_tier} (v2, pre-Facts) & 245 & 64.5\% {\scriptsize[58.8, 70.6]} & 78.0\% & 50.0\% & 52.0\% & 44.4\% & \textbf{96.0\%} & 4,250 & 75.5\% & \textbf{0.0001$^*$} \\
-\texttt{flat\_hybrid\_rag} & 245 & 48.2\% {\scriptsize[42.0, 54.3]} & 46.0\% & 26.0\% & 40.0\% & 33.3\% & 94.0\% & \textbf{725} & 2.3\% & \textbf{$<$0.0001$^*$} \\
-\texttt{tree\_summary\_only} (Folding) & 245 & 41.2\% {\scriptsize[35.5, 47.3]} & 40.0\% & 32.0\% & 16.0\% & 31.1\% & 86.0\% & 1,480 & 11.9\% & \textbf{$<$0.0001$^*$} \\
+\textbf{\texttt{chatree\_two\_tier\_v3}} & 245 & \textbf{77.1\%} {\scriptsize[71.8, 82.5]} & 86\% & 80\% & 74\% & \textbf{58\%} & 86\% & 6,390 & \$1.04 {\scriptsize(.84+.20)} & 7.8s & 60.0\% & ref \\
+\texttt{full\_context\_linear} & 245 & 76.3\% {\scriptsize[71.4, 82.0]} & \textbf{88\%} & \textbf{82\%} & 68\% & 56\% & 86\% & 35,097 & \$0.30 {\scriptsize(.30+.00)} & 3.1s & \textbf{95.4\%} & .874 \\
+\texttt{mem0\_official} (\texttt{2.2.1}) & 245 & 73.5\% {\scriptsize[68.2, 79.2]} & 78\% & 66\% & 74\% & 53\% & 94\% & 874 & \$0.20 {\scriptsize(.05+.15)} & \textbf{2.4s} & 0.1\% & .223 \\
+\texttt{rlm\_official} (\texttt{0.1.3})$^\ddagger$ & 117 & 70.9\% {\scriptsize[62.4, 78.6]} & 76\% & 64\% & \textbf{80\%} & 55\% & 77\% & 28,166 & \$1.38 {\scriptsize(1.38+.00)} & 28.3s & 0.0\% & .473 \\
+\texttt{chatree\_two\_tier} (v2) & 245 & 64.5\% {\scriptsize[58.8, 70.6]} & 78\% & 50\% & 52\% & 44\% & \textbf{96\%} & 4,250 & \$0.67 {\scriptsize(.57+.10)} & 8.4s & 75.5\% & \textbf{.0001$^*$} \\
+\texttt{flat\_hybrid\_rag} & 245 & 48.2\% {\scriptsize[42.0, 54.3]} & 46\% & 26\% & 40\% & 33\% & 94\% & \textbf{725} & \textbf{\$0.05} {\scriptsize(.05+.00)} & 3.1s & 2.3\% & \textbf{$<$.0001$^*$} \\
+\texttt{tree\_summary\_only} & 245 & 41.2\% {\scriptsize[35.5, 47.3]} & 40\% & 32\% & 16\% & 31\% & 86\% & 1,480 & \$0.06 {\scriptsize(.06+.00)} & \textbf{2.1s} & 11.9\% & \textbf{$<$.0001$^*$} \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -283,7 +283,7 @@ Table~\ref{tab:lme} and Figure~\ref{fig:pareto} report results on Official LongM
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figures/fig3_pareto_efficiency.pdf}
-  \caption{Accuracy vs.\ Peak Context Window (log scale) Pareto frontier across (a) Official LoCoMo ($n=245$) and (b) Official LongMemEval-S ($n=30$). \chatree{} v3 occupies the upper-left Pareto-optimal corner on both benchmarks, outperforming full-context linear at 5.5$\times$--17.3$\times$ smaller peak context while sustaining 31--60\% KV-cache hit rates.}
+  \caption{Accuracy--Efficiency Pareto frontier and Total Lifecycle Cost across (a) Official LoCoMo ($n=245$), (b) Official LongMemEval-S ($n=30$), and (c) LoCoMo Total Lifecycle Cost (Query USD + Write-Time Ingest USD) with p95 latency. \chatree{} v3 occupies the upper-left Pareto-optimal corner on both benchmarks at 5.5$\times$--17.3$\times$ smaller peak context while making write-time extraction overhead explicit (\texttt{mem0\_official}'s \$0.153 write-time ingest is 3.0$\times$ its \$0.051 query cost; \chatree{} v3 runs 3.6$\times$ faster at p95 than \texttt{rlm\_official}).}
   \label{fig:pareto}
 \end{figure*}
 
@@ -367,7 +367,7 @@ Under completely system-agnostic natural prompts containing zero tool jargon, \t
 To meet rigorous artifact-evaluation standards, we highlight six explicit limitations:
 \begin{enumerate}
   \item \textbf{Interactive Orchestrator vs.\ \texttt{TreeQueryEngine}:} While \texttt{tree.ask(..., deep=True)} and external benchmarks now share the identical \texttt{TreeQueryEngine} implementation, interactive turns rely on autonomous tool selection inside \texttt{TurnOrchestrator}. Evaluating unscripted multi-turn tool policies directly on full LoCoMo/LongMemEval trajectories remains future work.
-  \item \textbf{Single-Model and Self-Judging Bias:} All live experiments used \texttt{deepseek-chat} for both generation and judging on a single seed. Although \chatree{}'s runner supports cross-family judging (\texttt{--judge-model}) and checkpoint re-judging (\texttt{--rejudge-locomo-ckpt}), multi-family inter-judge agreement (Cohen's $\kappa$) across Claude/GPT-4o/Gemini remains to be measured.
+  \item \textbf{Single-Model and Self-Judging Bias:} All live experiments used \texttt{deepseek-chat} for both generation and judging on a single seed. \chatree{}'s evaluation harness provides a dedicated cross-family judge provider (\texttt{--judge-model}, \texttt{--judge-provider}, \texttt{--judge-api-base}), universal checkpoint re-judging (\texttt{--rejudge-ckpt --rejudge-dataset \{locomo,longmemeval,non\_monotonic\}}), and a 36-item Track~7 Non-Monotonic Software Engineering \& Spec-Reversal benchmark (\texttt{--tracks 7}) for measuring dead-end quarantine, spec reversal, and downstream staleness directly against Mem0, RLM, and linear baselines; multi-family inter-judge agreement (Cohen's $\kappa$) across Claude/GPT-4o/Gemini and full-split ($n=1{,}986$ LoCoMo, $n=500$ LongMemEval-S) runs are scheduled for off-peak execution.
   \item \textbf{Context-Overflow Regime (LongMemEval-M):} Our LongMemEval-S histories ($\sim$115k tokens) still fit inside DeepSeek's 128k context window; evaluating the 2.6\,GB LongMemEval-M split ($\sim$1.5M tokens/query) is supported by \chatree{}'s CLI (\texttt{--lme-split m}) and is expected to widen the gap against linear context truncation.
   \item \textbf{Partial \texttt{rlm\_official} LoCoMo Checkpoint:} \texttt{rlm\_official} completed $n=117/245$ LoCoMo QAs before an earlier API balance halt; its paired McNemar comparison ($p=0.4725$) is restricted strictly to the exact 117-QA intersection.
   \item \textbf{Hosted KV-Cache TTL:} Hosted API prefix caches typically expire within 5--10 minutes. Non-destructive compaction preserves \emph{verbatim message prefixes} indefinitely—enabling high cache hit rates within active sessions and rapid prefix reload on self-hosted RadixAttention engines—rather than permanent hosted VRAM residency.
@@ -382,7 +382,7 @@ To meet rigorous artifact-evaluation standards, we highlight six explicit limita
 \chatree{} demonstrates that replacing flat linear LLM chat transcripts with hierarchical actor-model dialogue trees resolves the classic trade-off between bounded working context and lossless verbatim provenance. By uniting KV-cache-safe ephemeral orientation tails, read-only shadow inspection, zero-extra-call Tier-2.5 dated atomic facts, materiality-gated transitive staleness, dead-end archiving, and non-destructive continuation compaction inside one provider-agnostic local-first framework, \chatree{} achieves state-of-the-art accuracy on both Official LoCoMo (77.1\%) and LongMemEval-S (80.0\%) at 5.5$\times$--17.3$\times$ smaller peak context while preserving 100\% verbatim Turn-1 recall across 9 compaction generations.
 
 \paragraph{Artifact Availability.}
-The complete codebase, 87 zero-key automated tests, portable \texttt{.dialogue/} v3 store, CLI, MCP server, FastAPI + React demo UI, raw JSONL checkpoints, reproducibility manifests, LaTeX tables, and figure generation scripts (\texttt{scripts/generate\_paper\_figures.py}) are available in the \chatree{} repository.
+The complete codebase, 92 zero-key automated tests, Track~7 non-monotonic engineering benchmark, portable \texttt{.dialogue/} v3 store, CLI, MCP server, FastAPI + React demo UI, raw JSONL checkpoints, reproducibility manifests, LaTeX tables, and figure generation scripts (\texttt{scripts/generate\_paper\_figures.py}) are available in the \chatree{} repository.
 
 \bibliographystyle{plainnat}
 \bibliography{references}
