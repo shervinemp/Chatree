@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrrrrr}
+\toprule
+\textbf{System} & \textbf{Accuracy (95\% CI)} & \textbf{F1} & \textbf{BLEU-1} & \textbf{Peak Tok} & \textbf{Total USD (Q+I)} & \textbf{p50 / p95 ms} & \textbf{p-val} \\
+\midrule
+chatree\_two\_tier\_v3 & 100.0\% [100.0, 100.0] & 0.100 & 0.055 & 3295 & \$0.0991 (0.077+0.022) & 4834 / 6837 & ref \\
+flat\_hybrid\_rag & 36.1\% [22.2, 52.8] & 0.181 & 0.126 & 777 & \$0.0079 (0.008+0.000) & 1399 / 2224 & 0.0000* \\
+full\_context\_linear & 100.0\% [100.0, 100.0] & 0.232 & 0.154 & 3710 & \$0.0105 (0.010+0.000) & 1403 / 2007 & 1.0000 \\
+tree\_summary\_only & 88.9\% [77.8, 97.2] & 0.278 & 0.189 & 1426 & \$0.0203 (0.010+0.010) & 1429 / 1792 & 0.1250 \\
+mem0\_official & 100.0\% [100.0, 100.0] & 0.193 & 0.114 & 1235 & \$0.0295 (0.012+0.017) & 1565 / 2892 & 1.0000 \\
+rlm\_official & 77.8\% [63.9, 91.7] & 0.195 & 0.130 & 4792 & \$0.1110 (0.111+0.000) & 5268 / 18096 & 0.0078* \\
+\bottomrule
+\end{tabular}
+\caption{Track 7: Non-Monotonic Software Engineering \& Spec-Reversal (deepseek/deepseek-chat, judge=deepseek/deepseek-chat).}
+\label{tab:non_monotonic}
+\end{table}

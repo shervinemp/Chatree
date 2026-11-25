@@ -353,6 +353,7 @@ def make_fig3_pareto() -> None:
         {
             "chatree_two_tier_v3": (-12, 16, "right"),
             "full_context_linear": (-10, -21, "right"),
+            "mem0_official": (4, -22, "left"),
             "rlm_official": (-10, 18, "right"),
             "chatree_two_tier": (12, -14, "left"),
             "flat_hybrid_rag": (12, 4, "left"),

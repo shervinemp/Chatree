@@ -2,8 +2,7 @@
   "model": "deepseek/deepseek-chat",
   "judge_model": "deepseek/deepseek-chat",
   "provider": "auto",
-  "track1_cost_usd": 0.08899,
-  "track1_seconds": 198.3,
-  "track2_cost_usd": 0.15621,
-  "track2_seconds": 265.5
+  "dry_run": false,
+  "track7_cost_usd": 0.27826,
+  "track7_seconds": 737.6
 }

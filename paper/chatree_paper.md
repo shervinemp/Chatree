@@ -106,20 +106,32 @@ All live experiments run on `deepseek/deepseek-chat` with local ONNX GPU retriev
 
 *‡Partial checkpoint ($n=117$); paired McNemar computed strictly over the exact 117-QA intersection. Total lifecycle cost exposes write-time extraction overhead (`mem0_official` spends \$0.153 on ingest vs. \$0.051 on queries — 3.0× its query cost — and 965.1s wall-clock).*
 
-### 4.2 Track 4: Official LongMemEval-S (ICLR 2025 — $n = 30$, ~115k Tokens/Item)
+### 4.2 Track 4: Official LongMemEval-S (ICLR 2025 — $n = 30$, ~115k Tokens/Item, 6 Systems)
 
 ![Pareto Frontier and Total Lifecycle Cost](figures/fig3_pareto_efficiency.png)
-*Figure 3: (a) Official LoCoMo ($n=245$) peak-context Pareto frontier, (b) Official LongMemEval-S ($n=30$) peak-context Pareto frontier, and (c) LoCoMo Total Lifecycle Cost (Query + Write-Time Ingest USD) with p95 latency. Chatree v3 occupies the upper-left Pareto-optimal corner on both benchmarks while transparently surfacing both write-time and query-time costs.*
+*Figure 3: (a) Official LoCoMo ($n=245$) peak-context Pareto frontier, (b) Official LongMemEval-S ($n=30$, all 6 systems incl. `mem0_official`) peak-context Pareto frontier, and (c) LoCoMo Total Lifecycle Cost (Query + Write-Time Ingest USD) with p95 latency. Chatree v3 occupies the upper-left Pareto-optimal corner on both benchmarks while costing 28% less total USD than `mem0_official` on LongMemEval-S (\$1.119 vs. \$1.555).*
 
-| System | Accuracy (95% CI) | S-User | S-Asst | Pref | Update | Temporal | Multi | Peak Tok | Query USD (+Ingest) | KV Cache | p50 / p95 ms | McNemar `p` |
+| System | Accuracy (95% CI) | S-User | S-Asst | Pref | Update | Temporal | Multi | Peak Tok | Total USD (Q + Ingest) | KV Cache | p50 / p95 ms | McNemar `p` |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **`chatree_two_tier_v3`** | **80.0%** `[66.7, 93.3]` | 80% | **100%** | **100%** | 80% | 60% | **60%** | 6,295 | \$0.235 (+\$0.884) | **31.4%** | 5.08s / **7.92s** | ref |
-| `full_context_linear` | 70.0% `[53.3, 86.7]` | **100%** | **100%** | 20% | **100%** | 60% | 40% | 108,772 | \$0.882 (+\$0.000) | 0.0% | **2.40s / 5.03s** | 0.5078 |
-| `rlm_official` | 70.0% `[53.3, 86.7]` | 80% | **100%** | 40% | 80% | **80%** | 40% | 21,373 | \$0.375 (+\$0.000) | 0.0% | 11.23s / 32.58s | 0.5810 |
-| `chatree_two_tier` (v2) | 63.3% `[46.7, 80.0]` | 80% | 60% | 60% | 80% | 60% | 40% | 6,927 | \$0.162 (+\$0.629) | **49.6%** | 5.98s / 8.18s | 0.1797 |
-| `flat_hybrid_rag` | 40.0% `[23.3, 56.7]` | 80% | 20% | 0% | 80% | 20% | 40% | **717** | **\$0.004** (+\$0.000) | 39.3% | 3.47s / 7.74s | **0.0018\*** |
+| **`chatree_two_tier_v3`** | **80.0%** `[66.7, 93.3]` | 80% | **100%** | **100%** | 80% | 60% | **60%** | 6,295 | \$1.119 (\$0.235 + \$0.884) | 31.4% | 5.11s / 7.69s | ref |
+| `full_context_linear` | 70.0% `[53.3, 86.7]` | **100%** | **100%** | 20% | **100%** | 60% | 40% | 108,772 | \$0.882 (\$0.882 + \$0.000) | 0.0% | 2.42s / 4.76s | 0.5078 |
+| `mem0_official` (`mem0ai==2.2.1`) | 70.0% `[53.3, 86.7]` | 80% | **100%** | **100%** | **40%** | 60% | 40% | 1,125 | \$1.555 (\$0.009 + \$1.546) | 0.0% | **1.46s / 3.60s** | 0.3750 |
+| `rlm_official` | 70.0% `[53.3, 86.7]` | 80% | **100%** | 40% | 80% | **80%** | 40% | 21,373 | \$0.375 (\$0.375 + \$0.000) | 0.0% | 11.25s / 31.98s | 0.5810 |
+| `chatree_two_tier` (v2) | 63.3% `[46.7, 80.0]` | 80% | 60% | 60% | 80% | 60% | 40% | 6,927 | \$0.791 (\$0.162 + \$0.630) | **49.6%** | 6.19s / 8.15s | 0.1797 |
+| `flat_hybrid_rag` | 40.0% `[23.3, 56.7]` | 80% | 20% | 0% | 80% | 20% | 40% | **717** | **\$0.004** (\$0.004 + \$0.000) | 39.3% | 3.54s / 7.10s | **0.0018\*** |
 
-### 4.3 Tracks 1 & 2: 5-Family Stress Suite, Ablations, and $K$-Scaling Crossover
+### 4.3 Track 7: Non-Monotonic Software Engineering & Spec-Reversal ($n = 36$, 80 Sessions)
+
+| System | Accuracy (95% CI) | Spec Rev. | Quarantine | Downstream | Verbatim | Synthesis | Peak Tok | Total USD (Q + Ingest) | KV Cache | p50 / p95 ms | McNemar `p` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **`chatree_two_tier_v3`** | **100.0%** `[100, 100]` | **100%** | **100%** | **100%** | **100%** | **100%** | 3,295 | \$0.099 (\$0.077 + \$0.022) | 68.6% | 4.83s / 6.84s | ref |
+| `full_context_linear` | **100.0%** `[100, 100]` | **100%** | **100%** | **100%** | **100%** | **100%** | 3,710 | \$0.011 (\$0.011 + \$0.000) | **76.8%** | 1.40s / 2.01s | 1.0000 |
+| `mem0_official` | **100.0%** `[100, 100]` | **100%** | **100%** | **100%** | **100%** | **100%** | 1,235 | \$0.030 (\$0.012 + \$0.017) | 0.0% | 1.57s / 2.89s | 1.0000 |
+| `tree_summary_only` | 88.9% `[77.8, 97.2]` | 100% | 100% | 100% | 75.0% | 83.3% | 1,426 | \$0.020 (\$0.010 + \$0.010) | 22.1% | 1.43s / 1.79s | 0.1250 |
+| `rlm_official` | 77.8% `[63.9, 91.7]` | 66.7% | 100% | 83.3% | 75.0% | 66.7% | 4,792 | \$0.111 (\$0.111 + \$0.000) | 0.0% | 5.27s / 18.10s | **0.0078\*** |
+| `flat_hybrid_rag` | 36.1% `[22.2, 52.8]` | 33.3% | 100% | 33.3% | 25.0% | 0.0% | **777** | **\$0.008** (\$0.008 + \$0.000) | 4.6% | 1.40s / 2.22s | **<0.0001\*** |
+
+### 4.4 Tracks 1 & 2: 5-Family Stress Suite, Ablations, and $K$-Scaling Crossover
 
 ![Track 2 Crossover and Ablations](figures/fig4_crossover_and_ablations.png)
 *Figure 4: (a) Track 2 cumulative input-token crossover at $K=8$ distractor branches (`29.6k` vs. `39.7k` total tokens; `957` vs. `4,266` peak tokens) while sustaining 100% strict pass; (b) Track 2 single-mechanism ablations proving shadow inspection is critical (`0.0%` without shadow turns, $p=0.0312^*$) and showing stale contradiction errors when staleness tracking or transitivity is disabled.*
@@ -127,7 +139,7 @@ All live experiments run on `deepseek/deepseek-chat` with local ONNX GPU retriev
 - **Track 1 (5-Family Suite):** `tree_ipc_full` scored **8/8 (100.0%) strict pass** with **0% leakage** and **0% stale contradiction errors** across Distractor Scaling ($K=4$), Proposal vs. Decision, Multihop Revision ($A \to B \to C$), Unscripted Agentic Policy, and Crossover Scaling—while `flat_rag`, `tree_summary_only`, and `tree_ipc_no_staleness` all failed `multihop-revision-staleness` with 100% stale contradiction errors.
 - **Track 2 ($K$-Scaling Crossover):** Across $K \in \{2, 4, 8\}$, `tree_ipc_full` maintained **100.0% strict pass** and flat peak root context (`707 -> 767 -> 957` tokens), crossing below `linear` on cumulative input tokens (`29,589` vs. `39,680`) and p50 latency (`1.19s` vs. `1.42s`) at $K=8$, whereas `sliding_window` collapsed to `0.0%` pass / `100.0%` leakage at $K=8$.
 
-### 4.4 Tracks 5 & 6: Infinite-Context Compaction and Natural-Prompt Live Jump-Around
+### 4.5 Tracks 5 & 6: Infinite-Context Compaction and Natural-Prompt Live Jump-Around
 
 ![Track 6 Compaction and Track 5 Jump-Around](figures/fig5_compaction_and_live.png)
 *Figure 5: (a) Track 6 9-generation compaction benchmark showing 100% vs. 0% non-anchored Turn-1 verbatim recall; (b) Track 5 18-turn live jump-around chatbot under system-agnostic natural prompts.*

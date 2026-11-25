@@ -3,13 +3,14 @@
 \small
 \begin{tabular}{lrrrrrrr}
 \toprule
-\textbf{System} & \textbf{Accuracy (95\% CI)} & \textbf{F1} & \textbf{BLEU-1} & \textbf{Peak Tok} & \textbf{Cost (USD)} & \textbf{p50 ms} & \textbf{p-val} \\
+\textbf{System} & \textbf{Accuracy (95\% CI)} & \textbf{F1} & \textbf{BLEU-1} & \textbf{Peak Tok} & \textbf{Total USD (Q+I)} & \textbf{p50 / p95 ms} & \textbf{p-val} \\
 \midrule
-chatree\_two\_tier\_v3 & 80.0\% [66.7, 93.3] & 0.148 & 0.094 & 6295 & \$0.23478 & 5083.2 & ref \\
-chatree\_two\_tier & 63.3\% [46.7, 80.0] & 0.172 & 0.126 & 6927 & \$0.16181 & 5982.9 & 0.1797 \\
-full\_context\_linear & 70.0\% [53.3, 86.7] & 0.199 & 0.136 & 108772 & \$0.88222 & 2396.9 & 0.5078 \\
-rlm\_official & 70.0\% [53.3, 86.7] & 0.205 & 0.148 & 21373 & \$0.37519 & 11230.9 & 0.5810 \\
-flat\_hybrid\_rag & 40.0\% [23.3, 56.7] & 0.181 & 0.135 & 717 & \$0.00371 & 3467.1 & 0.0018* \\
+chatree\_two\_tier\_v3 & 80.0\% [66.7, 93.3] & 0.148 & 0.094 & 6295 & \$1.1185 (0.235+0.884) & 5114 / 7687 & ref \\
+full\_context\_linear & 70.0\% [53.3, 86.7] & 0.199 & 0.136 & 108772 & \$0.8822 (0.882+0.000) & 2421 / 4755 & 0.5078 \\
+mem0\_official & 70.0\% [53.3, 86.7] & 0.188 & 0.125 & 1125 & \$1.5548 (0.009+1.546) & 1456 / 3602 & 0.3750 \\
+rlm\_official & 70.0\% [53.3, 86.7] & 0.205 & 0.148 & 21373 & \$0.3752 (0.375+0.000) & 11248 / 31979 & 0.5810 \\
+chatree\_two\_tier & 63.3\% [46.7, 80.0] & 0.172 & 0.126 & 6927 & \$0.7913 (0.162+0.629) & 6191 / 8148 & 0.1797 \\
+flat\_hybrid\_rag & 40.0\% [23.3, 56.7] & 0.181 & 0.135 & 717 & \$0.0037 (0.004+0.000) & 3543 / 7098 & 0.0018* \\
 \bottomrule
 \end{tabular}
 \caption{longmemeval comparison on deepseek/deepseek-chat}

@@ -263,19 +263,20 @@ Table~\ref{tab:lme} and Figure~\ref{fig:pareto} report results on Official LongM
 
 \begin{table*}[t]
 \centering
-\caption{Official LongMemEval-S (ICLR 2025) stratified evaluation ($n=30$, 5 items/category, $\sim$48 sessions / $\sim$115k tokens per item). Query cost and cold single-QA ingest cost are reported separately for transparency.}
+\caption{Official LongMemEval-S (ICLR 2025) 6-system stratified evaluation ($n=30$, 5 items/category, $\sim$48 sessions / $\sim$115k tokens per item, 1,429 sessions total). Total lifecycle cost (\texttt{Q+I}) exposes write-time extraction bills: \texttt{mem0\_official}'s \$1.546 ingest cost makes it 28\% more expensive overall than \chatree{} v3 (\$1.555 vs.\ \$1.119) while trailing by 10 pts overall and 40 pts on \texttt{knowledge-update}.}
 \label{tab:lme}
 \small
-\setlength{\tabcolsep}{3.6pt}
+\setlength{\tabcolsep}{3.0pt}
 \begin{tabular}{@{}lcccccccrrcr@{}}
 \toprule
-\textbf{System} & \textbf{Overall (95\% CI)} & \textbf{S-User} & \textbf{S-Asst} & \textbf{Pref} & \textbf{Update} & \textbf{Temp.} & \textbf{Multi} & \textbf{Peak Tok} & \textbf{Query (+Ing.)} & \textbf{p50 / p95} & \textbf{$p$ vs.\ v3} \\
+\textbf{System} & \textbf{Overall (95\% CI)} & \textbf{S-User} & \textbf{S-Asst} & \textbf{Pref} & \textbf{Update} & \textbf{Temp.} & \textbf{Multi} & \textbf{Peak Tok} & \textbf{Total USD (Q+I)} & \textbf{p50 / p95} & \textbf{$p$ vs.\ v3} \\
 \midrule
-\textbf{\texttt{chatree\_two\_tier\_v3}} & \textbf{80.0\%} {\scriptsize[66.7, 93.3]} & 80\% & \textbf{100\%} & \textbf{100\%} & 80\% & 60\% & \textbf{60\%} & 6,295 & \$0.235 {\scriptsize(+\$0.884)} & 5.1 / 7.9s & ref \\
-\texttt{full\_context\_linear} & 70.0\% {\scriptsize[53.3, 86.7]} & \textbf{100\%} & \textbf{100\%} & 20\% & \textbf{100\%} & 60\% & 40\% & 108,772 & \$0.882 {\scriptsize(+\$0.000)} & \textbf{2.4 / 5.0s} & 0.5078 \\
-\texttt{rlm\_official} & 70.0\% {\scriptsize[53.3, 86.7]} & 80\% & \textbf{100\%} & 40\% & 80\% & \textbf{80\%} & 40\% & 21,373 & \$0.375 {\scriptsize(+\$0.000)} & 11.2 / 32.6s & 0.5810 \\
-\texttt{chatree\_two\_tier} (v2) & 63.3\% {\scriptsize[46.7, 80.0]} & 80\% & 60\% & 60\% & 80\% & 60\% & 40\% & 6,927 & \$0.162 {\scriptsize(+\$0.629)} & 6.0 / 8.2s & 0.1797 \\
-\texttt{flat\_hybrid\_rag} & 40.0\% {\scriptsize[23.3, 56.7]} & 80\% & 20\% & 0\% & 80\% & 20\% & 40\% & \textbf{717} & \textbf{\$0.004} {\scriptsize(+\$0.000)} & 3.5 / 7.7s & \textbf{0.0018$^*$} \\
+\textbf{\texttt{chatree\_two\_tier\_v3}} & \textbf{80.0\%} {\scriptsize[66.7, 93.3]} & 80\% & \textbf{100\%} & \textbf{100\%} & 80\% & 60\% & \textbf{60\%} & 6,295 & \$1.12 {\scriptsize(.23+.88)} & 5.1 / 7.7s & ref \\
+\texttt{full\_context\_linear} & 70.0\% {\scriptsize[53.3, 86.7]} & \textbf{100\%} & \textbf{100\%} & 20\% & \textbf{100\%} & 60\% & 40\% & 108,772 & \$0.88 {\scriptsize(.88+.00)} & 2.4 / 4.8s & 0.5078 \\
+\texttt{mem0\_official} (\texttt{2.2.1}) & 70.0\% {\scriptsize[53.3, 86.7]} & 80\% & \textbf{100\%} & \textbf{100\%} & 40\% & 60\% & 40\% & 1,125 & \$1.55 {\scriptsize(.01+1.55)} & \textbf{1.5 / 3.6s} & 0.3750 \\
+\texttt{rlm\_official} & 70.0\% {\scriptsize[53.3, 86.7]} & 80\% & \textbf{100\%} & 40\% & 80\% & \textbf{80\%} & 40\% & 21,373 & \$0.38 {\scriptsize(.38+.00)} & 11.2 / 32.0s & 0.5810 \\
+\texttt{chatree\_two\_tier} (v2) & 63.3\% {\scriptsize[46.7, 80.0]} & 80\% & 60\% & 60\% & 80\% & 60\% & 40\% & 6,927 & \$0.79 {\scriptsize(.16+.63)} & 6.2 / 8.1s & 0.1797 \\
+\texttt{flat\_hybrid\_rag} & 40.0\% {\scriptsize[23.3, 56.7]} & 80\% & 20\% & 0\% & 80\% & 20\% & 40\% & \textbf{717} & \textbf{\$0.004} {\scriptsize(.004+.00)} & 3.5 / 7.1s & \textbf{0.0018$^*$} \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -283,11 +284,34 @@ Table~\ref{tab:lme} and Figure~\ref{fig:pareto} report results on Official LongM
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figures/fig3_pareto_efficiency.pdf}
-  \caption{Accuracy--Efficiency Pareto frontier and Total Lifecycle Cost across (a) Official LoCoMo ($n=245$), (b) Official LongMemEval-S ($n=30$), and (c) LoCoMo Total Lifecycle Cost (Query USD + Write-Time Ingest USD) with p95 latency. \chatree{} v3 occupies the upper-left Pareto-optimal corner on both benchmarks at 5.5$\times$--17.3$\times$ smaller peak context while making write-time extraction overhead explicit (\texttt{mem0\_official}'s \$0.153 write-time ingest is 3.0$\times$ its \$0.051 query cost; \chatree{} v3 runs 3.6$\times$ faster at p95 than \texttt{rlm\_official}).}
+  \caption{Accuracy--Efficiency Pareto frontier and Total Lifecycle Cost across (a) Official LoCoMo ($n=245$), (b) Official LongMemEval-S ($n=30$, all 6 systems including \texttt{mem0\_official}), and (c) LoCoMo Total Lifecycle Cost (Query USD + Write-Time Ingest USD) with p95 latency. \chatree{} v3 occupies the upper-left Pareto-optimal corner on both benchmarks at 5.5$\times$--17.3$\times$ smaller peak context while making write-time extraction overhead explicit (\texttt{mem0\_official}'s \$0.153 LoCoMo ingest is 3.0$\times$ its query cost, and its \$1.546 LongMemEval-S ingest makes Mem0 28\% more expensive overall than \chatree{} v3).}
   \label{fig:pareto}
 \end{figure*}
 
-On LongMemEval-S, \texttt{chatree\_two\_tier\_v3} again places first overall at \textbf{80.0\%} (+16.7 pts over v2, +10.0 pts over both \texttt{full\_context\_linear} and \texttt{rlm\_official}, and +40.0 pts over \texttt{flat\_hybrid\_rag}, $p=0.0018^*$). Notably, \chatree{} v3 reaches \textbf{100\%} on \texttt{single-session-preference} (where full-context linear falls to 20\% due to 108k-token dilution) and leads all baselines on \texttt{multi-session} (60\% vs.\ 40\%), while cutting peak context by \textbf{17.3$\times$} (6,295 vs.\ 108,772 tokens), cutting query cost by \textbf{3.8$\times$} (\$0.235 vs.\ \$0.882), and achieving \textbf{4.1$\times$ faster p95 latency} than \texttt{rlm\_official} (7.92s vs.\ 32.58s). Note that LongMemEval evaluates only 1 QA per 48-session history; thus cold ingest (\$0.884 across 1,429 sessions, or \$0.0006/session) is unamortized in single-QA benchmarks whereas it amortizes across turns in interactive workflows.
+On LongMemEval-S, \texttt{chatree\_two\_tier\_v3} places first across all six systems at \textbf{80.0\%} (+16.7 pts over v2, +10.0 pts over \texttt{full\_context\_linear}, \texttt{mem0\_official}, and \texttt{rlm\_official}, and +40.0 pts over \texttt{flat\_hybrid\_rag}, $p=0.0018^*$). Against \texttt{mem0\_official} at 115k-token scale, \chatree{} v3 achieves \textbf{+40.0 pts on \texttt{knowledge-update}} (80\% vs.\ 40\%) and \textbf{+20.0 pts on \texttt{multi-session}} (60\% vs.\ 40\%) while costing \textbf{28\% less in total lifecycle USD} (\$1.119 vs.\ \$1.555) and running 24\% faster on ingest (4,552s vs.\ 6,025s), because Mem0's write-time extraction bill (\$1.546 across 1,429 sessions) is 176$\times$ its query cost (\$0.009). Against \texttt{full\_context\_linear}, \chatree{} v3 cuts peak context by \textbf{17.3$\times$} (6,295 vs.\ 108,772 tokens), cuts query cost by \textbf{3.8$\times$} (\$0.235 vs.\ \$0.882), and outperforms \texttt{rlm\_official} by \textbf{4.2$\times$ faster p95 latency} (7.69s vs.\ 31.98s).
+
+\subsection{Track 7: Non-Monotonic Software Engineering \& Spec-Reversal ($n=36$)}
+To test non-monotonic spec revisions, competing scrapped prototypes, downstream consumer staleness, and verbatim SQL/YAML recall under operational noise, we evaluated all six systems on Track~7 (6 multi-sprint projects, 80 sessions including 18 archived dead-end prototypes with explicit textual cancellation turns ingested identically by all baselines; Table~\ref{tab:track7}). \texttt{chatree\_two\_tier\_v3} scores \textbf{100.0\% (36/36)} across all five categories at 68.6\% KV-cache hit rate, statistically outperforming \texttt{rlm\_official} (77.8\%, $p=0.0078^*$, 2.6$\times$ slower p95) and \texttt{flat\_hybrid\_rag} (36.1\%, $p < 10^{-4}$) and surpassing \texttt{tree\_summary\_only} (88.9\%, which drops to 75.0\% on \texttt{verbatim\_under\_noise}). At this compact 3.7k-token project scale, \texttt{full\_context\_linear} and \texttt{mem0\_official} also reach 100.0\% (Mem0 with 0.0\% cache and write-time ingest exceeding query cost)—confirming that Mem0's accuracy and cost penalties emerge sharply once conversations cross into realistic 35k--115k-token multi-session horizons (LoCoMo and LongMemEval-S).
+
+\begin{table}[t]
+\centering
+\caption{Track~7 Non-Monotonic Engineering \& Spec-Reversal benchmark ($n=36$, 80 sessions across 6 projects, \texttt{deepseek-chat}). $^*$ denotes $p < 0.05$ vs.\ \chatree{} v3.}
+\label{tab:track7}
+\scriptsize
+\setlength{\tabcolsep}{2.6pt}
+\begin{tabular}{@{}lccccrr@{}}
+\toprule
+\textbf{System} & \textbf{All} & \textbf{Rev.} & \textbf{Verb.} & \textbf{Synth.} & \textbf{Total USD} & \textbf{$p$} \\
+\midrule
+\textbf{\chatree{} v3} & \textbf{100\%} & \textbf{100\%} & \textbf{100\%} & \textbf{100\%} & \$0.099 & ref \\
+Full Linear & \textbf{100\%} & \textbf{100\%} & \textbf{100\%} & \textbf{100\%} & \$0.011 & 1.000 \\
+Mem0 (\texttt{2.2.1}) & \textbf{100\%} & \textbf{100\%} & \textbf{100\%} & \textbf{100\%} & \$0.030 & 1.000 \\
+Summary Folding & 88.9\% & 100\% & 75.0\% & 83.3\% & \$0.020 & .125 \\
+MIT RLM (\texttt{0.1.3}) & 77.8\% & 66.7\% & 75.0\% & 66.7\% & \$0.111 & \textbf{.0078$^*$} \\
+Flat Hybrid RAG & 36.1\% & 33.3\% & 25.0\% & 0.0\% & \textbf{\$0.008} & \textbf{$<$.0001$^*$} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Tracks 1 \& 2: Five-Family Stress Suite, Ablations, and Crossover Scaling}
 On Track~1 (Table~\ref{tab:track1}), \texttt{tree\_ipc\_full} achieves \textbf{8/8 (100.0\%) strict pass} across all five task families with 0\% distractor leakage and 0\% stale contradiction errors. Crucially, on \texttt{multihop-revision-staleness} ($A \to B \to C$), \texttt{flat\_rag}, \texttt{tree\_summary\_only}, and \texttt{tree\_ipc\_no\_staleness} all suffer 100\% stale contradiction errors (0/1), whereas \texttt{tree\_ipc\_full} detects transitive staleness, executes a targeted shadow refresh, and passes 1/1 at 1,138 peak tokens (vs.\ 2,988 for \texttt{linear}).

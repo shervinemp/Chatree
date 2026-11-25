@@ -128,22 +128,38 @@ Stratified macro-balanced selection (`5 QAs/category/conv` across all 10 convers
 
 Stratified across all 6 official categories (5 items/category, 1,429 sessions ingested total, [`exp4_longmemeval_v3.md`](results/deepseek_eval/exp4_longmemeval_v3.md)):
 
-| System | Accuracy (95% CI) | Single-User | Single-Asst | Pref | Knowledge-Update | Temporal | Multi-Session | Peak Tok | Query USD (+Ingest) | KV Cache | p50 / p95 ms | McNemar `p` vs. v3 |
+| System | Accuracy (95% CI) | Single-User | Single-Asst | Pref | Knowledge-Update | Temporal | Multi-Session | Peak Tok | Total USD (Q + Ingest) | KV Cache | p50 / p95 ms | McNemar `p` vs. v3 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **`chatree_two_tier_v3` (+Tier-2.5)** | **80.0%** `[66.7, 93.3]` | 80.0% | **100.0%** | **100.0%** | 80.0% | 60.0% | **60.0%** | **6,295** | **\$0.235** (+\$0.884) | **31.4%** | 5.08s / **7.92s** | ref |
-| `full_context_linear` | 70.0% `[53.3, 86.7]` | **100.0%** | **100.0%** | 20.0% | **100.0%** | 60.0% | 40.0% | 108,772 | \$0.882 (+\$0.000) | 0.0% | **2.40s / 5.03s** | 0.5078 |
-| `rlm_official` | 70.0% `[53.3, 86.7]` | 80.0% | **100.0%** | 40.0% | 80.0% | **80.0%** | 40.0% | 21,373 | \$0.375 (+\$0.000) | 0.0% | 11.23s / 32.58s | 0.5810 |
-| `chatree_two_tier` (v2) | 63.3% `[46.7, 80.0]` | 80.0% | 60.0% | 60.0% | 80.0% | 60.0% | 40.0% | 6,927 | \$0.162 (+\$0.629) | **49.6%** | 5.98s / 8.18s | 0.1797 |
-| `flat_hybrid_rag` | 40.0% `[23.3, 56.7]` | 80.0% | 20.0% | 0.0% | 80.0% | 20.0% | 40.0% | 717 | \$0.004 (+\$0.000) | 39.3% | 3.47s / 7.74s | **0.0018\*** |
+| **`chatree_two_tier_v3` (+Tier-2.5)** | **80.0%** `[66.7, 93.3]` | 80.0% | **100.0%** | **100.0%** | 80.0% | 60.0% | **60.0%** | 6,295 | \$1.119 (\$0.235 + \$0.884) | 31.4% | 5.11s / 7.69s | ref |
+| `full_context_linear` | 70.0% `[53.3, 86.7]` | **100.0%** | **100.0%** | 20.0% | **100.0%** | 60.0% | 40.0% | 108,772 | \$0.882 (\$0.882 + \$0.000) | 0.0% | 2.42s / 4.76s | 0.5078 |
+| `mem0_official` (`mem0ai==2.2.1`) | 70.0% `[53.3, 86.7]` | 80.0% | **100.0%** | **100.0%** | **40.0%** | 60.0% | 40.0% | 1,125 | \$1.555 (\$0.009 + \$1.546) | 0.0% | **1.46s / 3.60s** | 0.3750 |
+| `rlm_official` | 70.0% `[53.3, 86.7]` | 80.0% | **100.0%** | 40.0% | 80.0% | **80.0%** | 40.0% | 21,373 | \$0.375 (\$0.375 + \$0.000) | 0.0% | 11.25s / 31.98s | 0.5810 |
+| `chatree_two_tier` (v2) | 63.3% `[46.7, 80.0]` | 80.0% | 60.0% | 60.0% | 80.0% | 60.0% | 40.0% | 6,927 | \$0.791 (\$0.162 + \$0.630) | **49.6%** | 6.19s / 8.15s | 0.1797 |
+| `flat_hybrid_rag` | 40.0% `[23.3, 56.7]` | 80.0% | 20.0% | 0.0% | 80.0% | 20.0% | 40.0% | **717** | **\$0.004** (\$0.004 + \$0.000) | 39.3% | 3.54s / 7.10s | **0.0018\*** |
 
-> **Key Takeaways:** `chatree_two_tier_v3` ranks **#1 overall at 80.0%** (+16.7 pts over v2, +10.0 pts over both `full_context_linear` and `rlm_official`, and +40.0 pts over `flat_hybrid_rag`, $p = 0.0018^*$), leading all systems on `single-session-preference` (**100.0%** vs. 20–40%) and `multi-session` (**60.0%** vs. 40%). It stays at **17.3× smaller peak context** than `full_context_linear` (`6,295` vs. `108,772`), **3.8× lower query USD** (`\$0.235` vs. `\$0.882`), **4.1× faster p95 latency** than `rlm_official` (`7.92s` vs. `32.58s`), and **31.4% KV-cache hit** vs. **0.0%** for linear and RLM. On LongMemEval's single-question-per-history layout, cold ingest (`\$0.884` across 1,429 sessions) is paid once for 1 QA rather than amortized across a multi-turn workspace.
+> **Key Takeaways:** `chatree_two_tier_v3` ranks **#1 overall across all 6 systems at 80.0%** (+16.7 pts over v2, +10.0 pts over `full_context_linear`, `mem0_official`, and `rlm_official`, and +40.0 pts over `flat_hybrid_rag`, $p = 0.0018^*$). Crucially, against `mem0_official` at 115k-token scale, Chatree v3 wins by **+40.0 pts on `knowledge-update` (`80.0% vs. 40.0%`)** and **+20.0 pts on `multi-session` (`60.0% vs. 40.0%`)** while costing **28% less in Total Lifecycle Cost (`\$1.119` vs. `\$1.555`)** and running **24% faster on ingest (`4,552s` vs. `6,025s`)**—because Mem0's write-time extraction bill (`\$1.546`) is **176× its query cost (`\$0.009`)**. Against `full_context_linear`, Chatree v3 runs at **17.3× smaller peak context** (`6,295` vs. `108,772`), **3.8× lower query USD**, and **31.4% vs. 0.0% KV-cache hit**, and beats `rlm_official` by **4.2× faster p95 latency** (`7.69s` vs. `31.98s`).
 
-### 3. Controlled Stress Suites, Ablations & Crossover Scaling (Tracks 1 & 2)
+### 3. Track 7 — Non-Monotonic Software Engineering & Spec-Reversal (6 Projects, 80 Sessions, 36 QAs)
+
+Multi-sprint engineering workspaces testing `spec_reversal`, `dead_end_quarantine` (18 competing scrapped prototypes with identical textual cancellation turns across all baselines + native `ARCHIVED` quarantine in Chatree), `downstream_staleness`, `verbatim_under_noise` (exact SQL/YAML/error tokens buried under ops logs), and `cross_branch_synthesis` ([`exp7_non_monotonic.md`](results/deepseek_eval/exp7_non_monotonic.md)):
+
+| System | Accuracy (95% CI) | Spec Rev. | Quarantine | Downstream | Verbatim | Synthesis | Peak Tok | Total USD (Q + Ingest) | KV Cache | p50 / p95 ms | McNemar `p` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **`chatree_two_tier_v3`** | **100.0%** `[100, 100]` | **100%** | **100%** | **100%** | **100%** | **100%** | 3,295 | \$0.099 (\$0.077 + \$0.022) | 68.6% | 4.83s / 6.84s | ref |
+| `full_context_linear` | **100.0%** `[100, 100]` | **100%** | **100%** | **100%** | **100%** | **100%** | 3,710 | \$0.011 (\$0.011 + \$0.000) | **76.8%** | 1.40s / 2.01s | 1.0000 |
+| `mem0_official` | **100.0%** `[100, 100]` | **100%** | **100%** | **100%** | **100%** | **100%** | 1,235 | \$0.030 (\$0.012 + \$0.017) | 0.0% | 1.57s / 2.89s | 1.0000 |
+| `tree_summary_only` | 88.9% `[77.8, 97.2]` | 100% | 100% | 100% | 75.0% | 83.3% | 1,426 | \$0.020 (\$0.010 + \$0.010) | 22.1% | 1.43s / 1.79s | 0.1250 |
+| `rlm_official` | 77.8% `[63.9, 91.7]` | 66.7% | 100% | 83.3% | 75.0% | 66.7% | 4,792 | \$0.111 (\$0.111 + \$0.000) | 0.0% | 5.27s / 18.10s | **0.0078\*** |
+| `flat_hybrid_rag` | 36.1% `[22.2, 52.8]` | 33.3% | 100% | 33.3% | 25.0% | 0.0% | **777** | **\$0.008** (\$0.008 + \$0.000) | 4.6% | 1.40s / 2.22s | **<0.0001\*** |
+
+> **Scale-Regime Takeaway:** At compact 3.7k-token structured engineering horizons (Track 7), `chatree_two_tier_v3` reaches **100.0% (36/36)**—statistically outperforming `rlm_official` (`77.8%`, $p = 0.0078^*$, 2.6× slower p95) and `flat_hybrid_rag` (`36.1%`, $p < 10^{-4}$), and surpassing `tree_summary_only` (`88.9%`)—while `mem0_official` ties at `100.0%` (albeit with 0% KV cache and write-time ingest > query cost). Once histories grow to realistic 35k–115k-token multi-session horizons (LoCoMo & LongMemEval-S), Mem0's write-time extraction degrades sharply on `multi_hop` (`-14 pts`), `knowledge-update` (`-40 pts`), and `multi-session` (`-20 pts`) while becoming more expensive overall than Chatree (`\$1.555` vs. `\$1.119`).
+
+### 4. Controlled Stress Suites, Ablations & Crossover Scaling (Tracks 1 & 2)
 
 - **Track 1 — 5-Family Stress Suite ([`exp1_suite.md`](results/deepseek_eval/exp1_suite.md)):** `tree_ipc_full` achieved **8/8 (100.0%) strict pass** with **0% leakage** and **0% stale contradiction errors** across all 5 families (including `multihop-revision-staleness`, where `flat_rag`, `tree_summary_only`, and `tree_ipc_no_staleness` all failed with 100% stale contradictions).
 - **Track 2 — 10-Row Ablations & $K$-Scaling Crossover ([`exp2_ablations.md`](results/deepseek_eval/exp2_ablations.md), [`exp2_crossover.md`](results/deepseek_eval/exp2_crossover.md)):** Removing read-only shadow inspection (`no_shadow_turns_folding`) collapsed strict pass rate to **0.0%** (McNemar $p = 0.0312^*$), while disabling staleness/transitivity introduced `14.3%` stale errors. Across $K \in \{2, 4, 8\}$ distractors, `tree_ipc_full` held **100.0% strict pass** and crossed below `linear` on cumulative total tokens at $K=8$ (**29,589 vs. 39,680 tokens**; peak `957` vs. `4,266` tokens; p50 latency `1.19s` vs. `1.42s`).
 
-### 4. Live Multi-Turn Jump-Around & Infinite-Context Compaction (Tracks 5 & 6)
+### 5. Live Multi-Turn Jump-Around & Infinite-Context Compaction (Tracks 5 & 6)
 
 #### Track 6 — Live Multi-Generation Infinite-Context Compaction ([`exp6_compaction_bench.md`](results/deepseek_eval/exp6_compaction_bench.md))
 

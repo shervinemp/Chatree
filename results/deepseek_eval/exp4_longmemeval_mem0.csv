@@ -1,0 +1,2 @@
+benchmark,system,n_questions,accuracy,acc_ci_low,acc_ci_high,mean_f1,mean_bleu1,peak_context_tokens,total_tokens_in,total_tokens_out,cache_hit_ratio,estimated_cost_usd,ingest_tokens_in,ingest_tokens_out,ingest_cost_usd,total_cost_usd,ingest_latency_ms,latency_p50_ms,latency_p95_ms,mcnemar_p_vs_ref
+longmemeval,mem0_official,30,0.7,0.5333,0.8667,0.1881,0.125,1125,26945,2947,0.0,0.008782,4249385,848097,1.546029,1.554811,6024613.27,1456.11,3601.94,

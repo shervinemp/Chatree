@@ -1,7 +1,7 @@
 {
-  "timestamp_utc": "2026-11-25T06:43:29.746273+00:00",
+  "timestamp_utc": "2026-11-25T15:42:36.903771+00:00",
   "chatree_version": "0.2.0",
-  "git_sha": "68e980b",
+  "git_sha": "7437589",
   "benchmark": "longmemeval",
   "model": "deepseek/deepseek-chat",
   "judge_model": "deepseek/deepseek-chat",
@@ -9,18 +9,23 @@
   "reranker": "Xenova/ms-marco-MiniLM-L-6-v2",
   "systems": [
     "chatree_two_tier_v3",
-    "chatree_two_tier",
     "full_context_linear",
+    "mem0_official",
     "rlm_official",
+    "chatree_two_tier",
     "flat_hybrid_rag"
   ],
-  "total_tokens_in": 6622695,
-  "total_tokens_out": 56409,
-  "total_estimated_cost_usd": 1.657706,
+  "total_tokens_in": 15106301,
+  "total_tokens_out": 1705379,
+  "total_estimated_cost_usd": 4.725683,
   "extra": {
     "split": "s",
     "per_category": 5,
     "n_questions": 30,
-    "flat_rag_gpu_refreshed": true
+    "includes_mem0_official": true,
+    "total_query_cost_usd": 1.666488,
+    "total_ingest_cost_usd": 3.059195,
+    "total_ingest_tokens_in": 8456661,
+    "total_ingest_tokens_out": 1646023
   }
 }

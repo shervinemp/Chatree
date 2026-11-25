@@ -51,7 +51,9 @@ def test_non_monotonic_benchmark_corpus_integrity() -> None:
     }
 
     archived_sessions = [s for c in convs for s in c.sessions if s.archived]
-    assert len(archived_sessions) == 6
+    assert len(archived_sessions) == 18
+    total_sessions = sum(len(c.sessions) for c in convs)
+    assert total_sessions >= 80
     for sess in archived_sessions:
         assert sess.archive_reason.strip()
         # Baseline fairness guarantee: every archived session must contain an explicit textual cancellation turn

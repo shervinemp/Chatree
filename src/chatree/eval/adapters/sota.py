@@ -118,8 +118,23 @@ class Mem0OfficialAdapter:
     def get_ingest_usage(self) -> tuple[int, int]:
         return self._ingest_tokens_in, self._ingest_tokens_out
 
+    def clone(self) -> Mem0OfficialAdapter:
+        """Create an isolated worker adapter (safe for concurrency when MEM0_TELEMETRY=false)."""
+        return Mem0OfficialAdapter(
+            name=self._name,
+            model=self.model,
+            llm=self.llm,
+            mem0_config=dict(self.mem0_config) if self.mem0_config else None,
+            api_base=self.api_base,
+            api_key=self.api_key,
+            top_k=self.top_k,
+        )
+
     async def reset(self, conversation_id: str) -> None:
         await self.close()
+        # Disable upstream Mem0's shared ~/.mem0/migrations_qdrant telemetry store so isolated
+        # concurrent workers never hit portalocker contention on Windows/Linux.
+        os.environ.setdefault("MEM0_TELEMETRY", "false")
         try:
             from mem0 import Memory  # type: ignore[import-not-found]
         except ImportError as exc:

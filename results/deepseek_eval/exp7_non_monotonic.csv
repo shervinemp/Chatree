@@ -1,0 +1,7 @@
+benchmark,system,n_questions,accuracy,acc_ci_low,acc_ci_high,mean_f1,mean_bleu1,peak_context_tokens,total_tokens_in,total_tokens_out,cache_hit_ratio,estimated_cost_usd,ingest_tokens_in,ingest_tokens_out,ingest_cost_usd,total_cost_usd,ingest_latency_ms,latency_p50_ms,latency_p95_ms,mcnemar_p_vs_ref
+non_monotonic,chatree_two_tier_v3,36,1.0,1.0,1.0,0.0995,0.0547,3295,642130,19424,0.6857,0.076994,27195,34554,0.022127,0.099121,310095.11,4834.0,6836.51,
+non_monotonic,flat_hybrid_rag,36,0.3611,0.2222,0.5278,0.1807,0.1258,777,25056,2734,0.046,0.007874,0,0,0.0,0.007874,1031.83,1398.7,2224.41,0.0
+non_monotonic,full_context_linear,36,1.0,1.0,1.0,0.2319,0.1543,3710,101026,4077,0.7678,0.010452,0,0,0.0,0.010452,0.35,1403.07,2007.45,1.0
+non_monotonic,tree_summary_only,36,0.8889,0.7778,0.9722,0.2784,0.1886,1426,40470,3160,0.2214,0.010401,17675,11833,0.009919,0.02032,130601.35,1428.9,1792.4,0.125
+non_monotonic,mem0_official,36,1.0,1.0,1.0,0.1931,0.1143,1235,36846,4762,0.0,0.012317,39652,14509,0.017196,0.029513,280106.55,1565.18,2892.34,1.0
+non_monotonic,rlm_official,36,0.7778,0.6389,0.9167,0.1948,0.1302,4792,352573,29189,0.0,0.11098,0,0,0.0,0.11098,0.34,5268.35,18096.32,0.00781
