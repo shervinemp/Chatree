@@ -1,7 +1,12 @@
 import type {
+  ArchiveBranchResponse,
   ArtifactModel,
+  AskTreeResponse,
+  BranchFactModel,
   ChildContextMode,
+  CompactBranchResponse,
   IpcEventModel,
+  LLMBackendKind,
   MailboxItemModel,
   NodeDetailResponse,
   NodeModel,
@@ -9,6 +14,8 @@ import type {
   SearchHit,
   SearchScope,
   StreamCallbacks,
+  ToolPermission,
+  TreeInvariantModel,
   TreeModel,
   TreeSnapshotResponse,
 } from '../types'
@@ -94,6 +101,7 @@ export const api = {
       summary_brief?: string
       slice_turn_count?: number
       model_override?: string | null
+      tool_permission?: ToolPermission | null
       switch_head?: boolean
     }
   ) =>
@@ -135,6 +143,72 @@ export const api = {
       ipc_event: IpcEventModel | null
       stale_node_ids: string[]
     }>(`/api/nodes/${callerNodeId}/request`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  askTree: (
+    callerNodeId: string,
+    payload: { query: string; scope?: SearchScope; max_targets?: number; deep?: boolean }
+  ) =>
+    jsonFetch<AskTreeResponse>(`/api/nodes/${callerNodeId}/ask`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  compactNode: (
+    nodeId: string,
+    payload: { keep_recent_turns?: number | null; title?: string | null; reason?: string; switch_head?: boolean }
+  ) =>
+    jsonFetch<CompactBranchResponse>(`/api/nodes/${nodeId}/compact`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  archiveNode: (
+    nodeId: string,
+    payload: { reason?: string; switch_to_parent?: boolean }
+  ) =>
+    jsonFetch<ArchiveBranchResponse>(`/api/nodes/${nodeId}/archive`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  listInvariants: (treeId: string) =>
+    jsonFetch<TreeInvariantModel[]>(`/api/trees/${treeId}/invariants`),
+
+  pinInvariant: (
+    treeId: string,
+    payload: { key: string; value: string; source_node_id?: string | null }
+  ) =>
+    jsonFetch<TreeInvariantModel>(`/api/trees/${treeId}/invariants`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  unpinInvariant: (treeId: string, key: string) =>
+    jsonFetch<{ key: string; removed: boolean }>(
+      `/api/trees/${treeId}/invariants/${encodeURIComponent(key)}`,
+      { method: 'DELETE' }
+    ),
+
+  listFacts: (treeId: string, opts?: { nodeId?: string; includeArchived?: boolean }) => {
+    const params = new URLSearchParams()
+    if (opts?.nodeId) params.set('node_id', opts.nodeId)
+    if (opts?.includeArchived) params.set('include_archived', 'true')
+    const qs = params.toString()
+    return jsonFetch<BranchFactModel[]>(`/api/trees/${treeId}/facts${qs ? `?${qs}` : ''}`)
+  },
+
+  addFacts: (
+    treeId: string,
+    payload: {
+      node_id: string
+      facts: Array<{ fact: string; resolved_date?: string; entities?: string[] }>
+      source_msg_seq?: number | null
+    }
+  ) =>
+    jsonFetch<BranchFactModel[]>(`/api/trees/${treeId}/facts`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
@@ -199,6 +273,7 @@ export const api = {
   getSettings: () => jsonFetch<RuntimeSettingsModel>('/api/settings'),
 
   updateSettings: (payload: {
+    llm_provider?: LLMBackendKind
     default_model?: string
     shadow_model?: string
     summary_model?: string

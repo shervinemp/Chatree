@@ -1,6 +1,8 @@
 export type ContextMode = 'root' | 'fork' | 'slice' | 'clean'
 export type ChildContextMode = 'fork' | 'slice' | 'clean'
 export type NodeStatus = 'ACTIVE' | 'COMPLETED' | 'ARCHIVED'
+export type ToolPermission = 'read_only' | 'read_write'
+export type LLMBackendKind = 'auto' | 'litellm' | 'openai_compat' | 'mock'
 export type ReflogAction = 'init' | 'spawn' | 'jump' | 'return' | 'close' | 'reopen' | 'fork_edit'
 export type IpcEventType =
   | 'spawn'
@@ -11,7 +13,9 @@ export type IpcEventType =
   | 'request_mutate'
   | 'search'
   | 'reflog_jump'
+  | 'custom_tool'
 export type SearchScope = 'all' | 'ancestors' | 'subtree' | 'siblings'
+export type RagGranularity = 'chunk' | 'summary' | 'rollup' | 'fact' | 'node' | 'message'
 
 export interface ArtifactRef {
   id: string
@@ -74,6 +78,7 @@ export interface NodeModel {
   slice_turn_count: number
   status: NodeStatus
   model_override: string | null
+  tool_permission?: ToolPermission
   summary: string | null
   summary_version: number
   is_dirty: boolean
@@ -155,6 +160,28 @@ export interface MailboxItemModel {
   delivered_at: string | null
 }
 
+export interface BranchFactModel {
+  id: string
+  tree_id: string
+  node_id: string
+  fact_text: string
+  entities: string[]
+  resolved_date: string
+  source_msg_seq: number | null
+  status: 'active' | 'superseded'
+  created_at: string
+}
+
+export interface TreeInvariantModel {
+  tree_id: string
+  key: string
+  value: string
+  source_node_id: string | null
+  source_summary_version: number
+  source_msg_seq: number
+  updated_at: string
+}
+
 export interface SearchHit {
   node_id: string
   node_title: string
@@ -164,8 +191,52 @@ export interface SearchHit {
   summary: string | null
   snippet: string
   score: number
+  granularity?: RagGranularity
   matched_seq: number | null
-  source: 'node' | 'message'
+  source: 'hybrid' | 'vector' | 'bm25' | 'node' | 'message'
+}
+
+export interface CompactBranchResponse {
+  ok: boolean
+  compacted: boolean
+  from_node_id: string
+  from_node_title: string
+  to_node_id: string
+  to_node_title: string
+  context_mode: ChildContextMode
+  keep_recent_turns: number
+  tokens_before: number
+  tokens_after: number
+  compression_ratio: number
+  source_summary_version: number
+  handoff_preview: string
+  switched_head: boolean
+}
+
+export interface ArchiveBranchResponse {
+  ok: boolean
+  archived_node_id: string
+  archived_node_title: string
+  status: NodeStatus
+  quarantined_from_search: boolean
+  reason: string
+  switched_head_to: string | null
+}
+
+export interface AskTreeResponse {
+  result: {
+    query?: string
+    scope?: SearchScope
+    deep?: boolean
+    answer?: string
+    targets_queried?: string[]
+    answers?: Array<Record<string, unknown>>
+    found_answers?: Array<Record<string, unknown>>
+    facts_used?: number
+    synth_tokens_in?: number
+    [key: string]: unknown
+  }
+  ipc_event: IpcEventModel | null
 }
 
 export interface TreeSnapshotResponse {
@@ -187,6 +258,7 @@ export interface NodeDetailResponse {
 }
 
 export interface RuntimeSettingsModel {
+  llm_provider: LLMBackendKind
   default_model: string
   shadow_model: string
   summary_model: string

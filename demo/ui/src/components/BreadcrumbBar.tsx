@@ -71,19 +71,32 @@ export function BreadcrumbBar({
           </button>
         </div>
 
-        <nav className="flex items-center gap-1 min-w-0 overflow-x-auto text-xs">
+        <nav className="flex items-center gap-1 min-w-0 overflow-hidden text-xs">
           {pathNodes.map((n, idx) => {
             const isLast = idx === pathNodes.length - 1
+            const isCollapsedMiddle = pathNodes.length > 3 && idx > 0 && idx < pathNodes.length - 2
+            if (isCollapsedMiddle) {
+              if (idx === 1) {
+                return (
+                  <div key="ellipsis" className="flex items-center gap-1 shrink-0 text-zinc-600">
+                    <ChevronRight className="w-3.5 h-3.5" />
+                    <span className="px-1 font-mono text-[11px]">…</span>
+                  </div>
+                )
+              }
+              return null
+            }
             return (
-              <div key={n.id} className="flex items-center gap-1 shrink-0">
-                {idx > 0 && <ChevronRight className="w-3.5 h-3.5 text-zinc-600" />}
+              <div key={n.id} className="flex items-center gap-1 min-w-0 shrink">
+                {idx > 0 && <ChevronRight className="w-3.5 h-3.5 text-zinc-600 shrink-0" />}
                 <button
                   type="button"
                   onClick={() => onSelectNode(n.id)}
-                  className={`px-1.5 py-0.5 rounded transition-colors max-w-[160px] truncate ${
+                  title={n.title}
+                  className={`px-1.5 py-0.5 rounded transition-colors truncate ${
                     isLast
-                      ? 'bg-zinc-800/90 text-zinc-100 font-medium'
-                      : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900'
+                      ? 'bg-zinc-800/90 text-zinc-100 font-medium max-w-[150px] xl:max-w-[190px]'
+                      : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 max-w-[100px] xl:max-w-[135px]'
                   }`}
                 >
                   {n.title}
@@ -125,7 +138,7 @@ export function BreadcrumbBar({
           </button>
         )}
 
-        {activeNode && activeNode.parent_id && (
+        {activeNode && activeNode.parent_id && activeNode.status !== 'ARCHIVED' && (
           <button
             type="button"
             disabled={finishing}

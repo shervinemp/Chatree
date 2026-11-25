@@ -3,6 +3,7 @@ import { api } from './api/client'
 import { BreadcrumbBar } from './components/BreadcrumbBar'
 import { ChatPane } from './components/ChatPane'
 import { CommandPalette } from './components/CommandPalette'
+import { CompactModal } from './components/CompactModal'
 import { InspectorDrawer } from './components/InspectorDrawer'
 import { NewTreeModal } from './components/NewTreeModal'
 import { SettingsModal } from './components/SettingsModal'
@@ -11,11 +12,16 @@ import { SpawnModal } from './components/SpawnModal'
 import { TreeOutline } from './components/TreeOutline'
 import { useKeyboardNav } from './hooks/useKeyboardNav'
 import type {
+  BranchFactModel,
   ChildContextMode,
   IpcEventModel,
+  LLMBackendKind,
   NodeDetailResponse,
   NodeModel,
   RuntimeSettingsModel,
+  SearchScope,
+  ToolPermission,
+  TreeInvariantModel,
   TreeModel,
   TreeSnapshotResponse,
 } from './types'
@@ -24,6 +30,9 @@ export function App() {
   const [trees, setTrees] = useState<TreeModel[]>([])
   const [snapshot, setSnapshot] = useState<TreeSnapshotResponse | null>(null)
   const [nodeDetail, setNodeDetail] = useState<NodeDetailResponse | null>(null)
+  const [invariants, setInvariants] = useState<TreeInvariantModel[]>([])
+  const [facts, setFacts] = useState<BranchFactModel[]>([])
+  const [includeArchivedFacts, setIncludeArchivedFacts] = useState(false)
   const [settings, setSettings] = useState<RuntimeSettingsModel | null>(null)
 
   const [inspectorOpen, setInspectorOpen] = useState(
@@ -33,7 +42,9 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [newTreeOpen, setNewTreeOpen] = useState(false)
   const [spawnParent, setSpawnParent] = useState<NodeModel | null>(null)
+  const [compactTarget, setCompactTarget] = useState<NodeModel | null>(null)
   const [shadowTarget, setShadowTarget] = useState<NodeModel | null>(null)
+  const [shadowModalMode, setShadowModalMode] = useState<'direct' | 'ask'>('direct')
   const [shadowModalOpen, setShadowModalOpen] = useState(false)
 
   const [isStreaming, setIsStreaming] = useState(false)
@@ -41,6 +52,7 @@ export function App() {
   const [streamingIpc, setStreamingIpc] = useState<IpcEventModel[]>([])
   const [ephemeralNotices, setEphemeralNotices] = useState<string[]>([])
   const [finishing, setFinishing] = useState(false)
+  const [archiving, setArchiving] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
   const showToast = useCallback((msg: string) => {
@@ -50,17 +62,27 @@ export function App() {
     }, 4000)
   }, [])
 
-  const loadTreeAndHead = useCallback(async (treeId: string, preferredNodeId?: string) => {
-    const snap = await api.getTreeSnapshot(treeId)
-    setSnapshot(snap)
-    const targetNodeId = preferredNodeId || snap.tree.head_node_id || snap.tree.root_node_id
-    if (targetNodeId) {
-      const detail = await api.getNodeDetail(targetNodeId)
-      setNodeDetail(detail)
-    } else {
-      setNodeDetail(null)
-    }
-  }, [])
+  const loadTreeAndHead = useCallback(
+    async (treeId: string, preferredNodeId?: string, includeArch?: boolean) => {
+      const showArch = includeArch ?? includeArchivedFacts
+      const [snap, invList, factList] = await Promise.all([
+        api.getTreeSnapshot(treeId),
+        api.listInvariants(treeId).catch(() => [] as TreeInvariantModel[]),
+        api.listFacts(treeId, { includeArchived: showArch }).catch(() => [] as BranchFactModel[]),
+      ])
+      setSnapshot(snap)
+      setInvariants(invList)
+      setFacts(factList)
+      const targetNodeId = preferredNodeId || snap.tree.head_node_id || snap.tree.root_node_id
+      if (targetNodeId) {
+        const detail = await api.getNodeDetail(targetNodeId)
+        setNodeDetail(detail)
+      } else {
+        setNodeDetail(null)
+      }
+    },
+    [includeArchivedFacts]
+  )
 
   const bootstrap = useCallback(async () => {
     const [treeList, rtSettings] = await Promise.all([api.listTrees(), api.getSettings()])
@@ -72,6 +94,8 @@ export function App() {
       })
       setTrees([created.tree])
       setSnapshot(created)
+      setInvariants([])
+      setFacts([])
       if (created.tree.head_node_id) {
         const detail = await api.getNodeDetail(created.tree.head_node_id)
         setNodeDetail(detail)
@@ -118,6 +142,8 @@ export function App() {
     const created = await api.createTree({ title, goal })
     setTrees((prev) => [created.tree, ...prev])
     setSnapshot(created)
+    setInvariants([])
+    setFacts([])
     setEphemeralNotices([])
     if (created.tree.head_node_id) {
       setNodeDetail(await api.getNodeDetail(created.tree.head_node_id))
@@ -196,6 +222,7 @@ export function App() {
     summary_brief: string
     slice_turn_count: number
     model_override: string | null
+    tool_permission: ToolPermission
     switch_head: boolean
   }) => {
     if (!activeTree || !spawnParent) return
@@ -205,6 +232,113 @@ export function App() {
     await loadTreeAndHead(activeTree.id, nextId)
     if (res.child) {
       showToast(`Spawned ${res.child.context_mode} branch “${res.child.title}”`)
+    }
+  }
+
+  const handleCompactBranch = async (payload: {
+    keep_recent_turns: number
+    title?: string
+    reason?: string
+    switch_head: boolean
+  }) => {
+    if (!activeTree || !compactTarget) return
+    const info = await api.compactNode(compactTarget.id, payload)
+    const nextId = info.switched_head ? info.to_node_id : activeNode?.id || compactTarget.id
+    await loadTreeAndHead(activeTree.id, nextId)
+    showToast(
+      `Compacted “${info.from_node_title}” → “${info.to_node_title}” (${info.tokens_before}→${info.tokens_after} tok, ${info.compression_ratio}×)`
+    )
+  }
+
+  const handleArchiveBranch = async (nodeToArchive?: NodeModel) => {
+    const target = nodeToArchive ?? activeNode
+    if (!activeTree || !target || !target.parent_id) return
+    setArchiving(true)
+    try {
+      const res = await api.archiveNode(target.id, {
+        reason: 'Archived via UI',
+        switch_to_parent: true,
+      })
+      const nextId =
+        res.switched_head_to ||
+        (activeNode?.id === target.id ? target.parent_id : activeNode?.id) ||
+        undefined
+      await loadTreeAndHead(activeTree.id, nextId)
+      showToast(`Archived “${res.archived_node_title}” — quarantined from default 4-tier RAG.`)
+    } catch (err) {
+      showToast(String(err))
+    } finally {
+      setArchiving(false)
+    }
+  }
+
+  const handleAskTree = async (
+    query: string,
+    scope: SearchScope,
+    maxTargets: number,
+    deep: boolean
+  ) => {
+    if (!activeTree || !activeNode) return {}
+    const res = await api.askTree(activeNode.id, {
+      query,
+      scope,
+      max_targets: maxTargets,
+      deep,
+    })
+    await loadTreeAndHead(activeTree.id, activeNode.id)
+    return res.result
+  }
+
+  const handlePinInvariant = async (payload: {
+    key: string
+    value: string
+    source_node_id?: string | null
+  }) => {
+    if (!activeTree) return
+    await api.pinInvariant(activeTree.id, payload)
+    await loadTreeAndHead(activeTree.id, activeNode?.id)
+    showToast(`Pinned invariant ${payload.key}`)
+  }
+
+  const handleUnpinInvariant = async (key: string) => {
+    if (!activeTree) return
+    await api.unpinInvariant(activeTree.id, key)
+    await loadTreeAndHead(activeTree.id, activeNode?.id)
+    showToast(`Unpinned invariant ${key}`)
+  }
+
+  const handleAddFact = async (payload: {
+    node_id: string
+    fact: string
+    resolved_date?: string
+    entities: string[]
+  }) => {
+    if (!activeTree) return
+    const existingForNode = facts.filter((f) => f.node_id === payload.node_id)
+    const merged = [
+      ...existingForNode.map((f) => ({
+        fact: f.fact_text,
+        resolved_date: f.resolved_date || undefined,
+        entities: f.entities,
+      })),
+      {
+        fact: payload.fact,
+        resolved_date: payload.resolved_date,
+        entities: payload.entities,
+      },
+    ]
+    await api.addFacts(activeTree.id, { node_id: payload.node_id, facts: merged })
+    await loadTreeAndHead(activeTree.id, activeNode?.id)
+    showToast('Added Tier-2.5 atomic temporal fact')
+  }
+
+  const handleToggleIncludeArchivedFacts = async (include: boolean) => {
+    setIncludeArchivedFacts(include)
+    if (activeTree) {
+      const factList = await api
+        .listFacts(activeTree.id, { includeArchived: include })
+        .catch(() => [] as BranchFactModel[])
+      setFacts(factList)
     }
   }
 
@@ -301,6 +435,7 @@ export function App() {
   }
 
   const handleSaveSettings = async (payload: {
+    llm_provider: LLMBackendKind
     default_model: string
     shadow_model: string
     summary_model: string
@@ -312,6 +447,7 @@ export function App() {
     applyToActiveTree: boolean
   }) => {
     const updated = await api.updateSettings({
+      llm_provider: payload.llm_provider,
       default_model: payload.default_model,
       shadow_model: payload.shadow_model,
       summary_model: payload.summary_model,
@@ -332,7 +468,7 @@ export function App() {
       })
       await loadTreeAndHead(activeTree.id, activeNode?.id)
     }
-    showToast(`Settings saved (model: ${payload.default_model})`)
+    showToast(`Settings saved (${payload.llm_provider} · ${payload.default_model})`)
   }
 
   const ipcEventsById = useMemo(() => {
@@ -369,8 +505,11 @@ export function App() {
         onSpawnFromNode={(node) => setSpawnParent(node)}
         onShadowQueryNode={(node) => {
           setShadowTarget(node)
+          setShadowModalMode('direct')
           setShadowModalOpen(true)
         }}
+        onCompactNode={(node) => setCompactTarget(node)}
+        onArchiveNode={(node) => handleArchiveBranch(node)}
       />
 
       {/* Center Column: Breadcrumbs + Focused Linear Chat */}
@@ -411,8 +550,17 @@ export function App() {
           onOpenSpawn={() => activeNode && setSpawnParent(activeNode)}
           onOpenShadowQuery={() => {
             setShadowTarget(null)
+            setShadowModalMode('direct')
             setShadowModalOpen(true)
           }}
+          onOpenAskTree={() => {
+            setShadowTarget(null)
+            setShadowModalMode('ask')
+            setShadowModalOpen(true)
+          }}
+          onOpenCompact={() => activeNode && setCompactTarget(activeNode)}
+          onArchiveNode={() => handleArchiveBranch()}
+          archiving={archiving}
           onJumpToNode={(nodeId) => handleJump(nodeId)}
         />
 
@@ -424,7 +572,7 @@ export function App() {
         )}
       </div>
 
-      {/* Right Sidebar: Reflog, IPC Audit Trace & Artifacts */}
+      {/* Right Sidebar: Reflog, IPC Audit Trace, Artifacts & Memory (Pins + Facts) */}
       {inspectorOpen && (
         <InspectorDrawer
           nodes={snapshot?.nodes ?? []}
@@ -432,9 +580,17 @@ export function App() {
           reflogCursor={activeTree?.reflog_cursor ?? 0}
           ipcEvents={snapshot?.recent_ipc ?? []}
           artifacts={snapshot?.artifacts ?? []}
+          invariants={invariants}
+          facts={facts}
           activeNodeId={activeNode?.id ?? null}
+          includeArchivedFacts={includeArchivedFacts}
+          onToggleIncludeArchivedFacts={handleToggleIncludeArchivedFacts}
           onJumpReflog={(target, note) => handleJump(target, note)}
+          onJumpToNode={(nodeId) => handleJump(nodeId)}
           onCreateArtifact={handleCreateArtifact}
+          onPinInvariant={handlePinInvariant}
+          onUnpinInvariant={handleUnpinInvariant}
+          onAddFact={handleAddFact}
         />
       )}
 
@@ -447,16 +603,32 @@ export function App() {
         />
       )}
 
+      {compactTarget && (
+        <CompactModal
+          sourceNode={compactTarget}
+          estimatedTokens={
+            compactTarget.id === activeNode?.id
+              ? nodeDetail?.estimated_context_tokens ?? 0
+              : compactTarget.tokens_in
+          }
+          onClose={() => setCompactTarget(null)}
+          onCompact={handleCompactBranch}
+        />
+      )}
+
       {shadowModalOpen && activeNode && shadowCandidates.length > 0 && (
         <ShadowQueryModal
           callerNode={activeNode}
           candidateNodes={shadowCandidates}
           initialTargetId={shadowTarget?.id}
+          initialMode={shadowModalMode}
           onClose={() => {
             setShadowModalOpen(false)
             setShadowTarget(null)
           }}
           onRunRequest={handleDirectRequest}
+          onRunAskTree={handleAskTree}
+          onJumpToNode={(nodeId) => handleJump(nodeId)}
         />
       )}
 

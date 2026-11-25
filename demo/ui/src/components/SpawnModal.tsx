@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { GitBranch, X } from 'lucide-react'
-import type { ChildContextMode, NodeModel } from '../types'
+import type { ChildContextMode, NodeModel, ToolPermission } from '../types'
 
 interface SpawnModalProps {
   parentNode: NodeModel
@@ -12,6 +12,7 @@ interface SpawnModalProps {
     summary_brief: string
     slice_turn_count: number
     model_override: string | null
+    tool_permission: ToolPermission
     switch_head: boolean
   }) => Promise<void>
 }
@@ -23,6 +24,7 @@ export function SpawnModal({ parentNode, onClose, onSpawn }: SpawnModalProps) {
   const [summaryBrief, setSummaryBrief] = useState('')
   const [sliceTurns, setSliceTurns] = useState(6)
   const [modelOverride, setModelOverride] = useState('')
+  const [toolPermission, setToolPermission] = useState<ToolPermission>('read_only')
   const [switchHead, setSwitchHead] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
@@ -38,6 +40,7 @@ export function SpawnModal({ parentNode, onClose, onSpawn }: SpawnModalProps) {
         summary_brief: summaryBrief.trim(),
         slice_turn_count: sliceTurns,
         model_override: modelOverride.trim() || null,
+        tool_permission: toolPermission,
         switch_head: switchHead,
       })
       onClose()
@@ -168,6 +171,32 @@ export function SpawnModal({ parentNode, onClose, onSpawn }: SpawnModalProps) {
               placeholder="Key constraints or context to hand to the child branch..."
               className="w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2.5 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-zinc-400 mb-1.5 font-medium">Branch Tool Permission</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { id: 'read_only', label: 'Read-Only', desc: 'Safe exploration; cannot mutate tree invariants' },
+                  { id: 'read_write', label: 'Read-Write', desc: 'May pin invariants, archive & run write tools' },
+                ] as const
+              ).map((perm) => (
+                <button
+                  key={perm.id}
+                  type="button"
+                  onClick={() => setToolPermission(perm.id)}
+                  className={`p-2 rounded-lg border text-left transition-colors ${
+                    toolPermission === perm.id
+                      ? 'border-violet-500 bg-violet-500/15 text-zinc-100'
+                      : 'border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:border-zinc-700'
+                  }`}
+                >
+                  <div className="font-semibold text-xs">{perm.label}</div>
+                  <div className="text-[10px] text-zinc-400 mt-0.5">{perm.desc}</div>
+                </button>
+              ))}
+            </div>
           </div>
 
           <label className="flex items-center gap-2 text-zinc-300 cursor-pointer select-none">

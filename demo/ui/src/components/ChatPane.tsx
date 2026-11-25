@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
+  Archive,
   ChevronDown,
   ChevronRight,
   Cpu,
   GitBranch,
   Layers,
+  Minimize2,
   RefreshCw,
   Search,
   Send,
@@ -40,6 +42,10 @@ interface ChatPaneProps {
   onDismissHandoff: (mailboxId: string) => Promise<void>
   onOpenSpawn: () => void
   onOpenShadowQuery: () => void
+  onOpenAskTree: () => void
+  onOpenCompact: () => void
+  onArchiveNode: () => void
+  archiving: boolean
   onJumpToNode: (nodeId: string) => void
 }
 
@@ -55,15 +61,21 @@ function IpcChip({
   const [open, setOpen] = useState(false)
   const isBlocked = ev.status.startsWith('rejected_') || ev.status === 'error'
   const toLabel = ev.to_node_id ? nodeNames[ev.to_node_id] || ev.to_node_id : 'tree'
+  const customToolName = typeof ev.payload.tool === 'string' ? ev.payload.tool : 'custom_tool'
   const labelMap: Record<string, string> = {
-    spawn: `dialogue_tree_create_branch → ${toLabel}`,
+    spawn: ev.payload.compact
+      ? `dialogue_tree_compact_branch → ${toLabel}`
+      : `dialogue_tree_create_branch → ${toLabel}`,
     send: `dialogue_tree_send_to_branch → ${toLabel}`,
     send_finish: `dialogue_tree_send_to_branch(finish=True) → ${toLabel}`,
     request_summary: `dialogue_tree_query_branch(summary) → ${toLabel}`,
     request_shadow: `dialogue_tree_query_branch(shadow) → ${toLabel}`,
     request_mutate: `dialogue_tree_query_branch(mutate) → ${toLabel}`,
-    search: `dialogue_tree_search_branches("${String(ev.payload.query ?? '')}")`,
+    search: Array.isArray(ev.response.targets_queried)
+      ? `dialogue_tree_search_and_query("${String(ev.payload.query ?? '')}")`
+      : `dialogue_tree_search_branches("${String(ev.payload.query ?? '')}")`,
     reflog_jump: `dialogue_tree_switch_branch → ${toLabel}`,
+    custom_tool: `${customToolName} → ${toLabel}`,
   }
 
   return (
@@ -151,6 +163,10 @@ export function ChatPane({
   onDismissHandoff,
   onOpenSpawn,
   onOpenShadowQuery,
+  onOpenAskTree,
+  onOpenCompact,
+  onArchiveNode,
+  archiving,
   onJumpToNode,
 }: ChatPaneProps) {
   const [input, setInput] = useState('')
@@ -202,13 +218,20 @@ export function ChatPane({
             </span>
             <span
               className={`font-mono text-[10px] px-1.5 py-0.5 rounded shrink-0 ${
-                node.status === 'COMPLETED'
-                  ? 'bg-indigo-500/20 text-indigo-300'
-                  : 'bg-emerald-500/15 text-emerald-300'
+                node.status === 'ARCHIVED'
+                  ? 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                  : node.status === 'COMPLETED'
+                    ? 'bg-indigo-500/20 text-indigo-300'
+                    : 'bg-emerald-500/15 text-emerald-300'
               }`}
             >
               {node.status}
             </span>
+            {node.tool_permission === 'read_write' && (
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 shrink-0">
+                rw
+              </span>
+            )}
             {node.summary_version > 0 && (
               <span className="font-mono text-[10px] text-zinc-500 shrink-0">
                 v{node.summary_version}
@@ -223,16 +246,63 @@ export function ChatPane({
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
+            onClick={onOpenAskTree}
+            disabled={allNodes.length < 2}
+            title="Ask across tree via unified TreeQueryEngine (Hop-1 + Tier-2.5 facts + synthesis)"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/35 text-xs text-indigo-200 transition-colors disabled:opacity-40"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-indigo-300 shrink-0" />
+            <span className="hidden md:inline">Ask Tree</span>
+          </button>
+          <button
+            type="button"
             onClick={onOpenShadowQuery}
             disabled={allNodes.length < 2}
-            title="Run read-only shadow query against another node"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 transition-colors disabled:opacity-40"
+            title="Run read-only shadow query against a specific node"
+            className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 transition-colors disabled:opacity-40"
           >
             <Search className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-            <span className="hidden md:inline">Shadow Query Node</span>
+            <span className="hidden xl:inline">Shadow</span>
           </button>
+          {node.status !== 'ARCHIVED' && (
+            <button
+              type="button"
+              onClick={onOpenCompact}
+              title="Non-destructively compact this branch into a linked continuation child"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 hover:text-emerald-300 transition-colors"
+            >
+              <Minimize2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="hidden lg:inline">Compact</span>
+            </button>
+          )}
+          {node.parent_id && node.status !== 'ARCHIVED' && (
+            <button
+              type="button"
+              disabled={archiving}
+              onClick={onArchiveNode}
+              title="Archive dead-end branch (quarantine from default 4-tier RAG & active facts)"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-zinc-900 hover:bg-rose-950/40 border border-zinc-800 hover:border-rose-500/40 text-xs text-zinc-400 hover:text-rose-300 transition-colors disabled:opacity-40"
+            >
+              <Archive className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden xl:inline">{archiving ? 'Archiving…' : 'Archive'}</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Archived Dead-End Quarantine Banner */}
+      {node.status === 'ARCHIVED' && (
+        <div className="px-4 py-2 border-b border-zinc-800 bg-zinc-900/70 shrink-0">
+          <div className="max-w-3xl mx-auto flex items-center gap-2 text-xs text-zinc-400">
+            <Archive className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+            <span>
+              <strong className="text-zinc-200">Archived Dead-End Branch</strong> — quarantined from
+              default 4-tier RAG, branch summaries, and active atomic facts while preserving verbatim
+              history for audit.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Pinned Stale Dependency Banners (always visible above scroll fold) */}
       {node.stale_dependencies.length > 0 && (

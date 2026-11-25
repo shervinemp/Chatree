@@ -145,6 +145,7 @@ export function CommandPalette({
                     <div className="text-[11px] text-zinc-400 truncate mt-0.5">{hit.snippet}</div>
                   </div>
                   <span className="font-mono text-[10px] text-indigo-300 shrink-0">
+                    {hit.granularity ? `${hit.granularity} · ` : ''}
                     {hit.source}
                   </span>
                 </button>

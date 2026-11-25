@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { CheckCircle2, KeyRound, Settings, X } from 'lucide-react'
-import type { RuntimeSettingsModel, TreeModel } from '../types'
+import type { LLMBackendKind, RuntimeSettingsModel, TreeModel } from '../types'
 
 interface SettingsModalProps {
   settings: RuntimeSettingsModel
   activeTree: TreeModel | null
   onClose: () => void
   onSave: (payload: {
+    llm_provider: LLMBackendKind
     default_model: string
     shadow_model: string
     summary_model: string
@@ -21,12 +22,20 @@ interface SettingsModalProps {
 
 const MODEL_PRESETS = [
   { label: 'Demo Mode (Zero-Key Mock)', value: 'mock/chatree-demo' },
-  { label: 'OpenRouter · Claude Sonnet 4', value: 'openrouter/anthropic/claude-sonnet-4' },
-  { label: 'OpenRouter · Gemini 2.5 Pro', value: 'openrouter/google/gemini-2.5-pro' },
-  { label: 'Gemini · 2.5 Flash', value: 'gemini/gemini-2.5-flash' },
-  { label: 'Anthropic · Claude Sonnet 4', value: 'anthropic/claude-sonnet-4-20250514' },
+  { label: 'DeepSeek · Chat', value: 'deepseek/deepseek-chat' },
+  { label: 'Anthropic · Claude Sonnet 4.5', value: 'anthropic/claude-sonnet-4-5' },
   { label: 'OpenAI · GPT-4o', value: 'openai/gpt-4o' },
+  { label: 'Gemini · 2.5 Flash', value: 'gemini/gemini-2.5-flash' },
+  { label: 'OpenRouter · Claude Sonnet 4', value: 'openrouter/anthropic/claude-sonnet-4' },
+  { label: 'Groq · Llama 3.3 70B', value: 'groq/llama-3.3-70b-versatile' },
   { label: 'Ollama · Llama 3.2 (Local)', value: 'ollama/llama3.2' },
+]
+
+const PROVIDER_DRIVERS: Array<{ id: LLMBackendKind; label: string; desc: string }> = [
+  { id: 'auto', label: 'auto', desc: 'LiteLLM when installed, else zero-dep openai_compat' },
+  { id: 'openai_compat', label: 'openai_compat', desc: 'Zero-LiteLLM native HTTP/SSE (OpenAI, DeepSeek, Ollama, vLLM)' },
+  { id: 'litellm', label: 'litellm', desc: '100+ providers via LiteLLM router' },
+  { id: 'mock', label: 'mock', desc: 'Offline deterministic demo provider' },
 ]
 
 export function SettingsModal({
@@ -35,6 +44,7 @@ export function SettingsModal({
   onClose,
   onSave,
 }: SettingsModalProps) {
+  const [llmProvider, setLlmProvider] = useState<LLMBackendKind>(settings.llm_provider || 'auto')
   const [defaultModel, setDefaultModel] = useState(
     activeTree?.default_model || settings.default_model
   )
@@ -52,10 +62,12 @@ export function SettingsModal({
   )
   const [applyToActiveTree, setApplyToActiveTree] = useState(true)
   const [keys, setKeys] = useState<Record<string, string>>({
-    OPENROUTER_API_KEY: '',
-    GEMINI_API_KEY: '',
-    ANTHROPIC_API_KEY: '',
+    DEEPSEEK_API_KEY: '',
     OPENAI_API_KEY: '',
+    ANTHROPIC_API_KEY: '',
+    GEMINI_API_KEY: '',
+    OPENROUTER_API_KEY: '',
+    GROQ_API_KEY: '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -68,6 +80,7 @@ export function SettingsModal({
         if (v.trim()) nonEmptyKeys[k] = v.trim()
       }
       await onSave({
+        llm_provider: llmProvider,
         default_model: defaultModel.trim() || 'mock/chatree-demo',
         shadow_model: shadowModel.trim() || 'inherit',
         summary_model: summaryModel.trim() || 'inherit',
@@ -103,6 +116,30 @@ export function SettingsModal({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5 text-xs">
+          {/* Provider Driver Selector */}
+          <div>
+            <label className="block text-zinc-400 mb-1.5 font-medium">
+              LLM Backend Driver (<code className="font-mono text-indigo-300">llm_provider</code>)
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {PROVIDER_DRIVERS.map((drv) => (
+                <button
+                  key={drv.id}
+                  type="button"
+                  onClick={() => setLlmProvider(drv.id)}
+                  className={`p-2 rounded-lg border text-left transition-colors ${
+                    llmProvider === drv.id
+                      ? 'border-indigo-500 bg-indigo-500/15 text-zinc-100'
+                      : 'border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:border-zinc-700'
+                  }`}
+                >
+                  <div className="font-mono font-semibold text-[11px]">{drv.label}</div>
+                  <div className="text-[10px] text-zinc-400 mt-0.5 leading-snug">{drv.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Quick Presets */}
           <div>
             <label className="block text-zinc-400 mb-1.5 font-medium">Quick Model Presets</label>
@@ -235,16 +272,18 @@ export function SettingsModal({
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1.5 font-medium text-zinc-300">
                 <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
-                Provider API Keys (saved locally in SQLite; never echoed back)
+                Provider API Keys (kept in runtime memory; never echoed back)
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
               {(
                 [
-                  ['openrouter', 'OPENROUTER_API_KEY'],
-                  ['gemini', 'GEMINI_API_KEY'],
-                  ['anthropic', 'ANTHROPIC_API_KEY'],
+                  ['deepseek', 'DEEPSEEK_API_KEY'],
                   ['openai', 'OPENAI_API_KEY'],
+                  ['anthropic', 'ANTHROPIC_API_KEY'],
+                  ['gemini', 'GEMINI_API_KEY'],
+                  ['openrouter', 'OPENROUTER_API_KEY'],
+                  ['groq', 'GROQ_API_KEY'],
                 ] as const
               ).map(([prov, envKey]) => {
                 const isSet = !!settings.configured_providers[prov]
