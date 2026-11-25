@@ -1,10 +1,10 @@
 """
 Provider-Agnostic Publishable Evaluation Runner for Chatree.
 
-Runs Tracks 1-7 against ANY LLM provider (OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter,
+Runs Tracks 1-8 against ANY LLM provider (OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter,
 Groq, Mistral, Together, xAI, Ollama, vLLM, SGLang, LM Studio, or `mock/chatree-demo`) with
 crash-safe JSONL checkpointing, dedicated cross-family judge providers, exact provenance
-manifests, Total Lifecycle Cost (Query + Ingest USD) tables, and `--dry-run` budgeting:
+manifests, Total Lifecycle Cost (Query + Ingest USD) tables, `--simulate-proof` ($0.00), and `--dry-run` budgeting:
   - Track 1: 5-Family Multi-Tangent & Autonomous Tool-Use Suite (6 baselines + LLM Judge)
   - Track 2: Systematic 10-Row Ablation Matrix + K-Scaling Crossover Curve (K=2, 4, 8)
   - Track 3: Official LoCoMo (ACL 2024) head-to-head (stratified or full n=1,986)
@@ -12,6 +12,7 @@ manifests, Total Lifecycle Cost (Query + Ingest USD) tables, and `--dry-run` bud
   - Track 5: Live 18-Turn Jump-Around Chatbot Benchmark (`--natural-prompts` supported)
   - Track 6: Multi-Generation Non-Destructive vs. Destructive Compaction Benchmark
   - Track 7: Non-Monotonic Software Engineering & Spec-Reversal Benchmark (6 projects, 36 QAs)
+  - Track 8: Structural Simulation Trace (`--simulate-proof`, $0.00) & Live Micro-Diagnostic Proof vs. Mem0
 
 Never prints or logs any API keys.
 """

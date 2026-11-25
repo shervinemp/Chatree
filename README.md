@@ -5,7 +5,7 @@
 [![CI](https://github.com/shervinemp/Chatree/actions/workflows/ci.yml/badge.svg)](https://github.com/shervinemp/Chatree/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 107 Passing](https://img.shields.io/badge/tests-107%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
+[![Tests: 111 Passing](https://img.shields.io/badge/tests-111%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
 [![Paper: LaTeX + Markdown](https://img.shields.io/badge/paper-LaTeX%20%2B%20MD-blue.svg)](paper/chatree_paper.md)
 [![Local-First SQLite](https://img.shields.io/badge/storage-SQLite%20WAL%20%2B%20FTS5-lightgrey.svg)](#architecture)
 [![MCP Compatible](https://img.shields.io/badge/protocol-MCP%20JSON--RPC%202.0-purple.svg)](#cli-mcp-server--optional-demo-ui)
@@ -194,7 +194,7 @@ To isolate Chatree's structural guarantees over flat write-time distilled memory
 In accordance with academic artifact-evaluation standards, we explicitly document known limitations and active research gaps:
 
 1. **Interactive orchestrator vs. structured `TreeQueryEngine`:** External benchmarks (`ChatreeSystemAdapter`) and `tree.ask(..., deep=True)` now share the unified [`TreeQueryEngine`](src/chatree/engine/query.py) pipeline, whereas interactive turns in `TurnOrchestrator` choose tools autonomously. Tier-2.5 ephemeral `FACTS` hints are wired into `TurnOrchestrator`, but end-to-end unscripted live-agent LoCoMo/LongMemEval evaluation remains future work.
-2. **Single-model & self-judging bias:** Live evaluations across Tracks 1–7 (including Track 7 in [`non_monotonic_bench.py`](src/chatree/eval/non_monotonic_bench.py)) used `deepseek/deepseek-chat` for both generation and LLM judging on a single seed. The runner provides a dedicated cross-family judge provider (`--judge-model`, `--judge-provider`, `--judge-api-base`) and universal checkpoint re-judging (`--rejudge-ckpt --rejudge-dataset {locomo,longmemeval,non_monotonic}`) for multi-family Cohen's $\kappa$ audits and full-split evaluation.
+2. **Single-model & self-judging bias:** Live evaluations across Tracks 1–8 (including Track 7 in [`non_monotonic_bench.py`](src/chatree/eval/non_monotonic_bench.py) and Track 8B in [`micro_diagnostics.py`](src/chatree/eval/micro_diagnostics.py), where Track 8A is deterministic zero-token and Track 8B uses verifiable token/leakage rubrics) used `deepseek/deepseek-chat` for generation (and LLM judging on Tracks 1–7) on a single seed. The runner provides a dedicated cross-family judge provider (`--judge-model`, `--judge-provider`, `--judge-api-base`) and universal checkpoint re-judging (`--rejudge-ckpt --rejudge-dataset {locomo,longmemeval,non_monotonic}`) for multi-family Cohen's $\kappa$ audits and full-split evaluation.
 3. **Context-overflow regime (`LongMemEval-M`, >1M tokens):** Live LongMemEval runs above used `LongMemEval-S` (~115k tokens, inside DeepSeek's 128k window). `LongMemEval-M` support (`--lme-split m`, 2.6 GB dataset, ~500 sessions / ~1.5M tokens per query) is implemented for >1M-token overflow testing.
 4. **Hosted-API KV-cache TTL:** On hosted providers (Anthropic, DeepSeek, OpenAI), server-side KV caches expire after ~5–10 minutes; non-destructive compaction preserves *verbatim message prefixes* indefinitely (enabling warm cache hits within TTL and instant reload on self-hosted RadixAttention / LMCache engines), not permanent hosted VRAM residency.
 5. **Single-process SQLite storage & $O(N)$ vector scan:** `SQLiteRepository` uses WAL + in-process `asyncio.Lock` and serves per-tree vector queries via `sqlite-vec` or a strongly consistent pre-normalized NumPy matrix cache (`unit_mat @ q`, <1 ms at 5k chunks). Multi-tenant / 100k+ chunk deployments will require an ANN index (HNSW) or a Postgres/`pgvector` `StorageBackend` implementation.
@@ -311,6 +311,12 @@ uv run python scripts/run_publishable_eval.py \
   --lme-split s --lme-per-cat 10 \
   --concurrency 4
 
+# Run Track 8 (Track 8A zero-token real-framework trace + Track 8B ultra-lean live micro-diagnostics vs. Mem0, ~$0.015)
+uv run python scripts/run_publishable_eval.py \
+  --model deepseek/deepseek-chat \
+  --tracks 8 \
+  --out-dir results/deepseek_eval
+
 # Universally re-judge any saved Track 3 / 4 / 7 checkpoint with a cross-family judge (zero re-ingest)
 uv run python scripts/run_publishable_eval.py \
   --model deepseek/deepseek-chat \
@@ -377,7 +383,7 @@ Chatree/
 │   ├── sdk/                       # Modular async SDK (client.py, tree.py, session.py, node.py)
 │   ├── eval/
 │   │   ├── adapters/              # Modular adapters (base, chatree, baselines, sota Mem0/RLM/Letta/Graphiti)
-│   │   └── *.py                   # Tracks 1-7 runners (incl. Track 7 non-monotonic bench), LoCoMo/LongMemEval loaders, stats
+│   │   └── *.py                   # Tracks 1-8 runners (incl. Track 7 non-monotonic bench & Track 8 simulation/micro-diagnostics), LoCoMo/LongMemEval loaders, stats
 │   ├── cli.py / mcp_server.py     # Full-parity CLI entrypoint & zero-dependency MCP stdio server
 │   └── server/                    # Modular FastAPI REST + SSE adapter (app, dtos, routes_trees, routes_nodes)
 ├── demo/ui/                       # Optional React + TypeScript IDE-style tree explorer
@@ -385,7 +391,7 @@ Chatree/
 ├── paper/                         # Camera-ready LaTeX paper (chatree_paper.tex), Markdown report, BibTeX & PDF/PNG/SVG figures
 ├── scripts/                       # Provider-agnostic evaluation runner & reproducible figure generator
 ├── results/deepseek_eval/         # Reproducible benchmark tables, LaTeX exports, checkpoints & manifests
-└── tests/                         # 107 automated unit & integration tests (zero API keys required)
+└── tests/                         # 111 automated unit & integration tests (zero API keys required)
 ```
 
 ---
