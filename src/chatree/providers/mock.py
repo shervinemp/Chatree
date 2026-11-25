@@ -7,6 +7,7 @@ import time
 import uuid
 from typing import Any, AsyncIterator
 
+from chatree.providers.tokenizer import get_default_token_counter
 from chatree.tools import (
     TOOL_ASK_TREE,
     TOOL_COMPACT_BRANCH,
@@ -19,22 +20,16 @@ from chatree.tools import (
 from chatree.types import LLMResponse, LLMStreamEvent, LLMToolCall
 
 
-def estimate_tokens(text: str) -> int:
+def estimate_tokens(text: str, *, model: str | None = None) -> int:
     if not text:
         return 0
-    return max(1, len(text) // 4)
+    return get_default_token_counter().count_text(text, model=model)
 
 
-def estimate_messages_tokens(messages: list[dict[str, Any]]) -> int:
-    total = 0
-    for m in messages:
-        total += 4
-        content = m.get("content") or ""
-        if isinstance(content, str):
-            total += estimate_tokens(content)
-        if m.get("tool_calls"):
-            total += estimate_tokens(json.dumps(m["tool_calls"]))
-    return total
+def estimate_messages_tokens(
+    messages: list[dict[str, Any]], *, model: str | None = None
+) -> int:
+    return get_default_token_counter().count_messages(messages, model=model)
 
 
 class MockLLMProvider:

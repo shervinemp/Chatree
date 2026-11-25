@@ -8,11 +8,13 @@ from chatree.engine.rag import TreeRAGService
 from chatree.storage.repository import SQLiteRepository
 from chatree.types import (
     ArtifactModel,
+    BranchFactModel,
     IpcEventModel,
     MailboxItemModel,
     MessageModel,
     NodeModel,
     ReflogEntryModel,
+    TreeInvariantModel,
     TreeModel,
 )
 
@@ -70,11 +72,13 @@ class DialogueDirectoryStore:
         artifacts = await repo.list_artifacts(tree_id)
         mailbox_items = await repo.list_mailbox_items(tree_id)
         deps = await repo.list_dependencies(tree_id)
+        facts = await repo.list_branch_facts(tree_id, active_only=False, exclude_archived=False)
+        invariants = await repo.list_tree_invariants(tree_id)
 
         (out / "tree.json").write_text(
             json.dumps(
                 {
-                    "format_version": 2,
+                    "format_version": 3,
                     "tree": tree.model_dump(),
                     "node_ids": [n.id for n in nodes],
                 },
@@ -101,6 +105,14 @@ class DialogueDirectoryStore:
         (out / "mailbox.jsonl").write_text(
             "\n".join(json.dumps(mb.model_dump()) for mb in reversed(mailbox_items))
             + ("\n" if mailbox_items else ""),
+            encoding="utf-8",
+        )
+        (out / "facts.jsonl").write_text(
+            "\n".join(json.dumps(f.model_dump()) for f in facts) + ("\n" if facts else ""),
+            encoding="utf-8",
+        )
+        (out / "invariants.json").write_text(
+            json.dumps([inv.model_dump() for inv in invariants], indent=2) + "\n",
             encoding="utf-8",
         )
 
@@ -171,6 +183,7 @@ class DialogueDirectoryStore:
 
         async with repo.db.write_transaction():
             await DialogueDirectoryStore._insert_bundle(repo, tree, in_dir, bundle)
+        repo.invalidate_vector_cache(tree.id)
 
         if rag is not None:
             await rag.index_tree(tree.id)
@@ -457,5 +470,56 @@ class DialogueDirectoryStore:
                         art.summary,
                         art.created_by_node_id,
                         art.created_at,
+                    ),
+                )
+
+        # Restore Tier-2.5 atomic temporal facts (lossless round-trip!)
+        facts_path = in_dir / "facts.jsonl"
+        if facts_path.exists():
+            for line in facts_path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                fact = BranchFactModel(**json.loads(line))
+                await repo.conn.execute(
+                    """
+                    INSERT INTO branch_facts (
+                        id, tree_id, node_id, fact_text, entities_json,
+                        resolved_date, source_msg_seq, status, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        fact.id,
+                        fact.tree_id,
+                        fact.node_id,
+                        fact.fact_text,
+                        json.dumps(fact.entities),
+                        fact.resolved_date,
+                        fact.source_msg_seq,
+                        fact.status,
+                        fact.created_at,
+                    ),
+                )
+
+        # Restore tree-level PINNED invariants (including source version/seq staleness snapshots!)
+        inv_path = in_dir / "invariants.json"
+        if inv_path.exists():
+            raw_invs = json.loads(inv_path.read_text(encoding="utf-8"))
+            for item in raw_invs if isinstance(raw_invs, list) else []:
+                inv = TreeInvariantModel(**item)
+                await repo.conn.execute(
+                    """
+                    INSERT INTO tree_invariants (
+                        tree_id, key, value, source_node_id,
+                        source_summary_version, source_msg_seq, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        inv.tree_id,
+                        inv.key,
+                        inv.value,
+                        inv.source_node_id,
+                        inv.source_summary_version,
+                        inv.source_msg_seq,
+                        inv.updated_at,
                     ),
                 )

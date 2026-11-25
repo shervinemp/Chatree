@@ -11,6 +11,7 @@ from chatree.engine.guardrails import TraceContext
 from chatree.engine.ipc import IPCRouter
 from chatree.engine.operations import BranchOperations
 from chatree.engine.orchestrator import TurnOrchestrator
+from chatree.engine.query import TreeQueryEngine
 from chatree.engine.rag import TreeRAGService
 from chatree.engine.reflog import ReflogService
 from chatree.engine.staleness import StalenessService
@@ -156,6 +157,14 @@ class Chatree:
             on_branch_switch_away=(
                 self._schedule_bg_summary if self.config.auto_background_summarize_on_switch else None
             ),
+        )
+        self.query_engine = TreeQueryEngine(
+            self.repo,
+            self.ipc,
+            self.rag,
+            self.llm,
+            self.router,
+            ablations=self.config.ablations,
         )
         self.orchestrator = TurnOrchestrator(
             self.repo,
@@ -381,6 +390,7 @@ class Chatree:
             else {"custom": True}
         )
         return RuntimeSettingsModel(
+            llm_provider=stored.get("llm_provider", self.config.llm_provider),
             default_model=stored.get("default_model", self.config.default_model),
             shadow_model=stored.get("shadow_model", self.config.shadow_model),
             summary_model=stored.get("summary_model", self.config.summary_model),
@@ -396,6 +406,7 @@ class Chatree:
     async def update_runtime_settings(self, updates: dict[str, Any]) -> RuntimeSettingsModel:
         to_persist: dict[str, Any] = {}
         for key in (
+            "llm_provider",
             "default_model",
             "shadow_model",
             "summary_model",
@@ -406,7 +417,9 @@ class Chatree:
         ):
             if key in updates and updates[key] is not None:
                 val = updates[key]
-                if key == "api_base":
+                if key == "llm_provider":
+                    self.config.llm_provider = val
+                elif key == "api_base":
                     val = val or None
                     if hasattr(self.llm, "api_base"):
                         setattr(self.llm, "api_base", val)
@@ -566,13 +579,32 @@ class DialogueTree:
         caller_id: str | None = None,
         exclude_node_ids: set[str] | None = None,
         shadow_prompt: str | None = None,
+        deep: bool = False,
+        enable_recursive_hop: bool = True,
+        include_branch_summary_map: bool = True,
+        concise_synthesis: bool = True,
     ) -> dict[str, Any]:
-        """Single-hop compound Retrieve-then-Ask fusing hybrid search + parallel shadow turns."""
+        """
+        Single-hop compound Retrieve-then-Ask fusing hybrid search + parallel shadow turns.
+        Pass `deep=True` to execute the unified `TreeQueryEngine.deep_ask()` pipeline
+        (Hop-1 shadows + Tier-2.5 atomic dated facts + optional Hop-2 drill-down + chronological synthesis).
+        """
         t = await self.model()
         cid = caller_id or t.head_node_id or t.root_node_id
         assert cid is not None
         caller = await self._ct.repo.get_node(cid)
         assert caller is not None
+        if deep:
+            return await self._ct.query_engine.deep_ask(
+                tree=t,
+                caller=caller,
+                query=query,
+                scope=scope,
+                max_targets=max_targets,
+                enable_recursive_hop=enable_recursive_hop,
+                include_branch_summary_map=include_branch_summary_map,
+                concise_synthesis=concise_synthesis,
+            )
         res = await self._ct.ipc.ask_tree(
             tree=t,
             caller=caller,

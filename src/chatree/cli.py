@@ -92,6 +92,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_ask.add_argument("--max-targets", type=int, default=2)
     p_ask.add_argument("--caller", default=None)
+    p_ask.add_argument(
+        "--deep",
+        action="store_true",
+        help="Use TreeQueryEngine multi-hop synthesis (Hop-1 + Tier-2.5 facts + Hop-2 drill-down)",
+    )
 
     p_reflog = sub.add_parser("reflog", help="Show Git-style reflog history")
     p_reflog.add_argument("tree_id")
@@ -109,6 +114,33 @@ def _build_parser() -> argparse.ArgumentParser:
     p_compact.add_argument("--keep-turns", type=int, default=4, help="Recent turns to keep verbatim (0=clean)")
     p_compact.add_argument("--title", default=None, help="Optional continuation title")
     p_compact.add_argument("--reason", default="", help="Optional compaction note")
+
+    p_archive = sub.add_parser(
+        "archive",
+        help="Archive a non-root dead-end branch to quarantine it from active search",
+    )
+    p_archive.add_argument("tree_id")
+    p_archive.add_argument("--node", default=None, help="Branch node ID to archive (defaults to HEAD)")
+    p_archive.add_argument("--reason", default="", help="Reason for archiving")
+    p_archive.add_argument("--no-switch", action="store_true", help="Do not switch HEAD back to parent")
+
+    p_pin = sub.add_parser("pin", help="Pin or update a tree-wide invariant")
+    p_pin.add_argument("tree_id")
+    p_pin.add_argument("key")
+    p_pin.add_argument("value")
+    p_pin.add_argument("--source-node", default=None)
+
+    p_unpin = sub.add_parser("unpin", help="Unpin a tree-wide invariant by key")
+    p_unpin.add_argument("tree_id")
+    p_unpin.add_argument("key")
+
+    p_invs = sub.add_parser("invariants", help="List pinned tree-wide invariants")
+    p_invs.add_argument("tree_id")
+
+    p_facts = sub.add_parser("facts", help="List Tier-2.5 provenance-linked atomic temporal facts")
+    p_facts.add_argument("tree_id")
+    p_facts.add_argument("--node", default=None)
+    p_facts.add_argument("--include-archived", action="store_true")
 
     p_export = sub.add_parser("export", help="Compile tree active path & artifacts to Markdown")
     p_export.add_argument("tree_id")
@@ -436,6 +468,7 @@ async def run_cli_async(argv: Sequence[str] | None = None) -> int:
                 scope=args.scope,
                 max_targets=args.max_targets,
                 caller_id=args.caller,
+                deep=args.deep,
             )
             print(json.dumps(out, indent=2))
             return 0
@@ -460,6 +493,38 @@ async def run_cli_async(argv: Sequence[str] | None = None) -> int:
                 reason=args.reason,
             )
             print(json.dumps(info, indent=2))
+            return 0
+
+        if args.command == "archive":
+            info = await tree.archive(
+                node_id=args.node,
+                reason=args.reason,
+                switch_to_parent=not args.no_switch,
+            )
+            print(json.dumps(info, indent=2))
+            return 0
+
+        if args.command == "pin":
+            inv = await tree.pin(args.key, args.value, source_node_id=args.source_node)
+            print(json.dumps(inv.model_dump(), indent=2))
+            return 0
+
+        if args.command == "unpin":
+            removed = await tree.unpin(args.key)
+            print(json.dumps({"key": args.key, "removed": removed}, indent=2))
+            return 0
+
+        if args.command == "invariants":
+            invs = await tree.invariants()
+            print(json.dumps([i.model_dump() for i in invs], indent=2))
+            return 0
+
+        if args.command == "facts":
+            facts = await tree.facts(
+                node_id=args.node,
+                exclude_archived=not args.include_archived,
+            )
+            print(json.dumps([f.model_dump() for f in facts], indent=2))
             return 0
 
         if args.command == "export":

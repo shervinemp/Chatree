@@ -4,6 +4,8 @@ from typing import Any, AsyncIterator, Callable, Literal, Protocol, runtime_chec
 
 from chatree.types import (
     ArtifactModel,
+    BackgroundJobModel,
+    BranchFactModel,
     IpcEventModel,
     LLMResponse,
     LLMStreamEvent,
@@ -12,6 +14,7 @@ from chatree.types import (
     NodeModel,
     ReflogEntryModel,
     SearchHit,
+    TreeInvariantModel,
     TreeModel,
 )
 
@@ -57,6 +60,15 @@ class Reranker(Protocol):
     async def rerank(
         self, query: str, hits: list[SearchHit], top_k: int
     ) -> list[SearchHit]: ...
+
+
+@runtime_checkable
+class TokenCounter(Protocol):
+    """Pluggable token estimator (tiktoken, provider tokenizer, or calibrated heuristic)."""
+
+    def count_text(self, text: str, *, model: str | None = None) -> int: ...
+
+    def count_messages(self, messages: list[dict[str, Any]], *, model: str | None = None) -> int: ...
 
 
 @runtime_checkable
@@ -107,6 +119,30 @@ class StorageBackend(Protocol):
     ) -> list[MailboxItemModel]: ...
     async def get_all_settings(self) -> dict[str, Any]: ...
     async def set_settings(self, values: dict[str, Any]) -> None: ...
+
+    # Shadow memoization cache
+    async def get_cached_shadow_answer(self, *args: Any, **kwargs: Any) -> dict[str, Any] | None: ...
+    async def put_cached_shadow_answer(self, *args: Any, **kwargs: Any) -> None: ...
+    async def invalidate_shadow_cache(self, target_node_id: str) -> None: ...
+
+    # Embeddings & background jobs
+    async def replace_node_embeddings(self, *args: Any, **kwargs: Any) -> int: ...
+    async def count_embeddings(self, tree_id: str) -> int: ...
+    async def list_background_jobs(self, tree_id: str | None = None, *, limit: int = 50) -> list[BackgroundJobModel]: ...
+
+    # Tier-2.5 atomic temporal facts & tree-level PINNED invariants
+    async def replace_branch_facts(self, *args: Any, **kwargs: Any) -> list[BranchFactModel]: ...
+    async def list_branch_facts(
+        self,
+        tree_id: str,
+        *,
+        node_id: str | None = None,
+        active_only: bool = True,
+        exclude_archived: bool = True,
+    ) -> list[BranchFactModel]: ...
+    async def upsert_tree_invariant(self, *args: Any, **kwargs: Any) -> TreeInvariantModel: ...
+    async def delete_tree_invariant(self, tree_id: str, key: str) -> bool: ...
+    async def list_tree_invariants(self, tree_id: str) -> list[TreeInvariantModel]: ...
 
 
 @runtime_checkable

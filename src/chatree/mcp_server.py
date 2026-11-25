@@ -80,6 +80,7 @@ MCP_TOOLS: list[dict[str, Any]] = [
                 },
                 "max_targets": {"type": "integer", "default": 2},
                 "caller_node_id": {"type": "string"},
+                "deep": {"type": "boolean", "default": False},
             },
             "required": ["tree_id", "query"],
         },
@@ -92,6 +93,63 @@ MCP_TOOLS: list[dict[str, Any]] = [
             "properties": {
                 "tree_id": {"type": "string"},
                 "leaf_node_id": {"type": "string"},
+            },
+            "required": ["tree_id"],
+        },
+    },
+    {
+        "name": "dialogue_tree_compact_branch",
+        "description": "Non-destructively compact a branch into a linked continuation child session while keeping the previous branch verbatim.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tree_id": {"type": "string"},
+                "node_id": {"type": "string"},
+                "keep_recent_turns": {"type": "integer", "default": 4},
+                "title": {"type": "string"},
+                "reason": {"type": "string", "default": ""},
+            },
+            "required": ["tree_id"],
+        },
+    },
+    {
+        "name": "dialogue_tree_archive_branch",
+        "description": "Archive a non-root dead-end branch to quarantine its chunks, summaries, and atomic facts from default active search.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tree_id": {"type": "string"},
+                "node_id": {"type": "string"},
+                "reason": {"type": "string", "default": ""},
+                "switch_to_parent": {"type": "boolean", "default": True},
+            },
+            "required": ["tree_id"],
+        },
+    },
+    {
+        "name": "dialogue_tree_pin_invariant",
+        "description": "Pin, update, unpin, or list bounded tree-wide invariants surfaced in every branch's context envelope.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tree_id": {"type": "string"},
+                "action": {"type": "string", "enum": ["pin", "unpin", "list"], "default": "pin"},
+                "key": {"type": "string"},
+                "value": {"type": "string", "default": ""},
+                "source_node_id": {"type": "string"},
+            },
+            "required": ["tree_id"],
+        },
+    },
+    {
+        "name": "dialogue_tree_list_facts",
+        "description": "List Tier-2.5 provenance-linked atomic temporal facts stored for a tree or specific branch.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tree_id": {"type": "string"},
+                "node_id": {"type": "string"},
+                "include_archived": {"type": "boolean", "default": False},
             },
             "required": ["tree_id"],
         },
@@ -191,11 +249,53 @@ class ChatreeMCPServer:
                 scope=args.get("scope", "all"),
                 max_targets=int(args.get("max_targets", 2)),
                 caller_id=args.get("caller_node_id"),
+                deep=bool(args.get("deep", False)),
             )
 
         if name == "dialogue_tree_export_markdown":
             tree = await self.client.get_tree(str(args["tree_id"]))
             return await tree.compile_markdown(leaf_node_id=args.get("leaf_node_id"))
+
+        if name == "dialogue_tree_compact_branch":
+            tree = await self.client.get_tree(str(args["tree_id"]))
+            _, info = await tree.compact(
+                node_id=args.get("node_id"),
+                keep_recent_turns=int(args["keep_recent_turns"]) if args.get("keep_recent_turns") is not None else None,
+                title=args.get("title"),
+                reason=str(args.get("reason") or ""),
+            )
+            return info
+
+        if name == "dialogue_tree_archive_branch":
+            tree = await self.client.get_tree(str(args["tree_id"]))
+            return await tree.archive(
+                node_id=args.get("node_id"),
+                reason=str(args.get("reason") or ""),
+                switch_to_parent=bool(args.get("switch_to_parent", True)),
+            )
+
+        if name == "dialogue_tree_pin_invariant":
+            tree = await self.client.get_tree(str(args["tree_id"]))
+            action = str(args.get("action") or "pin")
+            if action == "list":
+                return [inv.model_dump() for inv in await tree.invariants()]
+            if action == "unpin":
+                removed = await tree.unpin(str(args["key"]))
+                return {"ok": True, "action": "unpin", "key": str(args["key"]), "removed": removed}
+            inv = await tree.pin(
+                str(args["key"]),
+                str(args.get("value") or ""),
+                source_node_id=args.get("source_node_id"),
+            )
+            return {"ok": True, "action": "pin", "invariant": inv.model_dump()}
+
+        if name == "dialogue_tree_list_facts":
+            tree = await self.client.get_tree(str(args["tree_id"]))
+            facts = await tree.facts(
+                node_id=args.get("node_id"),
+                exclude_archived=not bool(args.get("include_archived", False)),
+            )
+            return [f.model_dump() for f in facts]
 
         raise ValueError(f"Unknown MCP tool: {name}")
 

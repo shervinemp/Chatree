@@ -134,6 +134,114 @@ class TurnOrchestrator:
             error=error,
         )
 
+    async def _maybe_auto_compact(
+        self,
+        tree: TreeModel,
+        node: NodeModel,
+        trace_ctx: TraceContext,
+    ) -> tuple[TreeModel, NodeModel, list[dict[str, Any]]]:
+        """Run non-destructive auto-compaction if `node` crossed the configured token threshold."""
+        events: list[dict[str, Any]] = []
+        if (
+            not self.guardrails.auto_compact_enabled
+            or node.last_msg_seq < self.guardrails.auto_compact_min_messages
+        ):
+            return tree, node, events
+        eff_threshold = min(
+            self.guardrails.auto_compact_threshold_tokens,
+            int(
+                self.guardrails.max_branch_context_tokens
+                * self.guardrails.auto_compact_trigger_ratio
+            ),
+        )
+        live_tokens = await self.context.estimate_node_context_tokens(node)
+        if live_tokens < eff_threshold:
+            return tree, node, events
+
+        comp_res = await self.ipc.compact_branch(
+            tree=tree,
+            source=node,
+            keep_recent_turns=self.guardrails.auto_compact_keep_recent_turns,
+            reason=f"Auto-compacted at {live_tokens} tokens >= threshold {eff_threshold}",
+            switch_head=True,
+            trace_ctx=trace_ctx,
+        )
+        events.append({"event": "branch_compacted", "data": comp_res.tool_output})
+        if comp_res.ipc_event is not None:
+            events.append({"event": "ipc_activity", "data": comp_res.ipc_event.model_dump()})
+        if comp_res.head_changed is not None:
+            f_id, t_id, rf_ent = comp_res.head_changed
+            events.append(
+                {
+                    "event": "head_changed",
+                    "data": {
+                        "from_node_id": f_id,
+                        "to_node_id": t_id,
+                        "reflog_entry": rf_ent.model_dump(),
+                    },
+                }
+            )
+        new_id = str(comp_res.tool_output["to_node_id"])
+        new_node = await self.repo.get_node(new_id)
+        new_tree = await self.repo.get_tree(tree.id)
+        if new_node is not None and new_tree is not None:
+            return new_tree, new_node, events
+        return tree, node, events
+
+    async def _collect_preturn_hints(
+        self,
+        tree: TreeModel,
+        refreshed_node: NodeModel,
+        user_content: str,
+    ) -> tuple[list[Any], list[Any]]:
+        """Run fast local (<5ms, 0 LLM tokens) speculative pointer & Tier-2.5 atomic fact lookup."""
+        speculative_hits: list[Any] = []
+        fact_hits: list[Any] = []
+        if not self.rag.cfg.enabled or len(await self.repo.list_nodes(tree.id)) <= 1:
+            return speculative_hits, fact_hits
+
+        if (
+            self.context.ablations.enable_speculative_pointers
+            and self.rag.cfg.speculative_pointer_top_k > 0
+        ):
+            raw_hits = await self.rag.search(
+                tree_id=tree.id,
+                query=user_content,
+                scope="all",
+                current_node=refreshed_node,
+                top_k=self.rag.cfg.speculative_pointer_top_k + 2,
+                use_reranker=False,
+            )
+            speculative_hits = [
+                h
+                for h in raw_hits
+                if h.node_id != refreshed_node.id
+                and h.score >= self.rag.cfg.speculative_pointer_min_score
+            ][: self.rag.cfg.speculative_pointer_top_k]
+
+        if (
+            self.context.ablations.enable_atomic_facts
+            and self.rag.cfg.enable_atomic_facts
+            and self.rag.cfg.fact_hint_top_k > 0
+        ):
+            raw_facts = await self.rag.search(
+                tree_id=tree.id,
+                query=user_content,
+                scope="all",
+                current_node=refreshed_node,
+                top_k=self.rag.cfg.fact_hint_top_k + 2,
+                granularities={"fact"},
+                use_reranker=False,
+            )
+            fact_hits = [
+                h
+                for h in raw_facts
+                if h.node_id != refreshed_node.id
+                and h.score >= self.rag.cfg.speculative_pointer_min_score
+            ][: self.rag.cfg.fact_hint_top_k]
+
+        return speculative_hits, fact_hits
+
     async def run_turn_stream(
         self,
         node_id: str,
@@ -167,50 +275,11 @@ class TurnOrchestrator:
             min_turn_reserve=self.guardrails.min_turn_reserve,
         )
 
-        # Auto-compact / non-destructive split threshold for unbounded infinite-context sessions:
-        # leaves the old branch 100% untouched & shadow-queryable and routes the new prompt into
-        # a linked continuation child node with structured anchor handoff!
-        if (
-            self.guardrails.auto_compact_enabled
-            and node.last_msg_seq >= self.guardrails.auto_compact_min_messages
-        ):
-            eff_threshold = min(
-                self.guardrails.auto_compact_threshold_tokens,
-                int(
-                    self.guardrails.max_branch_context_tokens
-                    * self.guardrails.auto_compact_trigger_ratio
-                ),
-            )
-            live_tokens = await self.context.estimate_node_context_tokens(node)
-            if live_tokens >= eff_threshold:
-                comp_res = await self.ipc.compact_branch(
-                    tree=tree,
-                    source=node,
-                    keep_recent_turns=self.guardrails.auto_compact_keep_recent_turns,
-                    reason=f"Auto-compacted at {live_tokens} tokens >= threshold {eff_threshold}",
-                    switch_head=True,
-                    trace_ctx=trace_ctx,
-                )
-                yield {"event": "branch_compacted", "data": comp_res.tool_output}
-                if comp_res.ipc_event is not None:
-                    yield {"event": "ipc_activity", "data": comp_res.ipc_event.model_dump()}
-                if comp_res.head_changed is not None:
-                    f_id, t_id, rf_ent = comp_res.head_changed
-                    yield {
-                        "event": "head_changed",
-                        "data": {
-                            "from_node_id": f_id,
-                            "to_node_id": t_id,
-                            "reflog_entry": rf_ent.model_dump(),
-                        },
-                    }
-                new_id = str(comp_res.tool_output["to_node_id"])
-                new_node = await self.repo.get_node(new_id)
-                new_tree = await self.repo.get_tree(tree.id)
-                if new_node is not None and new_tree is not None:
-                    node = new_node
-                    tree = new_tree
-                    node_id = new_node.id
+        # Auto-compact / non-destructive split threshold for unbounded infinite-context sessions
+        tree, node, compact_events = await self._maybe_auto_compact(tree, node, trace_ctx)
+        node_id = node.id
+        for cev in compact_events:
+            yield cev
 
         reopened = False
         if node.status == "COMPLETED":
@@ -258,54 +327,10 @@ class TurnOrchestrator:
         refreshed_node = await self.repo.get_node(node.id)
         assert refreshed_node is not None
 
-        # Pre-turn speculative local search (<5ms, 0 LLM tokens) for compact cross-branch pointers
-        # AND Tier-2.5 atomic dated facts (ephemeral tail — preserves byte-0 KV prefix cache!)
-        speculative_hits = []
-        fact_hits = []
-        has_other_nodes = len(await self.repo.list_nodes(tree.id)) > 1
-        if (
-            self.context.ablations.enable_speculative_pointers
-            and self.rag.cfg.enabled
-            and self.rag.cfg.speculative_pointer_top_k > 0
-            and has_other_nodes
-        ):
-            raw_hits = await self.rag.search(
-                tree_id=tree.id,
-                query=user_content,
-                scope="all",
-                current_node=refreshed_node,
-                top_k=self.rag.cfg.speculative_pointer_top_k + 2,
-                use_reranker=False,
-            )
-            speculative_hits = [
-                h
-                for h in raw_hits
-                if h.node_id != refreshed_node.id
-                and h.score >= self.rag.cfg.speculative_pointer_min_score
-            ][: self.rag.cfg.speculative_pointer_top_k]
-
-        if (
-            self.context.ablations.enable_atomic_facts
-            and self.rag.cfg.enabled
-            and self.rag.cfg.enable_atomic_facts
-            and self.rag.cfg.fact_hint_top_k > 0
-            and has_other_nodes
-        ):
-            raw_facts = await self.rag.search(
-                tree_id=tree.id,
-                query=user_content,
-                scope="all",
-                current_node=refreshed_node,
-                top_k=self.rag.cfg.fact_hint_top_k + 2,
-                granularities={"fact"},
-                use_reranker=False,
-            )
-            fact_hits = [
-                h
-                for h in raw_facts
-                if h.node_id != refreshed_node.id
-                and h.score >= self.rag.cfg.speculative_pointer_min_score
-            ][: self.rag.cfg.fact_hint_top_k]
+        # Pre-turn speculative local search (<5ms, 0 LLM tokens) + Tier-2.5 atomic dated facts
+        speculative_hits, fact_hits = await self._collect_preturn_hints(
+            tree, refreshed_node, user_content
+        )
 
         # Drain unread background-actor mailbox deliveries for injection into this turn
         unread_mailbox = await self.repo.list_mailbox_items(

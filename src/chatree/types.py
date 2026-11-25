@@ -338,6 +338,7 @@ class TurnResult(BaseModel):
 
 
 class RuntimeSettingsModel(BaseModel):
+    llm_provider: str = "auto"
     default_model: str
     shadow_model: str
     summary_model: str

@@ -15,6 +15,7 @@ from chatree.config import (
     ToolPermission,
 )
 from chatree.engine.actors import BackgroundActorManager
+from chatree.engine.query import TreeQueryEngine
 from chatree.hooks import HookBus
 from chatree.protocols import (
     DefaultModelRouter,
@@ -24,6 +25,7 @@ from chatree.protocols import (
     ModelRouter,
     Reranker,
     StorageBackend,
+    TokenCounter,
 )
 from chatree.providers.embeddings import (
     FastEmbedEmbedder,
@@ -44,6 +46,13 @@ from chatree.providers.openai_compat import (
     resolve_provider_spec,
 )
 from chatree.providers.rerankers import FastEmbedCrossEncoderReranker, LLMReranker
+from chatree.providers.tokenizer import (
+    HeuristicTokenCounter,
+    TiktokenCounter,
+    build_token_counter,
+    get_default_token_counter,
+    set_default_token_counter,
+)
 from chatree.sandbox import BranchSandbox, GitWorktreeSandbox, SandboxWorkspace
 from chatree.sdk.client import Chatree, DialogueTree, NodeHandle
 from chatree.storage.portable import DialogueDirectoryStore
@@ -237,6 +246,7 @@ __all__ = [
     "GraphitiOfficialAdapter",
     "GuardrailPolicy",
     "HashEmbedder",
+    "HeuristicTokenCounter",
     "HookBus",
     "IpcEventModel",
     "JumpAroundBenchmarkRunner",
@@ -303,6 +313,8 @@ __all__ = [
     "SuiteBenchmarkReport",
     "SystemExternalResult",
     "TaskFamily",
+    "TiktokenCounter",
+    "TokenCounter",
     "ToolCallContext",
     "ToolNamespace",
     "ToolPermission",
@@ -311,6 +323,7 @@ __all__ = [
     "TreeInvariantModel",
     "TreeMetrics",
     "TreeModel",
+    "TreeQueryEngine",
     "TreeSummaryOnlyAdapter",
     "TurnResult",
     "__version__",
@@ -319,6 +332,7 @@ __all__ = [
     "build_embedder",
     "build_full_eval_suite",
     "build_llm_provider",
+    "build_token_counter",
     "crossover_scaling_scenario",
     "default_compaction_scenario",
     "default_jump_around_scenario",
@@ -327,6 +341,7 @@ __all__ = [
     "exact_match",
     "format_latex_table",
     "format_namespaced_tool",
+    "get_default_token_counter",
     "is_token_asserted_as_active",
     "mcnemar_test",
     "multihop_revision_scenario",
@@ -336,6 +351,7 @@ __all__ = [
     "resolve_onnx_provider_candidates",
     "resolve_provider_endpoint",
     "resolve_provider_spec",
+    "set_default_token_counter",
     "token_f1",
     "unscripted_agentic_scenario",
     "write_run_manifest",

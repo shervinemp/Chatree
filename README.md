@@ -3,7 +3,7 @@
 **Hierarchical Actor-Model Dialogue Trees for Bounded-Context, Verifiable, Non-Destructive LLM Conversations**
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 71 Passing](https://img.shields.io/badge/tests-71%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
+[![Tests: 79 Passing](https://img.shields.io/badge/tests-79%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
 [![Local-First SQLite](https://img.shields.io/badge/storage-SQLite%20WAL%20%2B%20FTS5-lightgrey.svg)](#architecture)
 [![MCP Compatible](https://img.shields.io/badge/protocol-MCP%20JSON--RPC%202.0-purple.svg)](#cli-mcp-server--optional-demo-ui)
 
@@ -225,8 +225,8 @@ Runnable examples: [`examples/01_quickstart_sdk.py`](examples/01_quickstart_sdk.
 
 ## Artifact Evaluation & Reproducibility
 
-### Step 1: Zero-Key Functional Verification (~40s)
-Runs all **71 unit and integration tests** covering IPC guardrails, copy-on-write forks, shadow memoization, materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, GPU runtime fallback, provider-agnostic HTTP/SSE & callable adapters, Tier-2.5 atomic facts, `PINNED` staleness, non-destructive compaction savings guards, negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
+### Step 1: Zero-Key Functional Verification (~45s)
+Runs all **79 unit and integration tests** covering IPC guardrails, copy-on-write forks, shadow memoization, materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, GPU runtime fallback, provider-agnostic HTTP/SSE & callable adapters, unified `TreeQueryEngine`, cached NumPy vector index, pluggable `TokenCounter`, Tier-2.5 atomic facts, `PINNED` staleness, portable v3 `.dialogue/` round-trips, CLI/MCP/REST API parity, non-destructive compaction savings guards, negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
 
 ```bash
 uv run pytest -v
@@ -273,8 +273,11 @@ Every external run emits crash-safe `*.ckpt.jsonl` checkpoints, paired `McNemar`
 # CLI tree operations & portable human-greppable .dialogue/ backup
 uv run chatree init "Distributed Caching"
 uv run chatree trees
-uv run chatree ask <tree_id> "What TTL did we select?"
-uv run chatree compact <tree_id> --keep-recent 4
+uv run chatree ask <tree_id> "What TTL did we select?" --deep
+uv run chatree pin <tree_id> cache_engine "Valkey 8.0"
+uv run chatree facts <tree_id>
+uv run chatree compact <tree_id> --keep-turns 4
+uv run chatree archive <tree_id> --node <dead_end_id> --reason "superseded"
 uv run chatree dump <tree_id> ./.dialogue/cache-tree
 uv run chatree load ./.dialogue/cache-tree
 uv run chatree export <tree_id> --out ADR.md
@@ -295,27 +298,35 @@ cd demo/ui && pnpm install && pnpm dev
 Chatree/
 ├── src/chatree/
 │   ├── config.py                  # ChatreeConfig, GuardrailPolicy, RagConfig, AblationConfig
+│   ├── protocols.py               # Runtime-checkable LLMProvider, Embedder, Reranker, TokenCounter, StorageBackend
 │   ├── tools.py                   # 9 dialogue_tree_* core schemas, STATIC_SYSTEM_PROMPT, ToolRegistry
 │   ├── engine/
-│   │   ├── orchestrator.py        # TurnOrchestrator (auto-compact, frozen envelope, grace synthesis)
+│   │   ├── orchestrator.py        # TurnOrchestrator (auto-compact, pre-turn hints, frozen envelope, grace synthesis)
 │   │   ├── context.py             # Static prefix builder + ephemeral <dialogue_tree_context>
-│   │   ├── ipc.py                 # IPCRouter (parallel fan-out, shadow turns, compaction, archive, pin)
+│   │   ├── ipc/                   # Modular IPCRouter (branching, shadow turns, lifecycle compact/archive/pin, router)
+│   │   ├── query.py               # Unified TreeQueryEngine (Hop-1 shadow + Tier-2.5 facts + Hop-2 + synthesis)
 │   │   ├── rag.py                 # 4-tier hybrid Tree RAG (chunks, summaries, atomic facts, rollups)
 │   │   ├── staleness.py           # Materiality gating, piggybacked FACTS_JSON, 5-section compactor
 │   │   ├── reflog.py              # Git-style HEAD@{k} / back / forward navigation
 │   │   ├── actors.py              # Non-blocking async background child actors
 │   │   └── guardrails.py          # Cycle, hop-depth, and cache-discounted token-budget ledger
-│   ├── providers/                 # OpenAICompatibleProvider, CallableLLMProvider, LiteLLMProvider, ONNX GPU fallback
-│   ├── storage/                   # SQLite WAL/FTS5/vector schema, migrations, portable .dialogue/ store
+│   ├── providers/                 # OpenAICompatibleProvider, CallableLLMProvider, LiteLLMProvider, ONNX GPU, tokenizer
+│   ├── storage/
+│   │   ├── database.py            # Async SQLite WAL + FTS5 + optional sqlite-vec connection manager
+│   │   ├── repository.py          # Thin SQLiteRepository facade composing storage/repos/* mixins
+│   │   ├── repos/                 # Modular storage mixins (trees, ipc_deps, artifacts_mailbox, search_vectors, memory_facts)
+│   │   └── portable.py            # Portable git-greppable .dialogue/ v3 export/import (incl. facts & invariants)
 │   ├── sdk/client.py              # High-level Chatree / DialogueTree / NodeHandle async SDK
-│   ├── eval/                      # Tracks 1-6 runners, SOTA adapters (Mem0/RLM/Letta/Graphiti), stats
-│   ├── cli.py / mcp_server.py     # CLI entrypoint & zero-dependency MCP stdio server
-│   └── server/                    # Optional FastAPI REST + SSE adapter
+│   ├── eval/
+│   │   ├── adapters/              # Modular adapters (base, chatree, baselines, sota Mem0/RLM/Letta/Graphiti)
+│   │   └── *.py                   # Tracks 1-6 runners, LoCoMo/LongMemEval loaders, bootstrap/McNemar stats
+│   ├── cli.py / mcp_server.py     # Full-parity CLI entrypoint & zero-dependency MCP stdio server
+│   └── server/                    # Modular FastAPI REST + SSE adapter (app, dtos, routes_trees, routes_nodes)
 ├── demo/ui/                       # Optional React + TypeScript IDE-style tree explorer
 ├── examples/                      # 5 runnable SDK, custom-tool, ablation, and eval scripts
-├── scripts/                       # Publishable DeepSeek / multi-provider evaluation runner
+├── scripts/                       # Provider-agnostic publishable evaluation runner
 ├── results/deepseek_eval/         # Reproducible benchmark tables, LaTeX exports, and manifests
-└── tests/                         # 71 automated unit & integration tests (zero API keys required)
+└── tests/                         # 79 automated unit & integration tests (zero API keys required)
 ```
 
 ---
