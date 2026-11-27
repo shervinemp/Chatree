@@ -282,18 +282,28 @@ class ContextAssembler:
 
     @staticmethod
     def _truncate_text_to_tokens(text: str, max_tokens: int) -> str:
-        max_chars = max(64, max_tokens * 4)
-        if len(text) <= max_chars:
+        if max_tokens <= 0:
+            return ""
+        cur_tok = estimate_tokens(text)
+        if cur_tok <= max_tokens:
             return text
         marker = "\n...[truncated to fit model context window]...\n"
-        avail = max(32, max_chars - len(marker))
-        head_n = int(avail * 0.70)
-        tail_n = max(0, avail - head_n)
-        return (
-            text[:head_n].rstrip()
-            + marker
-            + (text[-tail_n:].lstrip() if tail_n > 0 else "")
-        )[:max_chars]
+        chars_per_tok = max(1.5, len(text) / max(1, cur_tok))
+        max_chars = max(len(marker) + 24, int(max_tokens * chars_per_tok * 0.90))
+        out = text
+        for _ in range(6):
+            avail = max(16, max_chars - len(marker))
+            head_n = int(avail * 0.70)
+            tail_n = max(0, avail - head_n)
+            out = (
+                text[:head_n].rstrip()
+                + marker
+                + (text[-tail_n:].lstrip() if tail_n > 0 else "")
+            )
+            if estimate_tokens(out) <= max_tokens or max_chars <= len(marker) + 24:
+                break
+            max_chars = max(len(marker) + 24, int(max_chars * 0.78))
+        return out
 
     def fit_messages_to_budget(
         self,
@@ -323,10 +333,12 @@ class ContextAssembler:
         )
         tool_tokens = estimate_tokens(json.dumps(tools)) if tools else 0
         reserve = min(self.guardrails.reply_reserve_tokens, max(64, window // 5))
-        if window - tool_tokens - reserve >= 128:
+        if window - tool_tokens - reserve >= 96:
             input_budget = window - tool_tokens - reserve
+        elif window - tool_tokens >= 96:
+            input_budget = window - tool_tokens
         else:
-            # Tiny synthetic cap where tool schemas alone rival the cap: still enforce strict cap
+            # Tiny synthetic cap smaller than serialized tool schemas alone
             input_budget = max(96, window - min(tool_tokens, window // 2) - min(reserve, window // 5))
 
         if estimate_messages_tokens(messages) <= input_budget:
@@ -442,7 +454,7 @@ class ContextAssembler:
                     ),
                 }
             # Trim remaining messages from largest down until strictly within input_budget
-            for _ in range(4):
+            for _ in range(8):
                 cur_tok = estimate_messages_tokens(fitted)
                 if cur_tok <= input_budget:
                     break

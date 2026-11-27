@@ -456,29 +456,29 @@ async def test_phase2_handoff_pinned_block_trimming_and_whole_request_window() -
     rec = _RecordingMockLLM()
     cfg_small = ChatreeConfig(
         db_path=":memory:",
-        default_model="mock/tiny-3k",
+        default_model="mock/tiny-4k",
         guardrails=GuardrailPolicy(
             max_branch_context_tokens=120_000,
-            model_context_windows={"mock/tiny-3k": 3_000},
+            model_context_windows={"mock/tiny-4k": 4_096},
             reply_reserve_tokens=400,
             auto_compact_enabled=False,
         ),
     )
     async with Chatree.in_memory(config=cfg_small, llm=rec) as ct:
-        tree = await ct.create_tree("Strict Window", default_model="mock/tiny-3k")
+        tree = await ct.create_tree("Strict Window", default_model="mock/tiny-4k")
         root = await tree.root()
-        for i in range(12):
+        for i in range(16):
             await ct.repo.append_message(
                 root.id, tree.id, "user", f"History {i}: " + ("context " * 90)
             )
             await ct.repo.append_message(
                 root.id, tree.id, "assistant", f"Response {i}: " + ("answer " * 90)
             )
-        giant_prompt = "Summarize everything: " + ("detail " * 800)
+        giant_prompt = "Summarize everything: " + ("detail " * 900)
         await tree.chat(giant_prompt)
         assert rec.calls
         for c in rec.calls:
-            assert c["total_tokens"] <= 3_000, f"Exceeded 3000-token model window: {c['total_tokens']}"
+            assert c["total_tokens"] <= 4_096, f"Exceeded 4096-token model window: {c['total_tokens']}"
 
 
 @pytest.mark.asyncio
@@ -553,7 +553,7 @@ async def test_phase2_overbudget_shadow_query_recovers_turn1_middle_and_final() 
     cfg = ChatreeConfig(
         db_path=":memory:",
         guardrails=GuardrailPolicy(
-            max_branch_context_tokens=1_200,
+            max_branch_context_tokens=3_200,
             auto_compact_enabled=False,
         ),
     )
@@ -568,23 +568,23 @@ async def test_phase2_overbudget_shadow_query_recovers_turn1_middle_and_final() 
         await ct.repo.append_message(
             worker.id, tree.id, "assistant", "Confirmed TURN1_TOKEN_ALPHA = OMEGA_111."
         )
-        for i in range(2, 30):
-            if i == 15:
+        for i in range(2, 50):
+            if i == 25:
                 await ct.repo.append_message(
-                    worker.id, tree.id, "user", "Turn 15 locked fact: MID_TOKEN_BETA is SIGMA_222."
+                    worker.id, tree.id, "user", "Turn 25 locked fact: MID_TOKEN_BETA is SIGMA_222."
                 )
                 await ct.repo.append_message(
                     worker.id, tree.id, "assistant", "Confirmed MID_TOKEN_BETA = SIGMA_222."
                 )
             else:
                 await ct.repo.append_message(
-                    worker.id, tree.id, "user", f"Filler discussion {i}: " + ("padding " * 45)
+                    worker.id, tree.id, "user", f"Filler discussion {i}: " + ("padding " * 60)
                 )
                 await ct.repo.append_message(
-                    worker.id, tree.id, "assistant", f"Filler reply {i}: " + ("notes " * 35)
+                    worker.id, tree.id, "assistant", f"Filler reply {i}: " + ("notes " * 45)
                 )
         await ct.repo.append_message(
-            worker.id, tree.id, "user", "Turn 30 locked fact: FINAL_TOKEN_GAMMA is ZETA_333."
+            worker.id, tree.id, "user", "Turn 50 locked fact: FINAL_TOKEN_GAMMA is ZETA_333."
         )
         await ct.repo.append_message(
             worker.id, tree.id, "assistant", "Confirmed FINAL_TOKEN_GAMMA = ZETA_333."
