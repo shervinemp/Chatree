@@ -47,6 +47,11 @@ class Mem0OfficialAdapter:
         self._session_buf: dict[str, list[dict[str, str]]] = {}
         self._ingest_tokens_in = 0
         self._ingest_tokens_out = 0
+        self._ingest_cache_read_tokens = 0
+        self._ingest_llm_calls = 0
+        self._ingest_usage_metered = False
+        self._metering_ingest = False
+        self._meter_lock = threading.Lock()
 
     @staticmethod
     def build_provider_config(
@@ -118,6 +123,71 @@ class Mem0OfficialAdapter:
     def get_ingest_usage(self) -> tuple[int, int]:
         return self._ingest_tokens_in, self._ingest_tokens_out
 
+    def get_ingest_metering_info(self) -> dict[str, Any]:
+        """Return exact write-path metering metadata (client-metered vs. fallback heuristic)."""
+        return {
+            "tokens_in": self._ingest_tokens_in,
+            "tokens_out": self._ingest_tokens_out,
+            "cache_read_tokens": self._ingest_cache_read_tokens,
+            "llm_calls": self._ingest_llm_calls,
+            "metered": self._ingest_usage_metered,
+        }
+
+    def _install_llm_usage_meter(self) -> bool:
+        """
+        Wrap `self._mem.llm.client.chat.completions.create` so every internal `mem0ai`
+        write-path LLM call records exact provider-reported `prompt_tokens`, `completion_tokens`,
+        and cached input tokens (DeepSeek `prompt_cache_hit_tokens` or OpenAI
+        `prompt_tokens_details.cached_tokens`). Falls back cleanly when a non-OpenAI client is used.
+        """
+        llm_obj = getattr(self._mem, "llm", None)
+        client = getattr(llm_obj, "client", None)
+        completions = getattr(getattr(client, "chat", None), "completions", None)
+        orig_create = getattr(completions, "create", None)
+        if completions is None or not callable(orig_create):
+            return False
+        if getattr(orig_create, "_chatree_metered", False):
+            return True
+
+        def _extract_usage_counts(resp: Any) -> tuple[int, int, int] | None:
+            usage = getattr(resp, "usage", None)
+            if usage is None and isinstance(resp, dict):
+                usage = resp.get("usage")
+            if usage is None:
+                return None
+
+            def _get_field(obj: Any, key: str) -> Any:
+                if isinstance(obj, dict):
+                    return obj.get(key)
+                return getattr(obj, key, None)
+
+            p_tok = int(_get_field(usage, "prompt_tokens") or 0)
+            c_tok = int(_get_field(usage, "completion_tokens") or 0)
+            cache_tok = int(_get_field(usage, "prompt_cache_hit_tokens") or 0)
+            if cache_tok == 0:
+                details = _get_field(usage, "prompt_tokens_details")
+                if details is not None:
+                    cache_tok = int(_get_field(details, "cached_tokens") or 0)
+            return p_tok, c_tok, cache_tok
+
+        def _metered_create(*args: Any, **kwargs: Any) -> Any:
+            resp = orig_create(*args, **kwargs)
+            if self._metering_ingest:
+                counts = _extract_usage_counts(resp)
+                if counts is not None:
+                    p_tok, c_tok, cache_tok = counts
+                    with self._meter_lock:
+                        self._ingest_tokens_in += p_tok
+                        self._ingest_tokens_out += c_tok
+                        self._ingest_cache_read_tokens += cache_tok
+                        self._ingest_llm_calls += 1
+                        self._ingest_usage_metered = True
+            return resp
+
+        setattr(_metered_create, "_chatree_metered", True)
+        completions.create = _metered_create
+        return True
+
     def clone(self) -> Mem0OfficialAdapter:
         """Create an isolated worker adapter (safe for concurrency when MEM0_TELEMETRY=false)."""
         return Mem0OfficialAdapter(
@@ -146,6 +216,10 @@ class Mem0OfficialAdapter:
         self._session_buf = {}
         self._ingest_tokens_in = 0
         self._ingest_tokens_out = 0
+        self._ingest_cache_read_tokens = 0
+        self._ingest_llm_calls = 0
+        self._ingest_usage_metered = False
+        self._metering_ingest = False
         cfg = (
             dict(self.mem0_config)
             if self.mem0_config
@@ -158,6 +232,7 @@ class Mem0OfficialAdapter:
         )
         cfg.setdefault("history_db_path", str(Path(self._tmpdir.name) / "mem0_history.db"))
         self._mem = Memory.from_config(cfg) if cfg else Memory()
+        self._install_llm_usage_meter()
 
     async def start_session(
         self, session_id: str, *, title: str = "", date_time: str = "", parent_session_id: str | None = None
@@ -176,12 +251,18 @@ class Mem0OfficialAdapter:
         del summary
         msgs = self._session_buf.pop(session_id, [])
         if msgs and self._mem is not None:
-            # Estimate write-path extraction tokens (Mem0 performs LLM extraction + dedup per add)
-            chars = sum(len(m["content"]) for m in msgs)
-            self._ingest_tokens_in += max(200, chars // 4 + 350)
-            res = await asyncio.to_thread(self._mem.add, msgs, user_id=self._user_id)
-            out_chars = len(json.dumps(res, default=str))
-            self._ingest_tokens_out += max(40, out_chars // 4)
+            calls_before = self._ingest_llm_calls
+            self._metering_ingest = True
+            try:
+                res = await asyncio.to_thread(self._mem.add, msgs, user_id=self._user_id)
+            finally:
+                self._metering_ingest = False
+            if self._ingest_llm_calls == calls_before:
+                # Fallback heuristic ONLY when the underlying Mem0 LLM client could not be metered
+                chars = sum(len(m["content"]) for m in msgs)
+                self._ingest_tokens_in += max(200, chars // 4 + 350)
+                out_chars = len(json.dumps(res, default=str))
+                self._ingest_tokens_out += max(40, out_chars // 4)
 
     async def answer_query(self, question: str, *, date_time: str = "") -> AdapterAnswer:
         assert self._mem is not None and self.llm is not None

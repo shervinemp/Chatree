@@ -5,12 +5,12 @@
 [![CI](https://github.com/shervinemp/Chatree/actions/workflows/ci.yml/badge.svg)](https://github.com/shervinemp/Chatree/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 111 Passing](https://img.shields.io/badge/tests-111%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
+[![Tests: 113 Passing](https://img.shields.io/badge/tests-113%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
 [![Paper: PDF + LaTeX + MD](https://img.shields.io/badge/paper-PDF%20%2B%20LaTeX%20%2B%20MD-blue.svg)](paper/chatree_paper.pdf)
 [![Local-First SQLite](https://img.shields.io/badge/storage-SQLite%20WAL%20%2B%20FTS5-lightgrey.svg)](#architecture)
 [![MCP Compatible](https://img.shields.io/badge/protocol-MCP%20JSON--RPC%202.0-purple.svg)](#cli-mcp-server--optional-demo-ui)
 
-**Chatree** is a local-first Python framework and research testbed that replaces flat linear chat transcripts with **hierarchical actor-model dialogue trees**. Every topic tangent, speculative prototype, or compacted continuation runs as an isolated tree node with copy-on-write prefix inheritance, read-only shadow inspection, causal staleness coherence, dead-end quarantine, non-destructive compaction, and a 4-tier hybrid tree index—keeping active working context $O(1)$-bounded while retaining verbatim ancestor provenance.
+**Chatree** is a local-first Python framework and research testbed that replaces flat linear chat transcripts with **hierarchical actor-model dialogue trees**. Every topic tangent, speculative prototype, or compacted continuation runs as an isolated tree node with copy-on-write prefix inheritance, read-only shadow inspection, causal staleness coherence, dead-end quarantine, non-destructive compaction, and a 4-tier hybrid tree index—keeping active branch context bounded while retaining verbatim ancestor provenance.
 
 ---
 
@@ -89,7 +89,7 @@ All built-in primitives are namespaced under `dialogue_tree_*` to guarantee zero
 
 | Capability | Full-Context Linear | Sliding Window | Flat Hybrid RAG | Mem0 | Letta / MemGPT | Zep / Graphiti | Context-Folding | MIT RLM | **Chatree** |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Bounded $O(1)$ working context | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Partial | **✓** |
+| Bounded active branch window | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Partial | **✓** |
 | Lossless verbatim ancestor recall | ✓ (until limit) | ✗ | Partial (chunks) | ✗ (distilled) | Partial (archival) | Partial | ✗ (folded) | ✓ (REPL) | **✓ (Shadow)** |
 | Explicit branching & dead-end quarantine | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | Partial | ✗ | **✓ (`ARCHIVED`)** |
 | Materiality-gated causal staleness | ✗ | ✗ | ✗ | ✗ | ✗ | Temporal edges | ✗ | ✗ | **✓ (Transitive)** |
@@ -179,10 +179,11 @@ Multi-sprint engineering workspaces testing `spec_reversal`, `dead_end_quarantin
 
 To isolate Chatree's structural guarantees over flat write-time distilled memory (`mem0ai==2.2.1`) without burning benchmark budgets, Track 8 provides both a **0-token real-framework execution trace** (tracing real `Chatree` alongside real `mem0ai==2.2.1` over an in-process localhost proxy, `$0.00`) and a **live off-peak micro-diagnostic head-to-head** (`~$0.015` total on `deepseek/deepseek-chat`):
 
-- **Track 8A — Zero-Token Structural Simulation & Execution Trace ([`exp8_simulation_proof.md`](results/deepseek_eval/exp8_simulation_proof.md), `$0.00`):**
-  - **Byte-0 Prefix KV-Cache Stability (16 turns):** Chatree's tail-ephemeral `ContextAssembler` preserves **82.5%** mean turn-to-turn Longest Common Token Prefix (LCP) vs. **0.7%** for Mem0-style prefix memory injection (**-69.4%** effective billed input tokens under `0.1x` cache discount).
-  - **Write-Time Schema & Scaling Audit:** Live inspection of upstream `mem0ai==2.2.1` reveals a **`33,653`-char (~8,413-token)** `ADDITIVE_EXTRACTION_PROMPT` per `add()` call (plus `5,310`-char update reconciliation), vs. Chatree's `0` write calls/turn and `1` cold-trimmed summary (`7,500` chars) on branch finish (**2.4x–4.4x** lower total USD at `N=200` sessions).
-  - **Identical-Lossiness Probe Traces (Probes 1–3):** Giving *both* frameworks identical lossy distillation, Chatree passes **8/8 (100%)** vs. Mem0 **0/8 (0%)** across un-anchored verbatim recovery (`4/4` vs. `0/4`), 2-hop transitive staleness (`A -> B [1h] -> C [2h]`, `2/2` vs. `0/2`), and silent dead-end archival (`2/2` vs. `0/2`).
+- **Track 8A — Zero-Token Structural Simulation & Classifier Benchmark ([`exp8_simulation_proof.md`](results/deepseek_eval/exp8_simulation_proof.md), `$0.00`):**
+  - **3-Way Prefix KV-Cache Stability (16 turns):** Chatree's tail-ephemeral `ContextAssembler` preserves **82.5%** mean turn-to-turn Longest Common Token Prefix (LCP, climbing `74.1% -> 87.1%`) vs. **61.0%** for Mem0 end-of-system injection (decaying `84.2% -> 45.2%`, **−38.3%** billed tokens) and **0.7%** for byte-0 prepend (**−69.4%** billed tokens under `0.1x` cache discount).
+  - **Write-Time Schema & Scaling Audit:** Live inspection of upstream `mem0ai==2.2.1` reveals a **`33,653`-char (~8,413-token)** `ADDITIVE_EXTRACTION_PROMPT` per `add()` call (plus `5,310`-char update reconciliation), vs. Chatree's `0` write calls/turn and `1` cold-trimmed summary (`7,500` chars) on branch finish (**2.4x–4.4x** lower modeled total USD at `N=200` sessions).
+  - **Controlled Lossy-Distillation Stress Traces (Probes 1–3):** Giving *both* frameworks identical lossy distillation, Chatree passes **8/8 (100%)** vs. Mem0 **0/8 (0%)** across un-anchored verbatim recovery (`4/4` vs. `0/4`), 2-hop transitive staleness (`A -> B [1h] -> C [2h]`, `2/2` vs. `0/2`), and silent dead-end archival (`2/2` vs. `0/2`).
+  - **20-Pair Materiality Classifier Benchmark:** `StalenessService.classify_change_materiality()` (`bge-small-en-v1.5`, threshold `0.90`) achieves **90.9% precision / 100.0% recall / 95.2% F1** (`19/20` accuracy; `4/4` identifier/numeric, `3/3` polarity, `3/3` non-alphanumeric semantic shifts, `9/10` cosmetic with 1 conservative FP).
 - **Track 8B — Live Head-to-Head Micro-Diagnostics ([`exp8_micro_diagnostics.md`](results/deepseek_eval/exp8_micro_diagnostics.md), `deepseek/deepseek-chat` vs. unmodified `mem0ai==2.2.1`):**
   - **Combined Score:** `chatree_live` **8/8 (100.0%)**, **0 leaks**, **2/2 structural stale flags**, **78.7%–81.9% live KV-cache hit** vs. `mem0_official` **6/8 (75.0%)**, **1 production dead-end leak**, **0/2 structural stale flags**, **0.0% KV-cache hit**.
   - On **Probe 3 (Silent Dead-End Quarantine — no cancellation essay)**, unmodified `mem0ai==2.2.1` leaked archived prototype parameters (`rs_ledger_0`, `wiredTigerCacheSizeGB=24`) as active production configuration, whereas Chatree's native `status='ARCHIVED'` quarantined the spike with **0% leakage**. On **Probe 2**, Chatree deterministically flagged both `B (1h)` and `C (2h)` stale on revision of `A` (`2/2` vs. `0/2`). On tiny 12-turn **Probe 1**, both scored `4/4`, with Mem0 exploding 12 short turns into 13 verbose Qdrant memories via its 33.6k-char prompt at `0.0%` KV cache vs. Chatree's `81.9%` KV cache.
@@ -274,7 +275,7 @@ Runnable examples: [`examples/01_quickstart_sdk.py`](examples/01_quickstart_sdk.
 ## Artifact Evaluation & Reproducibility
 
 ### Step 1: Zero-Key Functional Verification (~55s)
-Runs all **111 unit and integration tests** covering IPC guardrails, copy-on-write forks, multi-branch `imports` with automatic staleness edges, shadow memoization (with normalized prompt hashing), compaction-chain transparent shadow lookup, materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, `chat` vs. promotable `subagent` node kinds, strict `HEAD`-only `reflog` + MRU envelope + supervisor worker cancellation cascade, multi-session `TreeSession` visitors with independent `HEAD`/reflog/cues, KV-cache-safe Turn-1 & piggybacked-exit semantic auto-titling (`title_source` + frozen `brief_title`), deterministic weekday date anchoring, selective Hop-2 escalation, `deep=True` agent tool dispatch, hybrid summary-map directory scaling, parallel batch ingest, conservative steady-state ephemeral envelopes, Track 7 non-monotonic engineering benchmark & Total Lifecycle Cost reporting, Track 8A zero-token LCP/scaling/execution-trace simulation proofs & Track 8B micro-diagnostics, cross-family `judge_llm` wiring, GPU runtime fallback, provider-agnostic HTTP/SSE & callable adapters, unified `TreeQueryEngine`, cached NumPy vector index, pluggable `TokenCounter`, Tier-2.5 atomic facts, `PINNED` staleness, portable v3 `.dialogue/` round-trips, CLI/MCP/REST API parity, non-destructive compaction savings guards, negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
+Runs all **113 unit and integration tests** covering IPC guardrails, copy-on-write forks, multi-branch `imports` with automatic staleness edges, shadow memoization (with normalized prompt hashing), compaction-chain transparent shadow lookup, materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, `chat` vs. promotable `subagent` node kinds, strict `HEAD`-only `reflog` + MRU envelope + supervisor worker cancellation cascade, multi-session `TreeSession` visitors with independent `HEAD`/reflog/cues, KV-cache-safe Turn-1 & piggybacked-exit semantic auto-titling (`title_source` + frozen `brief_title`), deterministic weekday date anchoring, selective Hop-2 escalation, `deep=True` agent tool dispatch, hybrid summary-map directory scaling, parallel batch ingest, conservative steady-state ephemeral envelopes, Track 7 non-monotonic engineering benchmark & Total Lifecycle Cost reporting, Track 8A zero-token 3-way LCP/scaling/execution-trace/materiality benchmarks & Track 8B micro-diagnostics, exact client-level Mem0 token metering, cross-family `judge_llm` wiring, GPU runtime fallback, provider-agnostic HTTP/SSE & callable adapters, unified `TreeQueryEngine`, cached NumPy vector index, pluggable `TokenCounter`, Tier-2.5 atomic facts, `PINNED` staleness, portable v3 `.dialogue/` round-trips, CLI/MCP/REST API parity, non-destructive compaction savings guards, negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
 
 ```bash
 uv run pytest -v
@@ -391,7 +392,7 @@ Chatree/
 ├── paper/                         # Compiled PDF (chatree_paper.pdf), camera-ready LaTeX (chatree_paper.tex), Markdown report, BibTeX & figures
 ├── scripts/                       # Provider-agnostic evaluation runner & reproducible figure generator
 ├── results/deepseek_eval/         # Reproducible benchmark tables, LaTeX exports, checkpoints & manifests
-└── tests/                         # 111 automated unit & integration tests (zero API keys required)
+└── tests/                         # 113 automated unit & integration tests (zero API keys required)
 ```
 
 ---

@@ -6,11 +6,15 @@
   "prefix_stability": {
     "num_turns": 16,
     "chatree_mean_lcp_ratio": 0.8248,
+    "mem0_end_of_sys_mean_lcp_ratio": 0.6098,
     "mem0_mean_lcp_ratio": 0.0074,
     "chatree_total_raw_tokens": 21052,
     "chatree_effective_billed_tokens": 6018,
+    "mem0_end_of_sys_total_raw_tokens": 19780,
+    "mem0_end_of_sys_effective_billed_tokens": 9750,
     "mem0_total_raw_tokens": 19780,
     "mem0_effective_billed_tokens": 19658,
+    "effective_input_savings_vs_end_of_sys_pct": 38.27,
     "effective_input_savings_pct": 69.39,
     "per_turn": [
       {
@@ -18,6 +22,9 @@
         "chatree_prompt_tokens": 940,
         "chatree_lcp_tokens": 0,
         "chatree_lcp_ratio": 0.0,
+        "mem0_end_of_sys_prompt_tokens": 833,
+        "mem0_end_of_sys_lcp_tokens": 0,
+        "mem0_end_of_sys_lcp_ratio": 0.0,
         "mem0_prompt_tokens": 833,
         "mem0_lcp_tokens": 0,
         "mem0_lcp_ratio": 0.0
@@ -27,6 +34,9 @@
         "chatree_prompt_tokens": 994,
         "chatree_lcp_tokens": 737,
         "chatree_lcp_ratio": 0.7414,
+        "mem0_end_of_sys_prompt_tokens": 882,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.8424,
         "mem0_prompt_tokens": 882,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0102
@@ -36,6 +46,9 @@
         "chatree_prompt_tokens": 1018,
         "chatree_lcp_tokens": 791,
         "chatree_lcp_ratio": 0.777,
+        "mem0_end_of_sys_prompt_tokens": 935,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.7947,
         "mem0_prompt_tokens": 935,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0096
@@ -45,6 +58,9 @@
         "chatree_prompt_tokens": 1071,
         "chatree_lcp_tokens": 845,
         "chatree_lcp_ratio": 0.789,
+        "mem0_end_of_sys_prompt_tokens": 989,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.7513,
         "mem0_prompt_tokens": 989,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0091
@@ -54,6 +70,9 @@
         "chatree_prompt_tokens": 1125,
         "chatree_lcp_tokens": 899,
         "chatree_lcp_ratio": 0.7991,
+        "mem0_end_of_sys_prompt_tokens": 1048,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.709,
         "mem0_prompt_tokens": 1048,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0086
@@ -63,6 +82,9 @@
         "chatree_prompt_tokens": 1174,
         "chatree_lcp_tokens": 952,
         "chatree_lcp_ratio": 0.8109,
+        "mem0_end_of_sys_prompt_tokens": 1107,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.6712,
         "mem0_prompt_tokens": 1107,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0081
@@ -72,6 +94,9 @@
         "chatree_prompt_tokens": 1233,
         "chatree_lcp_tokens": 1006,
         "chatree_lcp_ratio": 0.8159,
+        "mem0_end_of_sys_prompt_tokens": 1162,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.6394,
         "mem0_prompt_tokens": 1162,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0077
@@ -81,6 +106,9 @@
         "chatree_prompt_tokens": 1286,
         "chatree_lcp_tokens": 1060,
         "chatree_lcp_ratio": 0.8243,
+        "mem0_end_of_sys_prompt_tokens": 1214,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.612,
         "mem0_prompt_tokens": 1214,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0074
@@ -90,6 +118,9 @@
         "chatree_prompt_tokens": 1340,
         "chatree_lcp_tokens": 1114,
         "chatree_lcp_ratio": 0.8313,
+        "mem0_end_of_sys_prompt_tokens": 1263,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.5883,
         "mem0_prompt_tokens": 1263,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0071
@@ -99,6 +130,9 @@
         "chatree_prompt_tokens": 1389,
         "chatree_lcp_tokens": 1167,
         "chatree_lcp_ratio": 0.8402,
+        "mem0_end_of_sys_prompt_tokens": 1312,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.5663,
         "mem0_prompt_tokens": 1312,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0069
@@ -108,6 +142,9 @@
         "chatree_prompt_tokens": 1448,
         "chatree_lcp_tokens": 1221,
         "chatree_lcp_ratio": 0.8432,
+        "mem0_end_of_sys_prompt_tokens": 1365,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.5443,
         "mem0_prompt_tokens": 1365,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0066
@@ -117,6 +154,9 @@
         "chatree_prompt_tokens": 1501,
         "chatree_lcp_tokens": 1275,
         "chatree_lcp_ratio": 0.8494,
+        "mem0_end_of_sys_prompt_tokens": 1419,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.5236,
         "mem0_prompt_tokens": 1419,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0063
@@ -126,6 +166,9 @@
         "chatree_prompt_tokens": 1555,
         "chatree_lcp_tokens": 1329,
         "chatree_lcp_ratio": 0.8547,
+        "mem0_end_of_sys_prompt_tokens": 1478,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.5027,
         "mem0_prompt_tokens": 1478,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0061
@@ -135,6 +178,9 @@
         "chatree_prompt_tokens": 1604,
         "chatree_lcp_tokens": 1382,
         "chatree_lcp_ratio": 0.8616,
+        "mem0_end_of_sys_prompt_tokens": 1537,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.4834,
         "mem0_prompt_tokens": 1537,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0059
@@ -144,6 +190,9 @@
         "chatree_prompt_tokens": 1663,
         "chatree_lcp_tokens": 1436,
         "chatree_lcp_ratio": 0.8635,
+        "mem0_end_of_sys_prompt_tokens": 1592,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.4667,
         "mem0_prompt_tokens": 1592,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0057
@@ -153,6 +202,9 @@
         "chatree_prompt_tokens": 1711,
         "chatree_lcp_tokens": 1490,
         "chatree_lcp_ratio": 0.8708,
+        "mem0_end_of_sys_prompt_tokens": 1644,
+        "mem0_end_of_sys_lcp_tokens": 743,
+        "mem0_end_of_sys_lcp_ratio": 0.4519,
         "mem0_prompt_tokens": 1644,
         "mem0_lcp_tokens": 9,
         "mem0_lcp_ratio": 0.0055
@@ -338,10 +390,10 @@
         "stored_memories_count": 5,
         "stored_memories": [
           "Checkout UI redesign uses React 19, TanStack Query, Tailwind v4, and WCAG 2.2 AA.",
-          "Headline decision: replace legacy Redis 6 with Valkey 8.0 for rate-limit and idempotency keys.",
           "Headline decision: switch internal service-to-service hops from REST/JSON to gRPC mTLS.",
+          "Headline decision: migrate edge payment gateway to Envoy 1.31 across all regions.",
           "Billing webhooks use 6-attempt 24h exponential backoff and HMAC-SHA256 X-Billing-Sig.",
-          "Headline decision: migrate edge payment gateway to Envoy 1.31 across all regions."
+          "Headline decision: replace legacy Redis 6 with Valkey 8.0 for rate-limit and idempotency keys."
         ]
       },
       "steps": [
@@ -366,25 +418,25 @@
         {
           "step": 4,
           "operation": "Query `p1_q1_timeout`",
-          "chatree_action": "PASS via targets=['n_2309295a', 'n_6c080cfb', 'n_8ba35190'] -> `The legacy nginx ingress snippet specifies `proxy_read_timeout 43s`.`",
+          "chatree_action": "PASS via targets=['n_1abe8d01', 'n_5bf1e0c9', 'n_8c57acb5'] -> `The legacy nginx ingress snippet specifies `proxy_read_timeout 43s`.`",
           "mem0_action": "FAIL via 4 retrieved fact(s) -> `Not found in the available evidence.`"
         },
         {
           "step": 5,
           "operation": "Query `p1_q2_retry_epoch`",
-          "chatree_action": "PASS via targets=['n_2309295a', 'n_6c080cfb', 'n_8ba35190'] -> `The captured response header was `X-Retry-Epoch: 17`.`",
+          "chatree_action": "PASS via targets=['n_1abe8d01', 'n_5bf1e0c9', 'n_8c57acb5'] -> `The captured response header was `X-Retry-Epoch: 17`.`",
           "mem0_action": "FAIL via 4 retrieved fact(s) -> `Not found in the available evidence.`"
         },
         {
           "step": 6,
           "operation": "Query `p1_q3_error_code`",
-          "chatree_action": "PASS via targets=['n_2309295a', 'n_6c080cfb', 'n_8ba35190'] -> `The coordinator `renew_failed` log reported error code `ERR_SHARD_LEASE_419`.`",
+          "chatree_action": "PASS via targets=['n_1abe8d01', 'n_5bf1e0c9', 'n_8c57acb5'] -> `The coordinator `renew_failed` log reported error code `ERR_SHARD_LEASE_419`.`",
           "mem0_action": "FAIL via 4 retrieved fact(s) -> `Not found in the available evidence.`"
         },
         {
           "step": 7,
           "operation": "Query `p1_q4_index_name`",
-          "chatree_action": "PASS via targets=['n_2309295a', 'n_6c080cfb', 'n_8ba35190'] -> `The `EXPLAIN ANALYZE` plan scanned PostgreSQL index `idx_ledger_tenant_ts_v3`.`",
+          "chatree_action": "PASS via targets=['n_1abe8d01', 'n_5bf1e0c9', 'n_8c57acb5'] -> `The `EXPLAIN ANALYZE` plan scanned PostgreSQL index `idx_ledger_tenant_ts_v3`.`",
           "mem0_action": "FAIL via 4 retrieved fact(s) -> `Not found in the available evidence.`"
         }
       ],
@@ -472,8 +524,8 @@
           2
         ],
         "stale_notices_injected": [
-          "Reopened completed branch n_b76a9bdc (Mobile Refresh Flow) for revision.",
-          "n_1ec05c11 \"Auth Token Spec\" material 2h | Transitive upstream change via Edge Cache Policy: Summary updated (v1 -> v2) — removed [60m, RS256, v1]; added [10m, ED25519] [delta: removed [60m, RS256, v1]; added [10m, ED25519]]"
+          "Reopened completed branch n_e6751fe2 (Mobile Refresh Flow) for revision.",
+          "n_933926d5 \"Auth Token Spec\" material 2h | Transitive upstream change via Edge Cache Policy: Summary updated (v1 -> v2) — removed [60m, RS256, v1]; added [10m, ED25519] [delta: removed [60m, RS256, v1]; added [10m, ED25519]]"
         ]
       },
       "mem0_extra_metrics": {
@@ -491,55 +543,55 @@
         {
           "step": 1,
           "operation": "Create `branch_a_auth` (Auth Token Spec)",
-          "chatree_action": "Spawned clean branch `n_1ec05c11`; committed v1 summary",
+          "chatree_action": "Spawned clean branch `n_933926d5`; committed v1 summary",
           "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
         },
         {
           "step": 2,
           "operation": "Create `branch_b_cache` (Edge Cache Policy)",
-          "chatree_action": "Spawned clean branch `n_741410b1` + `node_dependencies` edge from ['branch_a_auth']; committed v1 summary",
+          "chatree_action": "Spawned clean branch `n_2cc7e3e8` + `node_dependencies` edge from ['branch_a_auth']; committed v1 summary",
           "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
         },
         {
           "step": 3,
           "operation": "Create `branch_c_mobile` (Mobile Refresh Flow)",
-          "chatree_action": "Spawned clean branch `n_b76a9bdc` + `node_dependencies` edge from ['branch_b_cache']; committed v1 summary",
+          "chatree_action": "Spawned clean branch `n_e6751fe2` + `node_dependencies` edge from ['branch_b_cache']; committed v1 summary",
           "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
         },
         {
           "step": 4,
           "operation": "Create `mobile_release_checklist` (Mobile Release Cut Checklist)",
-          "chatree_action": "Spawned clean branch `n_2b6c3c55`; committed v1 summary",
+          "chatree_action": "Spawned clean branch `n_add86a32`; committed v1 summary",
           "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
         },
         {
           "step": 5,
           "operation": "Create `ios_bg_sync_scheduler` (iOS Background Refresh Scheduler)",
-          "chatree_action": "Spawned clean branch `n_b5c76465`; committed v1 summary",
+          "chatree_action": "Spawned clean branch `n_ce1974b9`; committed v1 summary",
           "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
         },
         {
           "step": 6,
           "operation": "Create `android_workmanager_sync` (Android WorkManager Refresh Policy)",
-          "chatree_action": "Spawned clean branch `n_96c0ea0a`; committed v1 summary",
+          "chatree_action": "Spawned clean branch `n_80ccad3a`; committed v1 summary",
           "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
         },
         {
           "step": 7,
           "operation": "Create `cdn_edge_cache_purge` (CDN Edge Cache Purge and Vary Rules)",
-          "chatree_action": "Spawned clean branch `n_b4070944`; committed v1 summary",
+          "chatree_action": "Spawned clean branch `n_a47ee261`; committed v1 summary",
           "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
         },
         {
           "step": 8,
           "operation": "Create `mobile_crashlytics_slo` (Mobile Release Stability Gate)",
-          "chatree_action": "Spawned clean branch `n_9b1aeba1`; committed v1 summary",
+          "chatree_action": "Spawned clean branch `n_790fd3cc`; committed v1 summary",
           "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
         },
         {
           "step": 9,
           "operation": "Create `edge_cache_swr_tuning` (Edge Cache Stale-While-Revalidate Policy)",
-          "chatree_action": "Spawned clean branch `n_20ec75be`; committed v1 summary",
+          "chatree_action": "Spawned clean branch `n_fea2ccd3`; committed v1 summary",
           "mem0_action": "`mem.add()` stored 1 flat fact(s) (no causal links)"
         },
         {
@@ -597,8 +649,8 @@
         "mem0_max_system_prompt_chars": 33653,
         "stored_memories_count": 3,
         "stored_memories": [
-          "Ledger MongoDB 7.0 setup uses replica set rs_ledger_0, writeConcern=majority, shardKey=tenant_id_hashed, wiredTigerCacheSizeGB=24, and readPreference=primaryPreferred.",
           "Observability uses OpenTelemetry collector otel-gw-02, 15s Prometheus scrape, p99 < 180ms SLO.",
+          "Ledger MongoDB 7.0 setup uses replica set rs_ledger_0, writeConcern=majority, shardKey=tenant_id_hashed, wiredTigerCacheSizeGB=24, and readPreference=primaryPreferred.",
           "Production ledger database uses PostgreSQL 16.4 in us-east-1 with pgbouncer_pool_size=120, isolation_level=serializable, and pgBackRest WAL backups."
         ]
       },
@@ -630,13 +682,13 @@
         {
           "step": 5,
           "operation": "Query `p3_q1_active_db`",
-          "chatree_action": "PASS via targets=['n_cc70364c', 'n_d821200b'] -> `Active production ledger storage: PostgreSQL 16.4 with pgbouncer_pool_size=120 and isolation_le`",
+          "chatree_action": "PASS via targets=['n_75b38e5c', 'n_ac644a29'] -> `Active production ledger storage: PostgreSQL 16.4 with pgbouncer_pool_size=120 and isolation_le`",
           "mem0_action": "FAIL via 3 retrieved fact(s) -> `Active production ledger storage: PostgreSQL 16.4 with pgbouncer_pool_size=120 and isolation_le`"
         },
         {
           "step": 6,
           "operation": "Query `p3_q2_dead_end_leakage`",
-          "chatree_action": "PASS via targets=['n_cc70364c', 'n_d821200b'] -> `None — no MongoDB replica set, write concern, or WiredTiger cache is part of the active product`",
+          "chatree_action": "PASS via targets=['n_75b38e5c', 'n_ac644a29'] -> `None — no MongoDB replica set, write concern, or WiredTiger cache is part of the active product`",
           "mem0_action": "FAIL via 3 retrieved fact(s) -> `Active MongoDB settings found in memory: replica set `rs_ledger_0`, `writeConcern=majority`, an`"
         }
       ],
@@ -680,5 +732,206 @@
         }
       ]
     }
-  ]
+  ],
+  "materiality_eval": {
+    "embedder_backend": "FastEmbedEmbedder(BAAI/bge-small-en-v1.5)",
+    "cosine_threshold": 0.9,
+    "total_cases": 20,
+    "tp": 10,
+    "fp": 1,
+    "tn": 9,
+    "fn": 0,
+    "precision": 0.9091,
+    "recall": 1.0,
+    "f1": 0.9524,
+    "accuracy": 0.95,
+    "category_breakdown": {
+      "identifier_numeric": {
+        "expected": "material",
+        "correct": 4,
+        "total": 4,
+        "rate": 1.0
+      },
+      "polarity_flip": {
+        "expected": "material",
+        "correct": 3,
+        "total": 3,
+        "rate": 1.0
+      },
+      "semantic_non_alphanumeric": {
+        "expected": "material",
+        "correct": 3,
+        "total": 3,
+        "rate": 1.0
+      },
+      "cosmetic_rewording": {
+        "expected": "cosmetic",
+        "correct": 9,
+        "total": 10,
+        "rate": 0.9
+      }
+    },
+    "cases": [
+      {
+        "case_id": "mat_id_1",
+        "category": "identifier_numeric",
+        "expected_severity": "material",
+        "predicted_severity": "material",
+        "correct": true,
+        "delta_reason": "removed [60m, RS256]; added [10m, ED25519]"
+      },
+      {
+        "case_id": "mat_id_2",
+        "category": "identifier_numeric",
+        "expected_severity": "material",
+        "predicted_severity": "material",
+        "correct": true,
+        "delta_reason": "removed [120]; added [40]"
+      },
+      {
+        "case_id": "mat_id_3",
+        "category": "identifier_numeric",
+        "expected_severity": "material",
+        "predicted_severity": "material",
+        "correct": true,
+        "delta_reason": "removed [2500, 3]; added [1, 800]"
+      },
+      {
+        "case_id": "mat_id_4",
+        "category": "identifier_numeric",
+        "expected_severity": "material",
+        "predicted_severity": "material",
+        "correct": true,
+        "delta_reason": "removed [v1]; added [v2]"
+      },
+      {
+        "case_id": "mat_pol_1",
+        "category": "polarity_flip",
+        "expected_severity": "material",
+        "predicted_severity": "material",
+        "correct": true,
+        "delta_reason": "polarity shifted (allow -> forbid)"
+      },
+      {
+        "case_id": "mat_pol_2",
+        "category": "polarity_flip",
+        "expected_severity": "material",
+        "predicted_severity": "material",
+        "correct": true,
+        "delta_reason": "polarity shifted (stateless -> stateful)"
+      },
+      {
+        "case_id": "mat_pol_3",
+        "category": "polarity_flip",
+        "expected_severity": "material",
+        "predicted_severity": "material",
+        "correct": true,
+        "delta_reason": "polarity shifted (synchronous -> asynchronous)"
+      },
+      {
+        "case_id": "mat_sem_1",
+        "category": "semantic_non_alphanumeric",
+        "expected_severity": "material",
+        "predicted_severity": "material",
+        "correct": true,
+        "delta_reason": "summary shifted (sim=0.88)"
+      },
+      {
+        "case_id": "mat_sem_2",
+        "category": "semantic_non_alphanumeric",
+        "expected_severity": "material",
+        "predicted_severity": "material",
+        "correct": true,
+        "delta_reason": "summary shifted (sim=0.76)"
+      },
+      {
+        "case_id": "mat_sem_3",
+        "category": "semantic_non_alphanumeric",
+        "expected_severity": "material",
+        "predicted_severity": "material",
+        "correct": true,
+        "delta_reason": "summary shifted (sim=0.71)"
+      },
+      {
+        "case_id": "cos_1",
+        "category": "cosmetic_rewording",
+        "expected_severity": "cosmetic",
+        "predicted_severity": "cosmetic",
+        "correct": true,
+        "delta_reason": "Cosmetic clarification (sim=0.93, decisions unchanged)"
+      },
+      {
+        "case_id": "cos_2",
+        "category": "cosmetic_rewording",
+        "expected_severity": "cosmetic",
+        "predicted_severity": "cosmetic",
+        "correct": true,
+        "delta_reason": "Cosmetic clarification (sim=0.97, decisions unchanged)"
+      },
+      {
+        "case_id": "cos_3",
+        "category": "cosmetic_rewording",
+        "expected_severity": "cosmetic",
+        "predicted_severity": "cosmetic",
+        "correct": true,
+        "delta_reason": "Cosmetic clarification (sim=0.96, decisions unchanged)"
+      },
+      {
+        "case_id": "cos_4",
+        "category": "cosmetic_rewording",
+        "expected_severity": "cosmetic",
+        "predicted_severity": "cosmetic",
+        "correct": true,
+        "delta_reason": "Cosmetic clarification (sim=0.94, decisions unchanged)"
+      },
+      {
+        "case_id": "cos_5",
+        "category": "cosmetic_rewording",
+        "expected_severity": "cosmetic",
+        "predicted_severity": "cosmetic",
+        "correct": true,
+        "delta_reason": "Cosmetic clarification (sim=0.97, decisions unchanged)"
+      },
+      {
+        "case_id": "cos_6",
+        "category": "cosmetic_rewording",
+        "expected_severity": "cosmetic",
+        "predicted_severity": "material",
+        "correct": false,
+        "delta_reason": "summary shifted (sim=0.87)"
+      },
+      {
+        "case_id": "cos_7",
+        "category": "cosmetic_rewording",
+        "expected_severity": "cosmetic",
+        "predicted_severity": "cosmetic",
+        "correct": true,
+        "delta_reason": "Cosmetic clarification (sim=0.92, decisions unchanged)"
+      },
+      {
+        "case_id": "cos_8",
+        "category": "cosmetic_rewording",
+        "expected_severity": "cosmetic",
+        "predicted_severity": "cosmetic",
+        "correct": true,
+        "delta_reason": "Cosmetic clarification (sim=0.98, decisions unchanged)"
+      },
+      {
+        "case_id": "cos_9",
+        "category": "cosmetic_rewording",
+        "expected_severity": "cosmetic",
+        "predicted_severity": "cosmetic",
+        "correct": true,
+        "delta_reason": "Cosmetic clarification (sim=0.97, decisions unchanged)"
+      },
+      {
+        "case_id": "cos_10",
+        "category": "cosmetic_rewording",
+        "expected_severity": "cosmetic",
+        "predicted_severity": "cosmetic",
+        "correct": true,
+        "delta_reason": "Cosmetic clarification (sim=0.94, decisions unchanged)"
+      }
+    ]
+  }
 }

@@ -818,6 +818,9 @@ class PrefixTurnMetric(BaseModel):
     chatree_prompt_tokens: int
     chatree_lcp_tokens: int
     chatree_lcp_ratio: float
+    mem0_end_of_sys_prompt_tokens: int = 0
+    mem0_end_of_sys_lcp_tokens: int = 0
+    mem0_end_of_sys_lcp_ratio: float = 0.0
     mem0_prompt_tokens: int
     mem0_lcp_tokens: int
     mem0_lcp_ratio: float
@@ -826,13 +829,55 @@ class PrefixTurnMetric(BaseModel):
 class PrefixStabilitySimReport(BaseModel):
     num_turns: int
     chatree_mean_lcp_ratio: float
+    mem0_end_of_sys_mean_lcp_ratio: float = 0.0
     mem0_mean_lcp_ratio: float
     chatree_total_raw_tokens: int
     chatree_effective_billed_tokens: int
+    mem0_end_of_sys_total_raw_tokens: int = 0
+    mem0_end_of_sys_effective_billed_tokens: int = 0
     mem0_total_raw_tokens: int
     mem0_effective_billed_tokens: int
+    effective_input_savings_vs_end_of_sys_pct: float = 0.0
     effective_input_savings_pct: float
     per_turn: list[PrefixTurnMetric]
+
+
+class MaterialityCase(BaseModel):
+    case_id: str
+    category: Literal[
+        "identifier_numeric",
+        "polarity_flip",
+        "semantic_non_alphanumeric",
+        "cosmetic_rewording",
+    ]
+    expected_severity: Literal["material", "cosmetic"]
+    old_summary: str
+    new_summary: str
+
+
+class MaterialityCaseResult(BaseModel):
+    case_id: str
+    category: str
+    expected_severity: str
+    predicted_severity: str
+    correct: bool
+    delta_reason: str
+
+
+class MaterialityEvalReport(BaseModel):
+    embedder_backend: str
+    cosine_threshold: float
+    total_cases: int
+    tp: int
+    fp: int
+    tn: int
+    fn: int
+    precision: float
+    recall: float
+    f1: float
+    accuracy: float
+    category_breakdown: dict[str, dict[str, Any]]
+    cases: list[MaterialityCaseResult]
 
 
 class ScalingPoint(BaseModel):
@@ -892,8 +937,10 @@ class ZeroTokenSimulationReport(BaseModel):
     prefix_stability: PrefixStabilitySimReport
     scaling: ScalingSimReport
     probe_traces: list[ProbeTraceComparison]
+    materiality_eval: MaterialityEvalReport | None = None
 
     def to_markdown(self) -> str:
+        ps = self.prefix_stability
         lines: list[str] = [
             "# Track 8A: Zero-Token Structural Simulation & Real-Framework Execution Trace",
             "",
@@ -904,47 +951,58 @@ class ZeroTokenSimulationReport(BaseModel):
                 f"Mem0 trace backend = `{self.mem0_trace_backend}`."
             ),
             "",
-            "## 1. Byte-0 Prefix KV-Cache Stability (Exact LCP Trace over 16 Turns)",
+            "## 1. Prompt Prefix KV-Cache Stability (Exact 3-Way LCP Trace over 16 Turns)",
             "",
             (
-                "Both frameworks process the identical 16-turn multi-topic engineering dialogue. "
-                "Chatree appends its dynamic `<dialogue_tree_context>` envelope **ephemerally at the tail** "
-                "of the newest user message without mutating bytes `0..k`. Mem0-style chat integration "
-                "re-injects top-k retrieved memories into the system/header block on each turn, shifting byte 0."
+                "All three layouts process the identical 16-turn multi-topic engineering dialogue with the "
+                "exact same base system prompt. Chatree appends its dynamic `<dialogue_tree_context>` block "
+                "**ephemerally at the tail** of the newest user turn, keeping both the system prompt and all "
+                "prior turns immutable. We compare against two Mem0 system-prompt injection layouts: "
+                "(a) **End-of-System Injection** (appending retrieved memories after the static system prompt, "
+                "which preserves the system prompt in cache but invalidates all prior turns on every top-k change), "
+                "and (b) **Byte-0 Prepend** (prepending memories before the system prompt). "
+                "*Note: A Mem0 integration that injects memories inside the newest user turn (tail injection) "
+                "can match static-turn cacheability; this simulation evaluates system-prompt injection layouts.*"
             ),
             "",
-            "| Metric | Chatree (Real `ContextAssembler`) | Mem0-Style Prefix Injection |",
-            "|---|---:|---:|",
+            "| Metric | Chatree (Tail-Only Envelope) | Mem0 (End-of-System Injection) | Mem0 (Byte-0 Prepend) |",
+            "|---|---:|---:|---:|",
             (
-                f"| Mean Prefix Cacheability `LCP(t, t-1) / |P_t|` (Turns 2-{self.prefix_stability.num_turns}) "
-                f"| **{self.prefix_stability.chatree_mean_lcp_ratio * 100:.1f}%** "
-                f"| {self.prefix_stability.mem0_mean_lcp_ratio * 100:.1f}% |"
+                f"| Mean Prefix Cacheability `LCP(t, t-1) / |P_t|` (Turns 2-{ps.num_turns}) "
+                f"| **{ps.chatree_mean_lcp_ratio * 100:.1f}%** "
+                f"| {ps.mem0_end_of_sys_mean_lcp_ratio * 100:.1f}% "
+                f"| {ps.mem0_mean_lcp_ratio * 100:.1f}% |"
             ),
             (
-                f"| Raw Input Tokens ({self.prefix_stability.num_turns} turns) "
-                f"| {self.prefix_stability.chatree_total_raw_tokens:,} "
-                f"| {self.prefix_stability.mem0_total_raw_tokens:,} |"
+                f"| Raw Input Tokens ({ps.num_turns} turns) "
+                f"| {ps.chatree_total_raw_tokens:,} "
+                f"| {ps.mem0_end_of_sys_total_raw_tokens:,} "
+                f"| {ps.mem0_total_raw_tokens:,} |"
             ),
             (
                 f"| Effective Billed Input Tokens (`0.1x` cached read) "
-                f"| **{self.prefix_stability.chatree_effective_billed_tokens:,}** "
-                f"| {self.prefix_stability.mem0_effective_billed_tokens:,} |"
+                f"| **{ps.chatree_effective_billed_tokens:,}** "
+                f"| {ps.mem0_end_of_sys_effective_billed_tokens:,} "
+                f"| {ps.mem0_effective_billed_tokens:,} |"
             ),
             (
-                f"| Effective Input Token Reduction via Byte-0 Prefix Stability "
-                f"| **-{self.prefix_stability.effective_input_savings_pct:.1f}%** | baseline |"
+                f"| Effective Input Token Reduction (Chatree vs. Layout) "
+                f"| baseline "
+                f"| **-{ps.effective_input_savings_vs_end_of_sys_pct:.1f}%** "
+                f"| **-{ps.effective_input_savings_pct:.1f}%** |"
             ),
             "",
             "<details><summary>Turn-by-Turn Exact LCP Trace (Turns 1-16)</summary>",
             "",
-            "| Turn | Chatree Tok | Chatree LCP | Chatree Cache % | Mem0 Tok | Mem0 LCP | Mem0 Cache % |",
-            "|---:|---:|---:|---:|---:|---:|---:|",
+            "| Turn | Chatree Tok | Chatree Cache % | Mem0 End-of-Sys Cache % | Mem0 Byte-0 Cache % |",
+            "|---:|---:|---:|---:|---:|",
         ]
-        for pt in self.prefix_stability.per_turn:
+        for pt in ps.per_turn:
             lines.append(
-                f"| {pt.turn} | {pt.chatree_prompt_tokens} | {pt.chatree_lcp_tokens} "
-                f"| {pt.chatree_lcp_ratio * 100:.1f}% | {pt.mem0_prompt_tokens} "
-                f"| {pt.mem0_lcp_tokens} | {pt.mem0_lcp_ratio * 100:.1f}% |"
+                f"| {pt.turn} | {pt.chatree_prompt_tokens} "
+                f"| {pt.chatree_lcp_ratio * 100:.1f}% "
+                f"| {pt.mem0_end_of_sys_lcp_ratio * 100:.1f}% "
+                f"| {pt.mem0_lcp_ratio * 100:.1f}% |"
             )
         lines.extend(["", "</details>", ""])
 
@@ -964,8 +1022,8 @@ class ZeroTokenSimulationReport(BaseModel):
                 ),
                 (
                     "- **Empirical LongMemEval-S anchor (`n=30`, `deepseek/deepseek-chat`):** "
-                    "Mem0 `$1.5460` ingest + `$0.0088` query = **`$1.5548`** (`176x` write tax); "
-                    "Chatree v3.3 `$0.892` ingest + `$0.163` query = **`$1.055`** (`32%` lower total USD, `+10pp` higher accuracy in v3)."
+                    "Mem0 `$1.5460` ingest (character-heuristic estimate prior to v0.2.0 client metering) + `$0.0088` query = **`$1.5548`** (`176x` write tax); "
+                    "Chatree `$0.892` ingest + `$0.163` query = **`$1.055`** (`32%` lower total USD)."
                 ),
                 "",
                 "| Sessions (N) | Queries (Q) | Chatree Write Calls | Chatree Total USD | Mem0 Write Calls | Mem0 Total USD (70% sys-cached) | Mem0 Total USD (uncached) |",
@@ -982,12 +1040,14 @@ class ZeroTokenSimulationReport(BaseModel):
         lines.extend(
             [
                 "",
-                "## 3. Step-by-Step Framework Execution Traces (Probes 1-3, Identical Lossy Extraction)",
+                "## 3. Controlled Lossy-Distillation Stress Traces (Probes 1-3)",
                 "",
                 (
-                    "To eliminate prompt-engineering bias, **both frameworks receive the exact same deterministic "
-                    "lossy distillation** (high-level decisions preserved; incidental low-salience constants omitted). "
-                    "Every pass/fail delta below is purely architectural."
+                    "To isolate pure architectural recovery guarantees under distillation loss, **both frameworks "
+                    "receive the exact same deliberately lossy distillation** (high-level decisions kept; incidental "
+                    "low-salience constants omitted). Note the honest contrast with live Track 8B on the short 12-turn "
+                    "Probe 1 dialogue, where DeepSeek+Mem0 emitted 13 granular facts and passed 4/4 — demonstrating "
+                    "that flat distilled stores rely on extraction verbosity rather than a structural verbatim fallback."
                 ),
                 "",
                 "| Probe | Chatree Pass | Mem0 Pass | Key Structural Mechanism |",
@@ -997,14 +1057,14 @@ class ZeroTokenSimulationReport(BaseModel):
         for tr in self.probe_traces:
             mech = ""
             if tr.probe_id == "probe1_verbatim_recovery":
-                mech = "Tier-1 SQLite verbatim FTS5 + read-only shadow turn recovers omitted literals"
+                mech = "Verbatim SQLite log + FTS5 + read-only lookup recovers omitted constants"
             elif tr.probe_id == "probe2_transitive_staleness":
                 mech = (
                     f"`node_dependencies` BFS flags B (1h) + C (2h) STALE "
                     f"({tr.chatree_extra_metrics.get('stale_dependents_flagged', 0)}/2 vs. 0/2)"
                 )
             elif tr.probe_id == "probe3_silent_quarantine":
-                mech = "Native `status='ARCHIVED'` excludes dead-end from all 4 tiers (0% leakage)"
+                mech = "Native `status='ARCHIVED'` excludes dead-end from all search levels (0% leakage)"
             lines.append(
                 f"| {tr.title} | **{tr.chatree_passed}/{tr.chatree_total}** "
                 f"| {tr.mem0_passed}/{tr.mem0_total} | {mech} |"
@@ -1025,6 +1085,37 @@ class ZeroTokenSimulationReport(BaseModel):
                 )
                 lines.append(
                     f"- **Mem0 metrics:** `{json.dumps(tr.mem0_extra_metrics, sort_keys=True)}`"
+                )
+
+        if self.materiality_eval is not None:
+            me = self.materiality_eval
+            lines.extend(
+                [
+                    "",
+                    "## 4. Zero-Token Materiality Classifier Benchmark (20 Branch-Revision Pairs)",
+                    "",
+                    (
+                        f"Evaluates `StalenessService.classify_change_materiality()` (`embedder={me.embedder_backend}`, "
+                        f"`cosine_threshold={me.cosine_threshold:.2f}`) on 20 paired branch summaries: "
+                        f"10 true material revisions (4 identifier/numeric, 3 polarity flips, 3 subtle non-alphanumeric "
+                        f"semantic changes) and 10 true cosmetic rewordings."
+                    ),
+                    "",
+                    "| Metric | Score |",
+                    "|---|---:|",
+                    f"| Precision (material) | **{me.precision * 100:.1f}%** (TP={me.tp}, FP={me.fp}) |",
+                    f"| Recall (material) | **{me.recall * 100:.1f}%** (TP={me.tp}, FN={me.fn}) |",
+                    f"| F1 (material) | **{me.f1 * 100:.1f}%** |",
+                    f"| Overall Accuracy | **{me.accuracy * 100:.1f}%** ({me.tp + me.tn}/{me.total_cases}) |",
+                    "",
+                    "| Category | Expected | Correct / Total | Recall / Specificity |",
+                    "|---|---|---:|---:|",
+                ]
+            )
+            for cat_name, stats in me.category_breakdown.items():
+                lines.append(
+                    f"| `{cat_name}` | `{stats['expected']}` | {stats['correct']}/{stats['total']} "
+                    f"| {stats['rate'] * 100:.1f}% |"
                 )
         return "\n".join(lines) + "\n"
 
@@ -1055,8 +1146,9 @@ def _lcp_len(a: list[str], b: list[str]) -> int:
 async def simulate_prefix_kv_cache_stability(num_turns: int = 16) -> PrefixStabilitySimReport:
     """
     Sim 1: Run `num_turns` real interactive turns through Chatree's real `ContextAssembler`
-    (with live sibling branches & dynamic tail envelopes) vs. Mem0-style top-k memory prefix
-    injection, measuring exact turn-to-turn Longest Common Token Prefix (LCP).
+    (with live sibling branches & dynamic tail envelopes) vs. two Mem0-style system-prompt
+    injection layouts (end-of-system-prompt append and byte-0 prepend), measuring exact
+    turn-to-turn Longest Common Token Prefix (LCP).
     """
     topics = [
         ("auth", "Reviewing JWT RS256 key rotation cadence and JWKS cache TTL."),
@@ -1081,6 +1173,7 @@ async def simulate_prefix_kv_cache_stability(num_turns: int = 16) -> PrefixStabi
         guardrails=GuardrailPolicy(auto_title_enabled=False),
     )
     chatree_prompts: list[list[str]] = []
+    mem0_end_of_sys_prompts: list[list[str]] = []
     mem0_prompts: list[list[str]] = []
     mem0_history: list[dict[str, Any]] = []
 
@@ -1124,51 +1217,69 @@ async def simulate_prefix_kv_cache_stability(num_turns: int = 16) -> PrefixStabi
                 node_id=root.id, tree_id=tree.id, role="assistant", content=asst_txt, mark_dirty=True
             )
 
-            # Standard Mem0 chat pattern: top-k retrieved facts injected at top of system prompt
-            # using the IDENTICAL base `STATIC_SYSTEM_PROMPT` for apples-to-apples raw token parity
+            # Compare both Mem0 system-prompt injection layouts using the IDENTICAL base `STATIC_SYSTEM_PROMPT`:
+            #   (a) End-of-system-prompt append (preserves system prompt; invalidates prior turns)
+            #   (b) Byte-0 prepend (mutates byte 0 directly)
             start_k = (t_idx - 1) % len(mem0_pool)
             retrieved = [mem0_pool[(start_k + j) % len(mem0_pool)] for j in range(4)]
-            mem0_sys = (
-                "Relevant Mem0 memories for this turn:\n"
-                + "\n".join(f"- {fact}" for fact in retrieved)
-                + "\n\n"
-                + STATIC_SYSTEM_PROMPT
+            mem_block = "Relevant Mem0 memories for this turn:\n" + "\n".join(
+                f"- {fact}" for fact in retrieved
             )
-            mem0_msgs = [
-                {"role": "system", "content": mem0_sys},
+            mem0_end_sys = STATIC_SYSTEM_PROMPT + "\n\n" + mem_block
+            mem0_end_msgs = [
+                {"role": "system", "content": mem0_end_sys},
                 *mem0_history,
                 {"role": "user", "content": user_txt},
             ]
-            mem0_prompts.append(_tokenize_messages_for_lcp(mem0_msgs))
+            mem0_end_of_sys_prompts.append(_tokenize_messages_for_lcp(mem0_end_msgs))
+
+            mem0_byte0_sys = mem_block + "\n\n" + STATIC_SYSTEM_PROMPT
+            mem0_byte0_msgs = [
+                {"role": "system", "content": mem0_byte0_sys},
+                *mem0_history,
+                {"role": "user", "content": user_txt},
+            ]
+            mem0_prompts.append(_tokenize_messages_for_lcp(mem0_byte0_msgs))
+
             mem0_history.append({"role": "user", "content": user_txt})
             mem0_history.append({"role": "assistant", "content": asst_txt})
 
     per_turn: list[PrefixTurnMetric] = []
     c_raw_total = 0
     c_eff_total = 0.0
+    me_raw_total = 0
+    me_eff_total = 0.0
     m_raw_total = 0
     m_eff_total = 0.0
     c_ratios: list[float] = []
+    me_ratios: list[float] = []
     m_ratios: list[float] = []
 
     for idx in range(num_turns):
         c_tok = len(chatree_prompts[idx])
+        me_tok = len(mem0_end_of_sys_prompts[idx])
         m_tok = len(mem0_prompts[idx])
         if idx == 0:
             c_lcp = 0
+            me_lcp = 0
             m_lcp = 0
         else:
             c_lcp = _lcp_len(chatree_prompts[idx - 1], chatree_prompts[idx])
+            me_lcp = _lcp_len(mem0_end_of_sys_prompts[idx - 1], mem0_end_of_sys_prompts[idx])
             m_lcp = _lcp_len(mem0_prompts[idx - 1], mem0_prompts[idx])
         c_ratio = c_lcp / max(1, c_tok)
+        me_ratio = me_lcp / max(1, me_tok)
         m_ratio = m_lcp / max(1, m_tok)
         if idx > 0:
             c_ratios.append(c_ratio)
+            me_ratios.append(me_ratio)
             m_ratios.append(m_ratio)
         c_raw_total += c_tok
+        me_raw_total += me_tok
         m_raw_total += m_tok
         # Standard 90% KV-cache discount (cached read billed at 0.1x)
         c_eff_total += (c_tok - c_lcp) + 0.1 * c_lcp
+        me_eff_total += (me_tok - me_lcp) + 0.1 * me_lcp
         m_eff_total += (m_tok - m_lcp) + 0.1 * m_lcp
         per_turn.append(
             PrefixTurnMetric(
@@ -1176,6 +1287,9 @@ async def simulate_prefix_kv_cache_stability(num_turns: int = 16) -> PrefixStabi
                 chatree_prompt_tokens=c_tok,
                 chatree_lcp_tokens=c_lcp,
                 chatree_lcp_ratio=round(c_ratio, 4),
+                mem0_end_of_sys_prompt_tokens=me_tok,
+                mem0_end_of_sys_lcp_tokens=me_lcp,
+                mem0_end_of_sys_lcp_ratio=round(me_ratio, 4),
                 mem0_prompt_tokens=m_tok,
                 mem0_lcp_tokens=m_lcp,
                 mem0_lcp_ratio=round(m_ratio, 4),
@@ -1183,18 +1297,268 @@ async def simulate_prefix_kv_cache_stability(num_turns: int = 16) -> PrefixStabi
         )
 
     c_eff_int = int(round(c_eff_total))
+    me_eff_int = int(round(me_eff_total))
     m_eff_int = int(round(m_eff_total))
-    savings = (1.0 - (c_eff_total / max(1.0, m_eff_total))) * 100.0
+    savings_vs_end = (1.0 - (c_eff_total / max(1.0, me_eff_total))) * 100.0
+    savings_vs_byte0 = (1.0 - (c_eff_total / max(1.0, m_eff_total))) * 100.0
     return PrefixStabilitySimReport(
         num_turns=num_turns,
         chatree_mean_lcp_ratio=round(sum(c_ratios) / max(1, len(c_ratios)), 4),
+        mem0_end_of_sys_mean_lcp_ratio=round(sum(me_ratios) / max(1, len(me_ratios)), 4),
         mem0_mean_lcp_ratio=round(sum(m_ratios) / max(1, len(m_ratios)), 4),
         chatree_total_raw_tokens=c_raw_total,
         chatree_effective_billed_tokens=c_eff_int,
+        mem0_end_of_sys_total_raw_tokens=me_raw_total,
+        mem0_end_of_sys_effective_billed_tokens=me_eff_int,
         mem0_total_raw_tokens=m_raw_total,
         mem0_effective_billed_tokens=m_eff_int,
-        effective_input_savings_pct=round(savings, 2),
+        effective_input_savings_vs_end_of_sys_pct=round(savings_vs_end, 2),
+        effective_input_savings_pct=round(savings_vs_byte0, 2),
         per_turn=per_turn,
+    )
+
+
+DEFAULT_MATERIALITY_CASES: list[MaterialityCase] = [
+    # --- 10 True Material Revisions ---
+    # 4 Identifier / Numeric / Config revisions
+    MaterialityCase(
+        case_id="mat_id_1",
+        category="identifier_numeric",
+        expected_severity="material",
+        old_summary="Auth service issues JWT tokens with JWT_TTL=60m signed with RS256.",
+        new_summary="Auth service issues JWT tokens with JWT_TTL=10m signed with ED25519.",
+    ),
+    MaterialityCase(
+        case_id="mat_id_2",
+        category="identifier_numeric",
+        expected_severity="material",
+        old_summary="Primary database runs PostgreSQL 16.4 with PgBouncer pool_size=120.",
+        new_summary="Primary database runs PostgreSQL 16.4 with PgBouncer pool_size=40.",
+    ),
+    MaterialityCase(
+        case_id="mat_id_3",
+        category="identifier_numeric",
+        expected_severity="material",
+        old_summary="Checkout gateway retries upstream calls up to max_retries=3 with timeout_ms=2500.",
+        new_summary="Checkout gateway retries upstream calls up to max_retries=1 with timeout_ms=800.",
+    ),
+    MaterialityCase(
+        case_id="mat_id_4",
+        category="identifier_numeric",
+        expected_severity="material",
+        old_summary="Event ingestion writes to Kafka topic orders.v1 on cluster prod-us-east-1.",
+        new_summary="Event ingestion writes to Kafka topic orders.v2 on cluster prod-eu-west-1.",
+    ),
+    # 3 Polarity / Constraint flips
+    MaterialityCase(
+        case_id="mat_pol_1",
+        category="polarity_flip",
+        expected_severity="material",
+        old_summary="Allow public unauthenticated access to the metrics healthcheck endpoint.",
+        new_summary="Forbid public unauthenticated access to the metrics healthcheck endpoint.",
+    ),
+    MaterialityCase(
+        case_id="mat_pol_2",
+        category="polarity_flip",
+        expected_severity="material",
+        old_summary="Edge routing layer stays stateless across all regional nodes.",
+        new_summary="Edge routing layer stays stateful across all regional nodes.",
+    ),
+    MaterialityCase(
+        case_id="mat_pol_3",
+        category="polarity_flip",
+        expected_severity="material",
+        old_summary="Audit log writes run in synchronous mode before returning a response.",
+        new_summary="Audit log writes run in asynchronous mode before returning a response.",
+    ),
+    # 3 Subtle Non-Alphanumeric Semantic Requirement Changes (no IDs, numbers, or polarity keywords changed)
+    MaterialityCase(
+        case_id="mat_sem_1",
+        category="semantic_non_alphanumeric",
+        expected_severity="material",
+        old_summary="Billing invoices settle in dollars at the end of every month.",
+        new_summary="Billing invoices settle in euros at the end of every quarter.",
+    ),
+    MaterialityCase(
+        case_id="mat_sem_2",
+        category="semantic_non_alphanumeric",
+        expected_severity="material",
+        old_summary="Customer incidents escalate directly to the on-call platform engineers.",
+        new_summary="Customer incidents escalate first to daytime operations triage staff.",
+    ),
+    MaterialityCase(
+        case_id="mat_sem_3",
+        category="semantic_non_alphanumeric",
+        expected_severity="material",
+        old_summary="Nightly snapshots replicate across distant regions for disaster recovery.",
+        new_summary="Nightly snapshots stay inside the local datacenter only.",
+    ),
+    # --- 10 True Cosmetic Rewordings (zero decision/spec changes) ---
+    MaterialityCase(
+        case_id="cos_1",
+        category="cosmetic_rewording",
+        expected_severity="cosmetic",
+        old_summary="Auth service issues JWT tokens with JWT_TTL=10m signed using ED25519.",
+        new_summary="The auth service signs JWT tokens with ED25519 and uses JWT_TTL=10m.",
+    ),
+    MaterialityCase(
+        case_id="cos_2",
+        category="cosmetic_rewording",
+        expected_severity="cosmetic",
+        old_summary="Primary database runs PostgreSQL 16.4 with PgBouncer pool_size=120.",
+        new_summary="Our primary database uses PostgreSQL 16.4 and PgBouncer with pool_size=120.",
+    ),
+    MaterialityCase(
+        case_id="cos_3",
+        category="cosmetic_rewording",
+        expected_severity="cosmetic",
+        old_summary="Edge gateway uses Envoy 1.31 with gRPC mTLS for internal traffic.",
+        new_summary="Internal traffic goes through the Envoy 1.31 edge gateway using gRPC mTLS.",
+    ),
+    MaterialityCase(
+        case_id="cos_4",
+        category="cosmetic_rewording",
+        expected_severity="cosmetic",
+        old_summary="Rate limiting and idempotency keys run on Valkey 8.0.",
+        new_summary="Valkey 8.0 handles both rate limiting and idempotency keys.",
+    ),
+    MaterialityCase(
+        case_id="cos_5",
+        category="cosmetic_rewording",
+        expected_severity="cosmetic",
+        old_summary="Checkout gateway retries upstream calls up to max_retries=3 with timeout_ms=2500.",
+        new_summary="For upstream calls, the checkout gateway uses timeout_ms=2500 and up to max_retries=3.",
+    ),
+    MaterialityCase(
+        case_id="cos_6",
+        category="cosmetic_rewording",
+        expected_severity="cosmetic",
+        old_summary="Telemetry pipelines send metrics through otel-gw-02 on a 15s scrape interval.",
+        new_summary="Metrics flow via otel-gw-02 in the telemetry pipeline with a 15s scrape interval.",
+    ),
+    MaterialityCase(
+        case_id="cos_7",
+        category="cosmetic_rewording",
+        expected_severity="cosmetic",
+        old_summary="Billing webhooks verify payloads with HMAC-SHA256 in the X-Billing-Sig header.",
+        new_summary="The X-Billing-Sig header carries an HMAC-SHA256 signature to verify billing webhooks.",
+    ),
+    MaterialityCase(
+        case_id="cos_8",
+        category="cosmetic_rewording",
+        expected_severity="cosmetic",
+        old_summary="Audit log writes remain synchronous before returning a response to callers.",
+        new_summary="Before returning a response to callers, audit log writes remain synchronous.",
+    ),
+    MaterialityCase(
+        case_id="cos_9",
+        category="cosmetic_rewording",
+        expected_severity="cosmetic",
+        old_summary="Customer incidents escalate directly to on-call platform engineers.",
+        new_summary="On-call platform engineers receive customer incident escalations directly.",
+    ),
+    MaterialityCase(
+        case_id="cos_10",
+        category="cosmetic_rewording",
+        expected_severity="cosmetic",
+        old_summary="Nightly backups keep snapshots for 30d in object bucket ledger-backups-prod.",
+        new_summary="Snapshots from nightly backups are retained for 30d in the ledger-backups-prod bucket.",
+    ),
+]
+
+
+async def evaluate_materiality_classifier(
+    *,
+    cases: list[MaterialityCase] | None = None,
+    embedder: Embedder | None = None,
+    prefer_fastembed: bool = True,
+) -> MaterialityEvalReport:
+    """
+    Zero-token evaluation of Chatree's real `StalenessService.classify_change_materiality()`
+    across 20 realistic branch-summary revision pairs (10 true material + 10 true cosmetic),
+    reporting exact precision, recall, F1, accuracy, and per-category breakdown.
+    """
+    eval_cases = cases if cases is not None else DEFAULT_MATERIALITY_CASES
+    resolved_embedder = embedder
+    backend_label = type(embedder).__name__ if embedder is not None else ""
+    if resolved_embedder is None and prefer_fastembed:
+        try:
+            from chatree.providers.embeddings import FastEmbedEmbedder
+
+            resolved_embedder = FastEmbedEmbedder()
+            backend_label = "FastEmbedEmbedder(BAAI/bge-small-en-v1.5)"
+        except Exception:
+            resolved_embedder = None
+    if resolved_embedder is None:
+        resolved_embedder = HashEmbedder()
+        backend_label = "HashEmbedder"
+
+    cfg = ChatreeConfig(
+        db_path=":memory:",
+        default_model="mock/chatree-demo",
+        guardrails=GuardrailPolicy(auto_title_enabled=False),
+    )
+    results: list[MaterialityCaseResult] = []
+    tp = fp = tn = fn = 0
+    cat_counts: dict[str, dict[str, Any]] = {}
+
+    async with Chatree.in_memory(config=cfg, embedder=resolved_embedder) as ct:
+        threshold = ct.staleness.guardrails.materiality_cosine_threshold
+        for case in eval_cases:
+            pred, reason = await ct.staleness.classify_change_materiality(
+                case.old_summary, case.new_summary
+            )
+            correct = pred == case.expected_severity
+            if case.expected_severity == "material":
+                if pred == "material":
+                    tp += 1
+                else:
+                    fn += 1
+            else:
+                if pred == "cosmetic":
+                    tn += 1
+                else:
+                    fp += 1
+            entry = cat_counts.setdefault(
+                case.category, {"expected": case.expected_severity, "correct": 0, "total": 0}
+            )
+            entry["total"] += 1
+            if correct:
+                entry["correct"] += 1
+            results.append(
+                MaterialityCaseResult(
+                    case_id=case.case_id,
+                    category=case.category,
+                    expected_severity=case.expected_severity,
+                    predicted_severity=pred,
+                    correct=correct,
+                    delta_reason=reason,
+                )
+            )
+
+    for entry in cat_counts.values():
+        entry["rate"] = round(entry["correct"] / max(1, entry["total"]), 4)
+
+    precision = tp / max(1, tp + fp)
+    recall = tp / max(1, tp + fn)
+    f1 = (2.0 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+    total = len(eval_cases)
+    accuracy = (tp + tn) / max(1, total)
+
+    return MaterialityEvalReport(
+        embedder_backend=backend_label,
+        cosine_threshold=threshold,
+        total_cases=total,
+        tp=tp,
+        fp=fp,
+        tn=tn,
+        fn=fn,
+        precision=round(precision, 4),
+        recall=round(recall, 4),
+        f1=round(f1, 4),
+        accuracy=round(accuracy, 4),
+        category_breakdown=cat_counts,
+        cases=results,
     )
 
 
@@ -2174,6 +2538,7 @@ async def run_zero_token_simulation_proof(
     num_prefix_turns: int = 16,
     model: str = "deepseek/deepseek-chat",
     prefer_real_mem0_proxy: bool = True,
+    prefer_fastembed_materiality: bool | None = None,
 ) -> ZeroTokenSimulationReport:
     """
     Execute the complete Part A zero-token structural simulation & framework execution trace
@@ -2191,11 +2556,18 @@ async def run_zero_token_simulation_proof(
     p3 = await _trace_probe1_or_3_zero_token(
         build_probe3_silent_quarantine(), prefer_real_mem0_proxy=prefer_real_mem0_proxy
     )
+    use_fastembed = (
+        prefer_real_mem0_proxy
+        if prefer_fastembed_materiality is None
+        else prefer_fastembed_materiality
+    )
+    mat_rep = await evaluate_materiality_classifier(prefer_fastembed=use_fastembed)
     return ZeroTokenSimulationReport(
         mem0_trace_backend=p1.mem0_trace_backend,
         prefix_stability=prefix_rep,
         scaling=scaling_rep,
         probe_traces=[p1, p2, p3],
+        materiality_eval=mat_rep,
     )
 
 

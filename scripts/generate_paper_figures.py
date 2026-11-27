@@ -66,8 +66,8 @@ COLORS = {
 }
 
 DISPLAY_NAMES = {
-    "chatree_two_tier_v3": "Chatree v3\n(+Tier-2.5)",
-    "chatree_two_tier": "Chatree v2\n(pre-Facts)",
+    "chatree_two_tier_v3": "Chatree\n(Full)",
+    "chatree_two_tier": "Chatree\n(no facts)",
     "full_context_linear": "Full\nLinear",
     "mem0_official": "Mem0\n(Official)",
     "rlm_official": "MIT RLM\n(Official)",
@@ -79,7 +79,7 @@ DISPLAY_NAMES = {
     "flat_rag": "Flat RAG",
     "chatree_non_destructive": "Chatree\n(Non-Destructive)",
     "destructive_rolling": "Destructive\nRolling",
-    "tree_ipc_full": "Chatree (Full IPC)",
+    "tree_ipc_full": "Chatree (Full)",
 }
 
 
@@ -157,29 +157,29 @@ def make_fig1_architecture() -> None:
 
     ax.text(
         52, 56.2,
-        "Chatree Architecture: Hierarchical Actor-Model Dialogue Trees with Bounded O(1) Context",
+        "Chatree Architecture: Organizing Long Conversations as Branching Trees",
         ha="center", va="center", fontsize=11.4, fontweight="bold", color="#0f172a",
     )
 
-    # Row 1: User -> ContextAssembler -> Orchestrator / TreeQueryEngine
+    # Row 1: User -> Context Assembly -> Turn Runner / Query Pipeline
     box(1.5, 40, 17.5, 13.0, "User / Agent Turn", "SDK · CLI · MCP\nFastAPI REST/SSE\nor Benchmark Eval\n(chat / deep ask)", fc="#eff6ff", ec="#2563eb", title_color="#1d4ed8")
-    box(23.0, 40, 34.0, 13.0, "ContextAssembler (KV-Cache Safe)", "1. Immutable Static Prefix (CoW Fork / Slice / Clean)\n2. Ephemeral <dialogue_tree_context> Tail:\n   TREE · REFLOG · BRANCH SUMMARIES\n   PINNED [STALE] · FACTS · STALE · MAILBOX", fc="#eef2ff", ec="#4f46e5", title_color="#3730a3")
-    box(61.0, 40, 41.5, 13.0, "TurnOrchestrator & TreeQueryEngine", "• Auto-Compact Guard & Frozen Multi-Round Envelope\n• Unified Deep Ask: Hop-1 Parallel Read-Only Shadows\n  → Tier-2.5 Dated Facts → Hop-2 Drill-Down → Synthesis\n• Provider-Agnostic: OpenAI-Compat / LiteLLM / Callable", fc="#f0fdf4", ec="#059669", title_color="#047857")
+    box(23.0, 40, 34.0, 13.0, "Branch Context Assembly (KV-Cache Safe)", "1. Immutable Branch Prefix (Fork / Slice / Clean)\n2. Temporary Tail Context (latest turn only):\n   Branch Map · Recent Jumps · Summaries\n   Pinned Rules · Dated Facts · Stale Alerts", fc="#eef2ff", ec="#4f46e5", title_color="#3730a3")
+    box(61.0, 40, 41.5, 13.0, "Turn Runner & Cross-Branch Query Pipeline", "• Auto-Checkpoint Guard & Frozen Tool-Loop Prefix\n• Multi-Hop Query: Parallel Read-Only Lookups\n  → Dated Facts → Optional Hop-2 → Synthesis\n• Provider-Agnostic: OpenAI-Compat / LiteLLM / Callable", fc="#f0fdf4", ec="#059669", title_color="#047857")
 
     arrow(19.6, 46.5, 22.4, 46.5)
     arrow(57.6, 46.5, 60.4, 46.5)
 
-    # Row 2: IPC Router, StalenessService, 4-Tier Hybrid Tree RAG
-    box(1.5, 18.5, 31.5, 14.5, "IPCRouter + Guardrails", "• 9 dialogue_tree_* Core Primitives\n• Read-Only Shadow Turns + Memo Cache\n• Cycle Guard · Hop Cap · Budget Ledger\n• Non-Destructive Compact & ARCHIVED\n• Branch Permissions + GitWorktreeSandbox", fc="#fffbeb", ec="#d97706", title_color="#b45309")
-    box(36.0, 18.5, 31.5, 14.5, "Staleness & Compaction Engine", "• Lazy Summaries + Piggybacked FACTS_JSON\n  (0 extra LLM calls, absolute dates)\n• Materiality Gating (v1.1 vs Material v2.0)\n• Transitive Staleness DAG (A → B → C)\n• 5-Section Anchor Compact + Savings Guard", fc="#fef2f2", ec="#dc2626", title_color="#b91c1c")
-    box(70.5, 18.5, 32.0, 14.5, "4-Tier Hybrid Tree Index (RAG)", "Tier 1: Contextual Chunks (O(1) Tail Index)\nTier 2: Summaries  |  Tier 2.5: Atomic Facts\nTier 3: Depth-Capped Rollups (d ≤ 8)\nFTS5 BM25 + Cached NumPy / sqlite-vec RRF\n+ Local ONNX Reranker (CUDA/DirectML/CPU)", fc="#f5f3ff", ec="#7c3aed", title_color="#6d28d9")
+    # Row 2: Branch Operations, Staleness & Checkpoints, 4-Level Hybrid Search
+    box(1.5, 18.5, 31.5, 14.5, "Branch Operations & Guardrails", "• 9 Core Tree Primitives (branch, ask, jump, archive)\n• Read-Only Branch Lookups + Memo Cache\n• Cycle Guard · Hop Cap · Cache-Weighted Budget\n• Silent Dead-End Archiving (ARCHIVED)\n• Per-Branch Permissions + Git Worktree Sandbox", fc="#fffbeb", ec="#d97706", title_color="#b45309")
+    box(36.0, 18.5, 31.5, 14.5, "Summaries, Staleness & Checkpoints", "• Lazy Summaries + Dated Atomic Facts\n  (0 extra LLM calls, resolved calendar dates)\n• Cosmetic (v1.1) vs. Material (v2.0) Diff Check\n• Transitive Dependency Alerts (A → B → C)\n• Non-Destructive 5-Section Compaction Chains", fc="#fef2f2", ec="#dc2626", title_color="#b91c1c")
+    box(70.5, 18.5, 32.0, 14.5, "4-Level Hybrid Tree Search", "Level 1: Verbatim Turn Chunks (incremental)\nLevel 2: Branch Summaries  |  Dated Facts\nLevel 3: Depth-Capped Subtree Rollups\nSQLite FTS5 BM25 + Local Vector Cosine RRF\n+ Local Cross-Encoder Reranker (GPU / CPU)", fc="#f5f3ff", ec="#7c3aed", title_color="#6d28d9")
 
-    arrow(72.0, 39.4, 18.5, 33.6, label="tool dispatch", color="#b45309", lx=37.0, ly=36.5)
-    arrow(79.5, 39.4, 53.0, 33.6, label="commit / compact", color="#b91c1c", lx=66.0, ly=36.5)
-    arrow(86.5, 39.4, 86.5, 33.6, label="4-tier retrieve", color="#6d28d9", lx=91.5, ly=36.5)
+    arrow(72.0, 39.4, 18.5, 33.6, label="branch tools", color="#b45309", lx=37.0, ly=36.5)
+    arrow(79.5, 39.4, 53.0, 33.6, label="commit / checkpoint", color="#b91c1c", lx=66.0, ly=36.5)
+    arrow(86.5, 39.4, 86.5, 33.6, label="hybrid search", color="#6d28d9", lx=91.5, ly=36.5)
 
     # Row 3: SQLite WAL + Portable Store
-    box(7.0, 1.8, 90.0, 11.2, "Local-First Persistent Store (SQLite WAL + FTS5 + Cached Vector Matrices + Portable .dialogue/ v3)", "nodes (CoW path, ACTIVE | COMPLETED | ARCHIVED) · messages (verbatim append-only) · ipc_events · reflog\nnode_dependencies (transitive DAG) · shadow_cache · branch_facts (Tier-2.5) · tree_invariants (PINNED) · artifacts (slug@vN)", fc="#f1f5f9", ec="#475569", title_color="#0f172a")
+    box(7.0, 1.8, 90.0, 11.2, "Local-First SQLite Store (WAL + FTS5 + Local Vectors + Portable .dialogue/ Export)", "branches (ACTIVE | COMPLETED | ARCHIVED) · verbatim messages (append-only) · navigation history\ndependency edges (A → B → C) · lookup memo cache · dated facts · pinned constraints · versioned artifacts", fc="#f1f5f9", ec="#475569", title_color="#0f172a")
 
     arrow(17.5, 17.9, 28.0, 13.6, color="#475569")
     arrow(51.8, 17.9, 51.8, 13.6, color="#475569")
@@ -237,14 +237,14 @@ def make_fig2_locomo() -> None:
     ax1.grid(axis="y", linestyle="--", alpha=0.4, zorder=0)
     ax1.spines["top"].set_visible(False)
     ax1.spines["right"].set_visible(False)
-    ax1.text(0.02, 0.94, "* p < 0.001 vs. Chatree v3 (McNemar)  |  ‡ n = 117", transform=ax1.transAxes, fontsize=7.2, color="#475569")
+    ax1.text(0.02, 0.94, "* p < 0.001 vs. Chatree (Full) (McNemar)  |  ‡ n = 117", transform=ax1.transAxes, fontsize=7.2, color="#475569")
 
     # Panel (b): Per-category grouped bars for key hero + competitive systems
     cats = ["single_hop", "multi_hop", "temporal", "open_domain", "adversarial"]
     cat_labels = ["Single-Hop", "Multi-Hop", "Temporal", "Open-Domain", "Adversarial"]
     compare_sys = [
-        ("chatree_two_tier_v3", "Chatree v3 (+Tier-2.5)"),
-        ("chatree_two_tier", "Chatree v2 (pre-Facts)"),
+        ("chatree_two_tier_v3", "Chatree (Full)"),
+        ("chatree_two_tier", "Chatree (no facts)"),
         ("full_context_linear", "Full-Context Linear"),
         ("mem0_official", "Mem0 (Official)"),
         ("flat_hybrid_rag", "Flat Hybrid RAG"),
@@ -394,8 +394,8 @@ def make_fig3_pareto() -> None:
     i_costs = [float(r["ingest_cost_usd"]) for r in ordered]
     p95_s = [float(r["latency_p95_ms"]) / 1000.0 for r in ordered]
     short_labels = [
-        "Chatree v3" if r["system"] == "chatree_two_tier_v3"
-        else "Chatree v2" if r["system"] == "chatree_two_tier"
+        "Chatree (Full)" if r["system"] == "chatree_two_tier_v3"
+        else "Chatree (no facts)" if r["system"] == "chatree_two_tier"
         else "Full Linear" if r["system"] == "full_context_linear"
         else "Mem0 (Official)" if r["system"] == "mem0_official"
         else "MIT RLM‡" if r["system"] == "rlm_official"
@@ -443,7 +443,7 @@ def make_fig3_pareto() -> None:
     ax3.legend(loc="lower right", fontsize=7.2)
     ax3.text(
         0.5, -0.22,
-        "Note: Mem0 write-time ingest ($0.153) = 3.0× its query cost ($0.051)  |  ‡RLM n = 117",
+        "Note: Mem0 ingest ($0.153, char-est.) = 3.0× query ($0.051)  |  ‡RLM n = 117",
         transform=ax3.transAxes, ha="center", va="top", fontsize=6.9, color="#475569", parse_math=False,
     )
 
@@ -464,7 +464,7 @@ def make_fig4_crossover_and_ablations() -> None:
     ks = [2, 4, 8]
     for mode, label, ls, marker in [
         ("linear", "Full Linear (total tok)", "-", "s"),
-        ("tree_ipc_full", "Chatree Full IPC (total tok · 100% pass)", "-", "o"),
+        ("tree_ipc_full", "Chatree (Full, total tok · 100% pass)", "-", "o"),
         ("sliding_window", "Sliding Window (total tok · 0% at K=8)", "--", "^"),
     ]:
         ys = []
@@ -511,7 +511,7 @@ def make_fig4_crossover_and_ablations() -> None:
         ("no_materiality_gating", "− Materiality Gating"),
         ("no_hybrid_rag_fts_only", "− Dense Vectors (FTS5 Only)"),
         ("no_transitive_staleness", "− Transitive Staleness (A→B→C)"),
-        ("no_shadow_turns_folding", "− Shadow Turns (Folding Only)*"),
+        ("no_shadow_turns_folding", "− Read-Only Lookups (Folding Only)*"),
     ]
     by_abl = {r["ablation"]: r for r in abl_rows}
     y = np.arange(len(abl_select))
