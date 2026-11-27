@@ -5,7 +5,7 @@
 [![CI](https://github.com/shervinemp/Chatree/actions/workflows/ci.yml/badge.svg)](https://github.com/shervinemp/Chatree/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests: 127 Passing](https://img.shields.io/badge/tests-127%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
+[![Tests: 128 Passing](https://img.shields.io/badge/tests-128%20passing-brightgreen.svg)](#artifact-evaluation--reproducibility)
 [![Paper: PDF + LaTeX + MD](https://img.shields.io/badge/paper-PDF%20%2B%20LaTeX%20%2B%20MD-blue.svg)](paper/chatree_paper.pdf)
 [![Local-First SQLite](https://img.shields.io/badge/storage-SQLite%20WAL%20%2B%20FTS5-lightgrey.svg)](#architecture)
 [![MCP Compatible](https://img.shields.io/badge/protocol-MCP%20JSON--RPC%202.0-purple.svg)](#cli-mcp-server--optional-demo-ui)
@@ -235,7 +235,7 @@ async def main() -> None:
     cfg = ChatreeConfig(
         db_path="./data/chatree.db",
         default_model="mock/chatree-demo",  # swap for "deepseek/deepseek-chat", "anthropic/claude-sonnet-4-5", etc.
-        guardrails=GuardrailPolicy(auto_compact_enabled=True, auto_compact_threshold_tokens=24_000),
+        guardrails=GuardrailPolicy(auto_compact_enabled=True, auto_compact_threshold_tokens=64_000),
     )
     async with Chatree.open(cfg.db_path, config=cfg) as ct:
         tree = await ct.create_tree("Nebula API Gateway")
@@ -276,7 +276,7 @@ Runnable examples: [`examples/01_quickstart_sdk.py`](examples/01_quickstart_sdk.
 ## Artifact Evaluation & Reproducibility
 
 ### Step 1: Zero-Key Functional Verification (~60s)
-Runs all **127 unit and integration tests** covering IPC guardrails (including `autonomous=True` policy enforcement, unlimited interactive chat topics, and bounded active subagents), copy-on-write forks, multi-branch `imports` with automatic staleness edges, shadow memoization (with normalized prompt hashing), over-budget shadow query search fallback, compaction-chain transparent shadow lookup, materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, `chat` vs. promotable `subagent` node kinds, strict `HEAD`-only `reflog` + MRU/newest-first envelope with omitted counts, steady-state visible IDs, paged `query="*"` browsing, bounded `STALE`/`MAILBOX` notices, supervisor worker cancellation cascade, multi-session `TreeSession` visitors with independent `HEAD`/reflog/cues, KV-cache-safe Turn-1 & piggybacked-exit semantic auto-titling (`title_source` + frozen `brief_title`), handoff-preserving block-aligned trimming, whole-request model-window budget enforcement, bounded compaction handoffs, true $O(1)$ incremental tail chunk indexing, deterministic weekday date anchoring, selective Hop-2 escalation, `deep=True` agent tool dispatch, hybrid summary-map directory scaling, parallel batch ingest, conservative steady-state ephemeral envelopes, Track 7 non-monotonic engineering benchmark & Total Lifecycle Cost reporting, Track 8A zero-token 3-way LCP/scaling/execution-trace/materiality benchmarks & Track 8B micro-diagnostics, exact client-level Mem0 & Chatree ingest cache metering, Cohen's $\kappa$ inter-judge checkpoint agreement audits, `ChatreeInteractiveAdapter` live-agent benchmark evaluation, cross-family `judge_llm` wiring, GPU runtime fallback, provider-agnostic HTTP/SSE & callable adapters, unified `TreeQueryEngine`, cached NumPy vector index, pluggable `TokenCounter`, Tier-2.5 atomic facts, `PINNED` staleness, portable v3 `.dialogue/` round-trips, CLI/MCP/REST API parity (including `stale`, `compare`, `promote`, `fork-edit`, `extract`), non-destructive compaction savings guards, multi-line list & table negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
+Runs all **128 unit and integration tests** covering IPC guardrails (including `autonomous=True` policy enforcement, unlimited interactive chat topics, and bounded active subagents), copy-on-write forks, multi-branch `imports` with automatic staleness edges, shadow memoization (with normalized prompt hashing), over-budget shadow query search fallback, compaction-chain transparent shadow lookup, materiality-gated transitive staleness, `dialogue_tree_archive_branch` dead-end quarantine, `chat` vs. promotable `subagent` node kinds, strict `HEAD`-only `reflog` + MRU/newest-first envelope with omitted counts, steady-state visible IDs, paged `query="*"` browsing, bounded `STALE`/`MAILBOX` notices, supervisor worker cancellation cascade, multi-session `TreeSession` visitors with independent `HEAD`/reflog/cues, KV-cache-safe Turn-1 & piggybacked-exit semantic auto-titling (`title_source` + frozen `brief_title`), handoff-preserving block-aligned trimming, whole-request model-window budget enforcement, bounded compaction handoffs, true $O(1)$ incremental tail chunk indexing, deterministic weekday date anchoring, selective Hop-2 escalation, `deep=True` agent tool dispatch, hybrid summary-map directory scaling, parallel batch ingest, conservative steady-state ephemeral envelopes, Track 7 non-monotonic engineering benchmark & Total Lifecycle Cost reporting, Track 8A zero-token 3-way LCP/scaling/execution-trace/materiality benchmarks & Track 8B micro-diagnostics, exact client-level Mem0 & Chatree ingest cache metering, Cohen's $\kappa$ inter-judge checkpoint agreement audits, `ChatreeInteractiveAdapter` live-agent benchmark evaluation, cross-family `judge_llm` wiring, GPU runtime fallback, provider-agnostic HTTP/SSE & callable adapters, unified `TreeQueryEngine`, cached NumPy vector index, pluggable `TokenCounter`, Tier-2.5 atomic facts, `PINNED` staleness, portable v3 `.dialogue/` round-trips, CLI/MCP/REST API parity (including `stale`, `compare`, `promote`, `fork-edit`, `extract`), non-destructive compaction savings guards, multi-line list & table negation-aware scoring, LoCoMo/LongMemEval loaders, and Track 6 compaction benchmarks:
 
 ```bash
 uv run pytest -v
@@ -398,7 +398,7 @@ Chatree/
 ├── paper/                         # Compiled PDF (chatree_paper.pdf), camera-ready LaTeX (chatree_paper.tex), Markdown report, BibTeX & figures
 ├── scripts/                       # Provider-agnostic evaluation runner & reproducible figure generator
 ├── results/deepseek_eval/         # Reproducible benchmark tables, LaTeX exports, checkpoints & manifests
-└── tests/                         # 127 automated unit & integration tests (zero API keys required)
+└── tests/                         # 128 automated unit & integration tests (zero API keys required)
 ```
 
 ---

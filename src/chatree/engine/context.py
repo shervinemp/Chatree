@@ -305,6 +305,27 @@ class ContextAssembler:
             max_chars = max(len(marker) + 24, int(max_chars * 0.78))
         return out
 
+    @classmethod
+    def _truncate_user_preserving_envelope(cls, text: str, max_tokens: int) -> str:
+        """
+        When a single user turn exceeds `max_tokens`, preserve `<dialogue_tree_context>`
+        (including `PINNED` invariants, `TREE`, `STALE`, and `MAILBOX`) intact and truncate
+        only the user message body whenever the envelope fits inside `max_tokens`.
+        """
+        start_tag = "<dialogue_tree_context>"
+        end_tag = "</dialogue_tree_context>"
+        s_idx = text.find(start_tag)
+        e_idx = text.find(end_tag)
+        if s_idx != -1 and e_idx != -1 and e_idx > s_idx:
+            env_end = e_idx + len(end_tag)
+            env_block = text[:env_end]
+            body = text[env_end:]
+            env_tok = estimate_tokens(env_block)
+            if env_tok < max_tokens - 32 and body.strip():
+                body_budget = max(16, max_tokens - env_tok - 4)
+                return env_block + "\n\n" + cls._truncate_text_to_tokens(body.lstrip(), body_budget)
+        return cls._truncate_text_to_tokens(text, max_tokens)
+
     def fit_messages_to_budget(
         self,
         messages: list[dict[str, Any]],
@@ -467,11 +488,15 @@ class ContextAssembler:
                 )
                 msg_tok = estimate_messages_tokens([fitted[largest_idx]])
                 target_msg_tok = max(32, msg_tok - excess)
+                raw_txt = str(fitted[largest_idx].get("content") or "")
+                trimmed_txt = (
+                    self._truncate_user_preserving_envelope(raw_txt, target_msg_tok)
+                    if fitted[largest_idx].get("role") == "user"
+                    else self._truncate_text_to_tokens(raw_txt, target_msg_tok)
+                )
                 fitted[largest_idx] = {
                     **fitted[largest_idx],
-                    "content": self._truncate_text_to_tokens(
-                        str(fitted[largest_idx].get("content") or ""), target_msg_tok
-                    ),
+                    "content": trimmed_txt,
                 }
         return fitted
 
@@ -545,7 +570,8 @@ class ContextAssembler:
         cue_ids: list[str] = []
         if invariants:
             inv_strs: list[str] = []
-            for inv in invariants[:8]:
+            max_pins = getattr(self.guardrails, "max_pinned_invariants", 8)
+            for inv in invariants[:max_pins]:
                 stale_tag = ""
                 if inv.source_node_id and self.ablations.enable_staleness_notices:
                     src_node = nodes_by_id.get(inv.source_node_id)
@@ -558,8 +584,13 @@ class ContextAssembler:
                             stale_tag = f" [STALE: source {src_node.id} has uncommitted edits]"
                 if stale_tag:
                     notices.append(f"PINNED {inv.key}{stale_tag}")
+                src_tag = (
+                    f" [src:{inv.source_node_id}]"
+                    if (inv.source_node_id and not stale_tag)
+                    else ""
+                )
                 inv_strs.append(
-                    f"{_escape_envelope_text(inv.key)}={_escape_envelope_text(inv.value)}{stale_tag}"
+                    f"{_escape_envelope_text(inv.key)}={_escape_envelope_text(inv.value)}{src_tag}{stale_tag}"
                 )
             lines.append("PINNED [key=value]: " + "; ".join(inv_strs))
 

@@ -81,7 +81,7 @@ Reading from or importing up to 4 sibling branches at spawn records directed edg
 Provider KV caches match strictly from byte 0 onward. Chatree keeps prefixes stable via three rules: (1) freeze historical messages and initial branch brief labels so background auto-titling never mutates past prompt bytes; (2) attach changing tree status, stale warnings, and hints temporarily to the **end** of the latest user turn and never save them into history; and (3) send the same tool-schema list on read-only lookups as on active turns, enforcing read-only permissions in code.
 
 ### 2.5 Implementation Notes
-Chatree is written in Python 3.12 over SQLite (WAL + FTS5) with a zero-dependency OpenAI-compatible client plus optional LiteLLM routing, a CLI, a stdio MCP server, and an optional FastAPI + React UI. Cross-branch calls enforce cycle detection, hop caps, and a token budget ledger weighting cached reads at 0.1×. Local retrieval uses `bge-small-en-v1.5` (exact $O(N)$ per-tree NumPy scan, <1 ms at 5k chunks) and `ms-marco-MiniLM-L-6-v2` with automatic GPU-to-CPU fallback. The repo includes 127 zero-key automated tests.
+Chatree is written in Python 3.12 over SQLite (WAL + FTS5) with a zero-dependency OpenAI-compatible client plus optional LiteLLM routing, a CLI, a stdio MCP server, and an optional FastAPI + React UI. Cross-branch calls enforce cycle detection, hop caps, and a token budget ledger weighting cached reads at 0.1×. Local retrieval uses `bge-small-en-v1.5` (exact $O(N)$ per-tree NumPy scan, <1 ms at 5k chunks) and `ms-marco-MiniLM-L-6-v2` with automatic GPU-to-CPU fallback. The repo includes 128 zero-key automated tests.
 
 ---
 
@@ -205,7 +205,7 @@ On the **18-turn live jump-around chat** (natural prompts, zero tool jargon), Ch
 ## 7. Reproducibility
 
 ```bash
-# 1. Zero-key test suite (127 tests)
+# 1. Zero-key test suite (128 tests)
 uv run pytest -v
 
 # 2. Zero-token structural trace & materiality benchmark vs. real mem0ai ($0.00)

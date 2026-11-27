@@ -102,7 +102,7 @@ class GuardrailPolicy(BaseModel):
     max_stale_notices: int = Field(default=8, ge=1, le=100)
     max_mailbox_notices: int = Field(default=6, ge=1, le=100)
     auto_compact_enabled: bool = True
-    auto_compact_threshold_tokens: int = Field(default=24_000, ge=256, le=1_000_000)
+    auto_compact_threshold_tokens: int | None = Field(default=64_000, ge=256, le=2_000_000)
     auto_compact_trigger_ratio: float = Field(default=0.75, ge=0.1, le=0.98)
     auto_compact_keep_recent_turns: int = Field(default=4, ge=0, le=24)
     auto_compact_min_messages: int = Field(default=6, ge=2, le=100)
@@ -182,6 +182,7 @@ class ChatreeConfig(BaseSettings):
     auto_background_summarize_on_switch: bool = False
     max_hop_depth: int = 3
     token_budget: int = 96_000
+    auto_compact_threshold_tokens: int | None = None
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"]
     )
@@ -195,6 +196,11 @@ class ChatreeConfig(BaseSettings):
             self.guardrails.max_hop_depth = self.max_hop_depth
         if self.token_budget != 96_000 and self.guardrails.token_budget == 96_000:
             self.guardrails.token_budget = self.token_budget
+        if (
+            self.auto_compact_threshold_tokens is not None
+            and self.guardrails.auto_compact_threshold_tokens == 64_000
+        ):
+            self.guardrails.auto_compact_threshold_tokens = self.auto_compact_threshold_tokens
 
     def resolved_db_path(self) -> Path | str:
         if self.db_path == ":memory:":

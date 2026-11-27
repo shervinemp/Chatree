@@ -693,3 +693,42 @@ async def test_phase3_incremental_o1_chunk_indexing_and_exact_equivalence() -> N
             )
         ]
         assert inc_rows == full_rows
+
+
+@pytest.mark.asyncio
+async def test_pinned_invariants_lossless_cap_provenance_and_dynamic_compact_threshold() -> None:
+    # 1. Default auto_compact_threshold_tokens is 64k and supports env/config override or None (pure ratio)
+    default_cfg = ChatreeConfig(db_path=":memory:")
+    assert default_cfg.guardrails.auto_compact_threshold_tokens == 64_000
+    custom_cfg = ChatreeConfig(db_path=":memory:", auto_compact_threshold_tokens=96_000)
+    assert custom_cfg.guardrails.auto_compact_threshold_tokens == 96_000
+
+    # 2. >8 pins render cleanly up to max_pinned_invariants, expose [src:node_id] provenance,
+    #    and survive extreme single-message truncation intact!
+    rec = _RecordingMockLLM()
+    cfg = ChatreeConfig(
+        db_path=":memory:",
+        default_model="mock/tiny-4k",
+        guardrails=GuardrailPolicy(
+            max_pinned_invariants=12,
+            model_context_windows={"mock/tiny-4k": 4_096},
+            reply_reserve_tokens=400,
+            auto_compact_enabled=True,
+            auto_compact_threshold_tokens=None,  # Pure ratio scaling (4096 * 0.75 = 3072)
+        ),
+    )
+    async with Chatree.in_memory(config=cfg, llm=rec) as ct:
+        tree = await ct.create_tree("Lossless Pins", default_model="mock/tiny-4k")
+        auth = await tree.spawn("Auth specs", title="Auth", mode="clean", switch_head=False)
+        for i in range(10):
+            await tree.pin(f"pin_{i}", f"VAL_{i}_LOCKED", source_node_id=auth.id)
+
+        # Send a giant user paste exceeding the 4k model window -> envelope & ALL 10 pins survive!
+        await tree.chat("Analyze this dump: " + ("payload " * 1_600))
+        assert rec.calls
+        sent_user = str(rec.calls[-1]["messages"][-1]["content"])
+        assert "PINNED [key=value]:" in sent_user
+        for i in range(10):
+            assert f"pin_{i}=VAL_{i}_LOCKED [src:{auth.id}]" in sent_user
+        assert rec.calls[-1]["total_tokens"] <= 4_096
+

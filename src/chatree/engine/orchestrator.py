@@ -170,10 +170,11 @@ class TurnOrchestrator:
             overrides=self.guardrails.model_context_windows,
             configured_max=self.guardrails.max_branch_context_tokens,
         )
-        eff_threshold = min(
-            self.guardrails.auto_compact_threshold_tokens,
-            int(resolved_window * self.guardrails.auto_compact_trigger_ratio),
-        )
+        ratio_threshold = int(resolved_window * self.guardrails.auto_compact_trigger_ratio)
+        if self.guardrails.auto_compact_threshold_tokens is not None:
+            eff_threshold = min(self.guardrails.auto_compact_threshold_tokens, ratio_threshold)
+        else:
+            eff_threshold = ratio_threshold
         live_tokens = await self.context.estimate_node_context_tokens(node)
         if live_tokens < eff_threshold:
             return tree, node, events
