@@ -693,12 +693,12 @@ class ContextAssembler:
                     lines.append(
                         f"BRANCH SUMMARIES: {len(summarized_others)} unchanged "
                         f"[+{extra_roster}{more_tag}] "
-                        "(call dialogue_tree_query_branch(id) for 0-token cached summary)"
+                        "(query_branch(id) = 0-tok summary)"
                     )
                 else:
                     lines.append(
                         f"BRANCH SUMMARIES: {len(summarized_others)} unchanged{more_tag} "
-                        "(IDs in TREE above; call dialogue_tree_query_branch(id) for 0-token cached summary)"
+                        "(IDs in TREE; query_branch(id) = 0-tok summary)"
                     )
             else:
                 lines.append('BRANCH SUMMARIES [id "title" status v# | summary]:')
