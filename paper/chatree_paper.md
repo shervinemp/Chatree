@@ -1,4 +1,4 @@
-# Chatree: Hierarchical Actor-Model Dialogue Trees for Bounded-Context, Verifiable, Non-Destructive LLM Conversations
+# Chatree: Organizing Long LLM Conversations as Branching Trees
 
 **Shervin** · Technical Report (v0.2.0) · [Compiled PDF](chatree_paper.pdf) · [LaTeX Source](chatree_paper.tex) · [BibTeX](references.bib) · [Reproducible Results](../results/deepseek_eval/)
 
@@ -6,192 +6,201 @@
 
 ## Abstract
 
-Long-horizon Large Language Model (LLM) conversations suffer from four coupled failure modes in flat linear transcripts: unbounded context growth, dead-end pollution from abandoned explorations, lossy context compaction that discards verbatim provenance, and prefix KV-cache thrashing when dynamic state is injected into the prompt. We present **Chatree**, a local-first, provider-agnostic framework that structures conversations as **hierarchical actor-model dialogue trees**. Each topic tangent, speculative prototype, or compacted continuation runs as an isolated tree node backed by copy-on-write prefix inheritance, read-only shadow inspection with semantic memoization, materiality-gated transitive staleness tracking, dead-end quarantine (`ARCHIVED`), non-destructive continuation compaction, and a 4-tier hybrid tree index augmented with zero-extra-call piggybacked temporal facts (Tier-2.5). Dynamic topology and memory metadata are injected exclusively into an ephemeral tail envelope, preserving immutable static prefixes for provider KV caching.
+Long conversations with Large Language Models (LLMs) rarely move in a straight line. Users explore side questions, abandon dead ends, revise earlier decisions, and eventually run out of context space. Keeping everything in one flat transcript makes prompts grow on every turn and mixes rejected ideas with final choices. Compressing history into rolling summaries or flat fact lists (such as Mem0) keeps prompts short, but permanently discards raw details the summarizer overlooked, loses track of which later decisions depend on an earlier spec, and breaks prompt prefix caching by rewriting the top of the prompt on every turn.
 
-We evaluate Chatree across eight experimental tracks on `deepseek/deepseek-chat` with local ONNX retrieval against unmodified upstream baselines including `mem0ai==2.2.1`, MIT `rlms==0.1.3`, full-context linear, sliding window, flat hybrid RAG, and summary-only context folding:
-- **Official LoCoMo (ACL 2024, $n=245$ balanced QAs, fixed adversarial rubric):** Chatree v3 ranks **#1 overall at 77.1%** (95% CI `[71.8, 82.5]`), surpassing `full_context_linear` (`76.3%`) at **5.5× smaller peak context** (`6,390` vs. `35,097` tokens), `mem0_official` (`73.5%`, **+14.0 pts on multi-hop**, `60.0%` vs. `0.1%` KV cache hit), `rlm_official` (`70.9%`), `flat_hybrid_rag` (`48.2%`, $p < 10^{-4}$), and `tree_summary_only` (`41.2%`, $p < 10^{-4}$). Piggybacked Tier-2.5 dated facts deliver a **+12.6 pt** lift over v2 (McNemar $p = 0.0001^*$).
-- **Official LongMemEval-S (ICLR 2025, $n=30$, ~115k-token histories, 6 systems):** Chatree v3 ranks **#1 overall at 80.0%** (`[66.7, 93.3]`) vs. `70.0%` for `full_context_linear`, `mem0_official` (**+40.0 pts on `knowledge-update`**, **28% lower total lifecycle cost** `\$1.119` vs. `\$1.555`), and `rlm_official`, at **17.3× smaller peak context** (`6,295` vs. `108,772` tokens), **3.8× lower query cost** than linear, and **4.2× faster p95 latency** than RLM.
-- **Track 7 (Non-Monotonic Engineering & Spec-Reversal, $n=36$, 80 sessions):** Chatree v3 scores **100.0% (36/36)** across spec reversals, dead-end quarantine, downstream staleness, verbatim recovery under noise, and cross-branch synthesis—statistically outperforming `rlm_official` (`77.8%`, $p=0.0078^*$) and `flat_hybrid_rag` (`36.1%`, $p<10^{-4}$) and surpassing `tree_summary_only` (`88.9%`).
-- **Track 8 (Structural Simulation Trace & Live Micro-Diagnostic Proof vs. Mem0):** A zero-token real-framework execution trace (`\$0.00`) tracing real `Chatree` alongside real `mem0ai==2.2.1` over a localhost proxy verifies **82.5% vs. 0.7%** turn-to-turn byte-0 LCP prefix cacheability (**−69.4%** billed input tokens), exposes `mem0ai==2.2.1`'s **`33,653`-char (~8,413-token)** `ADDITIVE_EXTRACTION_PROMPT` per `add()` call, and separates Chatree **8/8 (100%)** vs. Mem0 **0/8 (0%)** under identical lossy distillation. Live off-peak verification (`deepseek/deepseek-chat`, `~\$0.015`) confirms **8/8 (100.0%, 0 leaks, 2/2 structural stale flags, 78.7–81.9% KV cache)** vs. `mem0_official` **6/8 (75.0%, 1 production dead-end leak, 0/2 stale flags, 0.0% KV cache)**.
-- **Track 6 (9-Generation Infinite-Context Compaction):** Chatree's non-destructive continuation chain achieves **100.0% recall** on both anchored decisions and **un-anchored Turn-1 verbatim diagnostics** at `1,727` peak tokens, while destructive rolling compaction drops to **0.0%** on un-anchored details.
-- **Tracks 1, 2 & 5:** `8/8 (100%)` strict pass across all 5 stress families, an empirical total-token crossover below `linear` at $K=8$ (`29.6k` vs. `39.7k` total tokens; `957` vs. `4,266` peak tokens), statistically significant shadow-turn ablation (`0.0%` without shadow turns, $p=0.0312^*$), and **100.0% recall / 1.00 judge / 82.7% KV cache** on natural-prompt live jump-around sessions.
+We present **Chatree**, a local-first framework that stores a conversation as a **tree of isolated branches** rather than a single linear log. Each side topic, exploratory spike, or continuation after compaction becomes its own branch. Branches keep their original messages intact in SQLite, generate a cheap summary plus up to 8 dated facts when finished (zero extra LLM calls), and answer targeted cross-branch questions through isolated read-only lookups without polluting either chat. When one branch builds on another, Chatree records the dependency edge so a meaningful revision automatically flags downstream branches as out of date. Finally, all changing metadata (branch map, stale warnings, related pointers) is attached temporarily to the end of the latest user message, leaving earlier prompt bytes unchanged so provider KV caches continue to hit.
+
+Across eight evaluation tracks on `deepseek-chat` against full-context chat, flat RAG, summary folding, official `mem0ai==2.2.1`, and official MIT `rlms==0.1.3`:
+- **Official LoCoMo ($n=245$):** Chatree ranks **#1 at 77.1%** (95% CI `[71.8, 82.5]`), ahead of Full Linear (`76.3%`) at **5.5× smaller peak context** (`6,390` vs. `35,097` tokens), Mem0 (`73.5%`, **+14 pts on multi-hop**, `60.0%` vs. `0.1%` KV cache), MIT RLM (`70.9%`), Flat RAG (`48.2%`, $p<10^{-4}$), and Summary Folding (`41.2%`, $p<10^{-4}$).
+- **Official LongMemEval-S ($n=30$, ~115k tokens/item):** Chatree ranks **#1 at 80.0%** (`[66.7, 93.3]`) vs. `70.0%` for Full Linear, Mem0 (**+40 pts on `knowledge-update`**, **28% lower total cost** `\$1.12` vs. `\$1.55`), and RLM—at **17.3× smaller peak context** (`6,295` vs. `108,772` tokens) and **4.2× faster p95 latency** than RLM.
+- **9-Generation Compaction:** Chatree retains **100%** recall of both anchored decisions and un-anchored Turn-1 details at `1,727` peak tokens, while rolling compaction drops to **0%** on un-anchored details.
+- **Targeted Diagnostics vs. Mem0 (Track 8):** Zero-token traces running real Chatree and real `mem0ai==2.2.1` through a local proxy show **82.5% vs. 0.7%** prefix cacheability (`−69.4%` effective billed input tokens), uncover Mem0's `33,653`-character extraction prompt per write, and separate Chatree **8/8** vs. Mem0 **0/8** under identical lossy distillation. Live `deepseek-chat` probes (`~\$0.015`) confirm **8/8 (100%, 0 leaks, 2/2 stale flags)** vs. Mem0 **6/8 (75%, 1 silent dead-end production leak, 0/2 stale flags)**.
 
 ---
 
 ## 1. Introduction
 
-Interactive software engineering, research synthesis, and multi-session assistants routinely span dozens of topic branches, speculative explorations, mid-stream design revisions, and hundreds of thousands of tokens. Representing these workflows as a single append-only linear transcript induces four coupled pathologies:
+Anyone who uses an LLM for a multi-hour coding, debugging, or research session hits the same wall: real work branches, but chat interfaces are flat. Current systems offer two flawed options:
 
-1. **Context Growth & Attention Degradation:** Unrelated tangents accumulate linearly per turn, inflating prefill cost and causing *lost-in-the-middle* recall failures (Liu et al., 2024).
-2. **Dead-End Pollution:** Abandoned explorations stay permanently interleaved with settled decisions, increasing distractor leakage.
-3. **Lossy Compaction:** In-place rolling summarization erases un-anchored verbatim facts (ports, offsets, edge-case dates) that were not recognized as salient when compaction ran.
-4. **Silent Causal Drift & KV-Cache Thrashing:** Revising an earlier decision emits no invalidation signal to dependent threads, while mutating system prompts or injecting dynamic memory near byte 0 destroys provider KV-cache prefixes (Zheng et al., 2024).
+1. **Keep one growing linear chat.** Side tangents and rejected ideas stay in the prompt forever. Every turn costs more, and models increasingly confuse old guesses with settled choices as details sink into the middle of long inputs (Liu et al., 2024).
+2. **Distill history into summaries or flat facts.** Rolling compaction (`/compact`) and flat memory layers like Mem0 (Chhikara et al., 2025) shrink prompts, but (a) any raw detail omitted at write time is gone forever, (b) flat fact lists have no dependency graph to flag downstream configs when an upstream spec changes, and (c) inserting retrieved memories near byte 0 breaks KV-cache prefixes every turn (Zheng et al., 2024).
 
-Chatree replaces the flat transcript with a **process tree of isolated dialogue actors** (Hewitt et al., 1973) persisted in a local-first SQLite WAL/FTS5 store and queried via a unified multi-hop `TreeQueryEngine`.
+### A Concrete Example
+Consider four short branches in one engineering session:
+- **Branch A (Auth):** Settles `JWT_TTL=60m` and `RS256`.
+- **Branch B (Edge Cache):** Imports Branch A and sets `CACHE_TTL=30m` (must stay ≤ half of `JWT_TTL`).
+- **Branch C (Mobile Refresh):** Imports Branch B and sets `REFRESH_WINDOW=25m` (5 minutes below `CACHE_TTL`).
+- **Branch D (MongoDB Spike):** Explores `MongoDB 7.0` (`rs_ledger_0`, `wiredTigerCacheSizeGB=24`), then gets closed and archived without anyone writing a cancellation essay.
+
+Later, a security audit revises *only* Branch A to `JWT_TTL=10m` and `ED25519`. In a flat chat, all four threads stay interleaved. In a flat fact store, Branch D's MongoDB values remain active memories because nobody wrote "cancel MongoDB," and Branches B and C receive no warning that their derived settings are now invalid.
+
+### Four Simple Ideas
+Chatree models a conversation as a tree of lightweight branches—closer to Git branches than a scrolling chat log:
+1. **Isolate branches and never destroy history:** Side topics run in child branches (full fork, recent slice, or clean slate). Dead ends are marked `ARCHIVED` to hide them from search without deleting the audit log. Long branches hand a short checkpoint to a fresh child branch while keeping the original branch untouched.
+2. **Use cheap summaries for search, and read-only lookups for exact details:** Finishing a branch generates a short summary plus up to 8 dated facts in the same call. When a question needs an exact port, error code, or config line missing from the summary, Chatree sends a read-only question directly to that branch over its original turns and caches the reply.
+3. **Track dependencies when earlier choices change:** Whenever Branch B reads from or imports Branch A, Chatree records `A -> B`. Substantive edits to A walk the graph and flag B (1 hop) and C (2 hops) as stale.
+4. **Keep changing context at the end, never the beginning:** Past messages stay byte-for-byte frozen; dynamic tree status, stale alerts, and hints are attached temporarily to the newest user turn and discarded afterward, keeping prefix caches warm.
 
 ---
 
-## 2. Systems Capability Comparison
+## 2. How Chatree Works
 
-| Capability | Full Linear | Sliding Window | Flat RAG | Mem0 | Letta / MemGPT | Zep / Graphiti | Context-Folding | MIT RLM | **Chatree** |
+![Chatree Architecture](figures/fig1_architecture.png)
+*Figure 1: Chatree overview. Each branch keeps an immutable prefix for KV caching and receives dynamic context only at the tail of the active turn. Cross-branch reads use cached summaries or read-only lookups over verbatim history, backed by a single local SQLite database.*
+
+### 2.1 Branches, Archiving, and Non-Destructive Checkpoints
+Each branch stores its parent link, lifecycle status (`ACTIVE`, `COMPLETED`, or `ARCHIVED`), append-only verbatim messages, a lazily updated summary with version number and up to 8 dated facts, optional versioned text artifacts, and dependency links to branches it has read from. Users and agents jump between branches with a Git-style navigation history (`back`, `forward`, `HEAD@{k}`).
+
+Spawning a child branch `c` from parent `u` at message `k` uses one of three prefix modes:
+- **Fork:** full parent history up to `k` + `c`'s messages.
+- **Slice:** system prompt + frozen brief + last `w` parent turns + `c`'s messages.
+- **Clean:** system prompt + frozen brief + `c`'s messages.
+
+**Dead-end archiving** sets `status = ARCHIVED`, immediately removing the branch from every search index while preserving its raw turns for audit. **Non-destructive compaction** commits a concise 5-section handoff (objective, locked decisions and exact identifiers, artifacts, rejected options, next steps) on the warm prefix, marks the old branch `COMPLETED`, and opens a linked continuation child (`B1 -> B2 -> ... -> Bk`), automatically stepping down from `slice` to `clean` if context would not shrink.
+
+### 2.2 Two-Level Retrieval: Cheap Index Plus Read-Only Lookups
+Active branches are indexed in SQLite (FTS5 BM25 + local dense vectors fused with RRF and optional cross-encoder reranking) across four granularities:
+- **Verbatim chunks:** Sliding windows of raw turns prefixed with the branch title and goal, updated incrementally.
+- **Branch summaries:** Generated lazily on finish or query; long cold branches use a role-balanced 7,500-character trimmer so user messages stay intact and late turns are never dropped.
+- **Dated atomic facts (0 extra LLM calls):** Extracted in the same summary prompt with relative dates ("yesterday", "two weeks ago") resolved to calendar dates using weekday-anchored session timestamps.
+- **Subtree rollups:** Depth-capped upward summaries for coarse discovery in deep trees.
+
+When a caller asks another branch `v` a question `q`:
+1. If no prompt is given and `v`'s summary is clean, Chatree returns the cached summary in **0 LLM tokens**.
+2. Otherwise, Chatree checks a per-branch memoization cache (normalized exact hash + cosine similarity ≥ 0.90 guarded by exact identifier matching).
+3. On a miss, Chatree runs an isolated **read-only lookup** over `v`'s raw turns (blocking state-changing tools and framing output as untrusted data), caches the result, and logs a dependency edge. If `v` is the tip of a compacted chain (`Bk`) and lacks the detail locally, Chatree automatically checks ancestors `Bk-1 ... B1` in one bounded hop.
+
+Complex cross-branch questions use a single shared 4-step query pipeline: parallel Hop-1 lookups across top candidate branches → zero-cost dated fact lookup → optional Hop-2 drill-down when needed → chronological synthesis.
+
+### 2.3 Dependency Tracking and Staleness Alerts
+Reading from or importing up to 4 sibling branches at spawn records directed edges in SQLite. When an upstream branch is edited later, Chatree checks whether concrete identifiers, numbers, or polarity changed:
+- **Cosmetic edits** bump a minor version (`v1.1`) with zero alerts.
+- **Material revisions** bump a major version (`v2.0`), record a 1-line diff (e.g., `removed [60m, RS256]; added [10m, ED25519]`), and run a cycle-safe breadth-first walk to mark both direct (`B`, 1 hop) and transitive (`C`, 2 hops) consumers stale. Shared pinned invariants (up to 8 per tree) are similarly flagged `[STALE]` when their source branch changes or is archived.
+
+### 2.4 Preserving Prompt KV Caches
+Provider KV caches match strictly from byte 0 onward. Chatree keeps prefixes stable via three rules: (1) freeze historical messages and initial branch brief labels so background auto-titling never mutates past prompt bytes; (2) attach changing tree status, stale warnings, and hints temporarily to the **end** of the latest user turn and never save them into history; and (3) send the same tool-schema list on read-only lookups as on active turns, enforcing read-only permissions in code.
+
+### 2.5 Implementation Notes
+Chatree is written in Python 3.12 over SQLite (WAL + FTS5) with a zero-dependency OpenAI-compatible client plus optional LiteLLM routing, a CLI, a stdio MCP server, and an optional FastAPI + React UI. Cross-branch calls enforce cycle detection, hop caps, and a token budget ledger weighting cached reads at 0.1×. Local retrieval uses `bge-small-en-v1.5` and `ms-marco-MiniLM-L-6-v2` with automatic GPU-to-CPU fallback. The repo includes 111 zero-key automated tests.
+
+---
+
+## 3. Related Work
+
+| Capability | Linear | Sliding | Flat RAG | Mem0 | Letta | Zep/Graphiti | Folding | MIT RLM | **Chatree** |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | Bounded $O(1)$ working context | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Partial | **✓** |
-| Lossless verbatim ancestor recall | ✓* | ✗ | Partial | ✗ | Partial | Partial | ✗ | ✓ | **✓ (Shadow)** |
-| Branching & dead-end quarantine | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | Partial | ✗ | **✓ (`ARCHIVED`)** |
-| Materiality-gated causal staleness | ✗ | ✗ | ✗ | ✗ | ✗ | Temporal | ✗ | ✗ | **✓ (Transitive)** |
-| Non-destructive compaction chain | ✗ | ✗ | ✗ | ✗ | Destructive | ✗ | Destructive | N/A | **✓** |
-| Piggybacked dated atomic facts | ✗ | ✗ | ✗ | Separate LLM | ✗ | KG | ✗ | ✗ | **✓ (0 extra calls)** |
+| Lossless verbatim ancestor recall | ✓* | ✗ | Partial | ✗ | Partial | Partial | ✗ | ✓ | **✓ (Lookup)** |
+| Branching & dead-end archiving | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | Partial | ✗ | **✓** |
+| Transitive staleness tracking | ✗ | ✗ | ✗ | ✗ | ✗ | Temporal | ✗ | ✗ | **✓** |
+| Non-destructive compaction | ✗ | ✗ | ✗ | ✗ | Destr. | ✗ | Destr. | N/A | **✓** |
+| Dated atomic facts | ✗ | ✗ | ✗ | Extra LLM | ✗ | KG | ✗ | ✗ | **✓ (0 extra calls)** |
 | KV-cache prefix preservation | ✓ | ✗ | ✗ | ✗ | Partial | ✗ | Partial | ✗ | **✓ (31–83%)** |
-| Git-style `HEAD@{k}` reflog | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Git-style branch navigation | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | **✓** |
 
-*\*Full-context linear retains verbatim history only until the model's context window overflows.*
-
----
-
-## 3. Architecture
-
-![Chatree System Architecture](figures/fig1_architecture.png)
-*Figure 1: End-to-end Chatree architecture uniting immutable copy-on-write prefixes, ephemeral tail envelopes, bidirectional IPC with read-only shadow turns, materiality-gated transitive staleness, 4-tier hybrid tree RAG with piggybacked Tier-2.5 atomic facts, and non-destructive compaction over a local-first SQLite WAL store.*
-
-### 3.1 Formal Dialogue Tree State Model
-
-A Chatree workspace is a tuple $\mathcal{T} = (V, E, H, \mathcal{R}, \mathcal{A}, \mathcal{F}, \mathcal{I}, \mathcal{D})$:
-- **$V, E$:** Rooted tree of dialogue actor nodes with materialized paths, lifecycle status $\sigma(v) \in \{\text{ACTIVE}, \text{COMPLETED}, \text{ARCHIVED}\}$, append-only verbatim messages $M(v)$, lazy Tier-2 summary $s(v)$ with version $\nu(v)$ and dirty flag $\delta(v)$, tool permission $\pi(v) \in \{\text{read\_only}, \text{read\_write}\}$, and inheritance mode $\mu(v) \in \{\text{root}, \text{fork}, \text{slice}, \text{clean}\}$.
-- **$H, \mathcal{R}$:** Active `HEAD` pointer and Git-style reflog supporting `HEAD@{k}`, `back`, and `forward` jumps with one-shot orientation cues.
-- **$\mathcal{A}$:** Versioned artifact blackboard (`slug@vN`) storing exact code, schemas, and specs out-of-band.
-- **$\mathcal{F}$:** Branch-scoped Tier-2.5 provenance-linked atomic temporal facts `(fact_text, entities, resolved_date, node_id, source_msg_seq)`.
-- **$\mathcal{I}$:** Bounded tree-wide `PINNED` invariants (up to 8 entries) with source-revision tracking `(source_node_id, source_summary_version, source_msg_seq)`.
-- **$\mathcal{D}$:** Directed dependency graph recording $(u \to v, \nu_{\text{seen}}, \text{seq}_{\text{seen}})$ whenever node $u$ reads from node $v$.
-
-### 3.2 KV-Cache-Safe Dual-Zone Context Assembly
-
-When child $c$ spawns from parent $u$ at a safe non-dangling tool-call boundary $k_{\text{fork}}$, its static prompt prefix is constructed copy-on-write:
-
-$$
-P(c) = \begin{cases}
-P(u) \Vert M_{1..k_{\text{fork}}}(u) \Vert M(c), & \mu(c) = \text{fork}, \\
-S_{\text{sys}} \Vert \text{brief}(c) \Vert M_{k_{\text{fork}}-w+1..k_{\text{fork}}}(u) \Vert M(c), & \mu(c) = \text{slice}, \\
-S_{\text{sys}} \Vert \text{brief}(c) \Vert M(c), & \mu(c) = \text{clean}.
-\end{cases}
-$$
-
-$P(c)$ stays **byte-immutable** across turns and multi-round tool loops: `brief(c)` anchors to a frozen `brief_title` captured at node creation, allowing Turn-1 non-blocking auto-titling and piggybacked-exit `TITLE:` refinement (`title_source ∈ {placeholder, auto, user}`) to enrich UI outlines and RAG `[Path | Goal]` headers with 0% KV-cache invalidation. All dynamic state (`TREE`, `REFLOG`, `BRANCH SUMMARIES`, `PINNED [STALE]`, Tier-2.5 `FACTS`, `STALE`, `RELATED`, `MAILBOX`) is injected solely into an ephemeral `<dialogue_tree_context>` tail on the active user message and never persisted into the branch prefix. Multiple concurrent human or agent visitors can navigate independent `HEAD` pointers and reflogs over the same tree via `TreeSession`.
-
-### 3.3 Core Mechanisms
-
-1. **Read-Only Shadow Turns, Compaction-Chain Resolution & Semantic Memoization:** Calling `dialogue_tree_query_branch(target=v, prompt=q)` returns cached summaries at 0 tokens when `prompt` is omitted, checks `shadow_cache` (normalized exact hash + identifier-guarded cosine $\ge 0.90$), or runs an isolated read-only shadow turn over $P(v)$ preserving the canonical tool-schema array (byte-0 KV-cache safety) while blocking mutating tools and wrapping responses in untrusted-data framing. When querying the tip $B_k$ of a compacted continuation chain returns `NOT_FOUND_IN_BRANCH`, the router transparently walks `[Compacted from ancestor ...]` upward across $B_{k-1} \dots B_1$ in one bounded hop, registers the dependency edge, and memoizes the result under $B_k$.
-2. **4-Tier Hybrid Tree Index & Zero-Extra-Call Tier-2.5 Facts:** Indexes contextual chunks (Tier 1, incremental $O(1)$ tail), branch summaries generated via role-balanced proportional cold-branch trimming (`_compact_cold_prefix_messages`, `char_budget=7,500`, 0 tool schemas on cold ingest) (Tier 2), piggybacked `FACTS_JSON:` speaker-attributed atomic facts with deterministic calendar weekday anchoring (`enrich_date_with_weekday`) (Tier 2.5, **0 extra LLM calls**), and depth-capped subtree rollups (Tier 3, `max_rollup_depth=8`). Retrieval fuses SQLite FTS5 BM25 + cached pre-normalized NumPy/`sqlite-vec` cosine rankings via RRF (Cormack et al., 2009) plus local ONNX cross-encoder reranking with automatic `CUDA -> DirectML -> CPU` runtime probe fallback and a shared `GLOBAL_ONNX_INFER_LOCK`. Archiving a dead-end branch (`ARCHIVED`) quarantines all 4 tiers by default.
-3. **Materiality-Gated Transitive Staleness, Multi-Branch Imports & `PINNED` Coherence:** Spawning a convergence branch with `imports=[...]` (up to 4 non-`ARCHIVED` branches) freezes bounded read-only snapshots into its brief (0% KV invalidation) and auto-registers `node_dependencies` edges in $\mathcal{D}$. Revising a completed branch distinguishes cosmetic edits (`v1.1`, zero cascade) from material revisions (`v2.0` + identifier/numeric/polarity delta), propagating transitive staleness alerts ($A \to B \to C$) over $\mathcal{D}$ and marking affected `PINNED` invariants `[STALE]`.
-4. **Non-Destructive Auto-Compaction Chaining:** Commits a structured 5-section anchor handoff on the warm KV prefix and spawns a linked continuation child ($B_1 \to B_2 \to \dots \to B_k$) guarded by an automatic token-savings check (`slice -> clean` step-down if context would not shrink), preserving every prior generation verbatim.
-5. **Unified `TreeQueryEngine`:** Shared across live callers (`tree.ask(..., deep=True)`, `dialogue_tree_search_and_query(..., deep=True)`, CLI, MCP, REST, Demo UI) and `ChatreeSystemAdapter`: Hop-1 parallel shadows $\to$ zero-cost Tier-2.5 atomic facts $\to$ selective Hop-2 summary-map drill-down (skipping redundant Hop-2 only on clean high-hit single-hop queries while preserving parallel targets + follow-up queries for multi-hop, counting, temporal, and update queries) $\to$ chronological evidence synthesis.
+*\*Linear chat retains verbatim history only until the context window overflows.*
 
 ---
 
-## 4. Empirical Evaluation
+## 4. Experimental Setup
 
-All live experiments run on `deepseek/deepseek-chat` with local ONNX GPU retrieval (`BAAI/bge-small-en-v1.5` + `Xenova/ms-marco-MiniLM-L-6-v2` on DirectML RTX 4080), `use_provided_summaries=False`, and unmodified upstream `mem0ai==2.2.1` and MIT `rlms==0.1.3`. Statistical significance uses 10,000-resample bootstrap 95% CIs and exact two-sided paired McNemar tests.
+All live runs use `deepseek-chat` with local `bge-small-en-v1.5` embeddings and `ms-marco-MiniLM-L-6-v2` reranking on an RTX 4080 Laptop GPU, with no gold summaries supplied. We compare against unmodified `mem0ai==2.2.1` (`top_k=8`), unmodified MIT `rlms==0.1.3` (`max_depth=1`, up to 8 iterations), Full Linear (up to 120k tokens), Flat Hybrid RAG (`top_k=5`), Summary Folding, Sliding Window, and Destructive Rolling compaction. External benchmarks report Total Lifecycle Cost (query USD + write-time ingest USD), 95% bootstrap CIs (10,000 resamples), and exact two-sided paired McNemar $p$-values.
 
-### 4.1 Track 3: Official LoCoMo (ACL 2024 — $n = 245$ Balanced QAs)
+---
+
+## 5. Results
+
+### 5.1 Long-Horizon Memory Benchmarks (LoCoMo & LongMemEval-S)
 
 ![Official LoCoMo Comparison](figures/fig2_locomo_comparison.png)
-*Figure 2: Official LoCoMo ($n=245$) under the fixed adversarial rubric: (a) overall accuracy with 95% bootstrap CIs and paired McNemar significance vs. Chatree v3; (b) per-category breakdown showing the +30.0 pt multi-hop and +22.0 pt temporal gains from piggybacked Tier-2.5 atomic facts.*
+*Figure 2: Official LoCoMo ($n=245$): (a) overall accuracy with 95% CIs and McNemar tests; (b) per-category breakdown showing the +30 pt multi-hop and +22 pt temporal gain from piggybacked dated facts.*
 
-| System | `n` | Accuracy (95% CI) | Single-Hop | Multi-Hop | Temporal | Open-Domain | Adversarial | Peak Tok | Total USD (Q + Ingest) | p50 / p95 ms | KV Cache | McNemar `p` vs. v3 |
+| System (LoCoMo, $n=245$) | `n` | Overall (95% CI) | Sgl | Mlt | Tmp | Opn | Adv | Peak Tok | Total USD (Q + I) | p95 | Cache | `p` vs. Ref |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **`chatree_two_tier_v3` (+Tier-2.5)** | **245** | **77.1%** `[71.8, 82.5]` | 86.0% | 80.0% | **74.0%** | **57.8%** | 86.0% | **6,390** | \$1.045 (\$0.842 + \$0.203) | 4.94s / 7.76s | **60.0%** | ref |
-| `full_context_linear` | 245 | 76.3% `[71.4, 82.0]` | **88.0%** | **82.0%** | 68.0% | 55.6% | 86.0% | 35,097 | \$0.300 (\$0.300 + \$0.000) | 1.63s / 3.12s | **95.4%** | 0.8744 |
-| `mem0_official` (`mem0ai==2.2.1`) | 245 | 73.5% `[68.2, 79.2]` | 78.0% | 66.0% | **74.0%** | 53.3% | 94.0% | 874 | \$0.204 (\$0.051 + \$0.153) | **1.28s / 2.42s** | 0.1% | 0.2225 |
-| `rlm_official` (`rlms==0.1.3`)‡ | 117 | 70.9% `[62.4, 78.6]` | 76.0% | 64.0% | **80.0%** | 55.0% | 77.3% | 28,166 | \$1.381 (\$1.381 + \$0.000) | 12.13s / 28.32s | 0.0% | 0.4725 |
-| `chatree_two_tier` (v2, pre-Facts) | 245 | 64.5% `[58.8, 70.6]` | 78.0% | 50.0% | 52.0% | 44.4% | **96.0%** | 4,250 | \$0.666 (\$0.570 + \$0.095) | 5.73s / 8.39s | 75.5% | **0.0001\*** |
-| `flat_hybrid_rag` | 245 | 48.2% `[42.0, 54.3]` | 46.0% | 26.0% | 40.0% | 33.3% | 94.0% | **725** | **\$0.046** (\$0.046 + \$0.000) | 1.70s / 3.12s | 2.3% | **<0.0001\*** |
-| `tree_summary_only` (Folding) | 245 | 41.2% `[35.5, 47.3]` | 40.0% | 32.0% | 16.0% | 31.1% | 86.0% | 1,480 | \$0.062 (\$0.062 + \$0.000) | 1.41s / 2.13s | 11.9% | **<0.0001\*** |
+| **Chatree (Full)** | 245 | **77.1%** `[71.8, 82.5]` | 86% | 80% | 74% | **58%** | 86% | 6,390 | \$1.04 (\$0.84 + \$0.20) | 7.8s | 60.0% | ref |
+| Full Linear | 245 | 76.3% `[71.4, 82.0]` | **88%** | **82%** | 68% | 56% | 86% | 35,097 | \$0.30 (\$0.30 + \$0.00) | 3.1s | **95.4%** | .874 |
+| Mem0 (`2.2.1`) | 245 | 73.5% `[68.2, 79.2]` | 78% | 66% | 74% | 53% | 94% | 874 | \$0.20 (\$0.05 + \$0.15) | **2.4s** | 0.1% | .223 |
+| MIT RLM (`0.1.3`)‡ | 117 | 70.9% `[62.4, 78.6]` | 76% | 64% | **80%** | 55% | 77% | 28,166 | \$1.38 (\$1.38 + \$0.00) | 28.3s | 0.0% | .473 |
+| Chatree (no dated facts) | 245 | 64.5% `[58.8, 70.6]` | 78% | 50% | 52% | 44% | **96%** | 4,250 | \$0.67 (\$0.57 + \$0.10) | 8.4s | 75.5% | **.0001\*** |
+| Flat Hybrid RAG | 245 | 48.2% `[42.0, 54.3]` | 46% | 26% | 40% | 33% | 94% | **725** | **\$0.05** (\$0.05 + \$0.00) | 3.1s | 2.3% | **<.0001\*** |
+| Summary Folding | 245 | 41.2% `[35.5, 47.3]` | 40% | 32% | 16% | 31% | 86% | 1,480 | \$0.06 (\$0.06 + \$0.00) | **2.1s** | 11.9% | **<.0001\*** |
 
-*‡Partial checkpoint ($n=117$); paired McNemar computed strictly over the exact 117-QA intersection. Total lifecycle cost exposes write-time extraction overhead (`mem0_official` spends \$0.153 on ingest vs. \$0.051 on queries — 3.0× its query cost — and 965.1s wall-clock).*
+*‡Partial checkpoint ($n=117$); paired McNemar computed strictly over the exact 117-QA intersection.*
 
-### 4.2 Track 4: Official LongMemEval-S (ICLR 2025 — $n = 30$, ~115k Tokens/Item, 6 Systems)
+![Pareto Frontier and Lifecycle Cost](figures/fig3_pareto_efficiency.png)
+*Figure 3: Accuracy vs. peak context on (a) LoCoMo and (b) LongMemEval-S, plus (c) LoCoMo Total Lifecycle Cost and p95 latency.*
 
-![Pareto Frontier and Total Lifecycle Cost](figures/fig3_pareto_efficiency.png)
-*Figure 3: (a) Official LoCoMo ($n=245$) peak-context Pareto frontier, (b) Official LongMemEval-S ($n=30$, all 6 systems incl. `mem0_official`) peak-context Pareto frontier, and (c) LoCoMo Total Lifecycle Cost (Query + Write-Time Ingest USD) with p95 latency. Chatree v3 occupies the upper-left Pareto-optimal corner on both benchmarks while costing 28% less total USD than `mem0_official` on LongMemEval-S (\$1.119 vs. \$1.555).*
-
-| System | Accuracy (95% CI) | S-User | S-Asst | Pref | Update | Temporal | Multi | Peak Tok | Total USD (Q + Ingest) | KV Cache | p50 / p95 ms | McNemar `p` |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **`chatree_two_tier_v3`** | **80.0%** `[66.7, 93.3]` | 80% | **100%** | **100%** | 80% | 60% | **60%** | 6,295 | \$1.119 (\$0.235 + \$0.884) | 31.4% | 5.11s / 7.69s | ref |
-| `full_context_linear` | 70.0% `[53.3, 86.7]` | **100%** | **100%** | 20% | **100%** | 60% | 40% | 108,772 | \$0.882 (\$0.882 + \$0.000) | 0.0% | 2.42s / 4.76s | 0.5078 |
-| `mem0_official` (`mem0ai==2.2.1`) | 70.0% `[53.3, 86.7]` | 80% | **100%** | **100%** | **40%** | 60% | 40% | 1,125 | \$1.555 (\$0.009 + \$1.546) | 0.0% | **1.46s / 3.60s** | 0.3750 |
-| `rlm_official` | 70.0% `[53.3, 86.7]` | 80% | **100%** | 40% | 80% | **80%** | 40% | 21,373 | \$0.375 (\$0.375 + \$0.000) | 0.0% | 11.25s / 31.98s | 0.5810 |
-| `chatree_two_tier` (v2) | 63.3% `[46.7, 80.0]` | 80% | 60% | 60% | 80% | 60% | 40% | 6,927 | \$0.791 (\$0.162 + \$0.630) | **49.6%** | 6.19s / 8.15s | 0.1797 |
-| `flat_hybrid_rag` | 40.0% `[23.3, 56.7]` | 80% | 20% | 0% | 80% | 20% | 40% | **717** | **\$0.004** (\$0.004 + \$0.000) | 39.3% | 3.54s / 7.10s | **0.0018\*** |
-
-### 4.3 Track 7: Non-Monotonic Software Engineering & Spec-Reversal ($n = 36$, 80 Sessions)
-
-| System | Accuracy (95% CI) | Spec Rev. | Quarantine | Downstream | Verbatim | Synthesis | Peak Tok | Total USD (Q + Ingest) | KV Cache | p50 / p95 ms | McNemar `p` |
+| System (LongMemEval-S, $n=30$) | Overall (95% CI) | S-User | S-Asst | Pref | Update | Temp. | Multi | Peak Tok | Total USD (Q + I) | p50 / p95 | `p` vs. Ref |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **`chatree_two_tier_v3`** | **100.0%** `[100, 100]` | **100%** | **100%** | **100%** | **100%** | **100%** | 3,295 | \$0.099 (\$0.077 + \$0.022) | 68.6% | 4.83s / 6.84s | ref |
-| `full_context_linear` | **100.0%** `[100, 100]` | **100%** | **100%** | **100%** | **100%** | **100%** | 3,710 | \$0.011 (\$0.011 + \$0.000) | **76.8%** | 1.40s / 2.01s | 1.0000 |
-| `mem0_official` | **100.0%** `[100, 100]` | **100%** | **100%** | **100%** | **100%** | **100%** | 1,235 | \$0.030 (\$0.012 + \$0.017) | 0.0% | 1.57s / 2.89s | 1.0000 |
-| `tree_summary_only` | 88.9% `[77.8, 97.2]` | 100% | 100% | 100% | 75.0% | 83.3% | 1,426 | \$0.020 (\$0.010 + \$0.010) | 22.1% | 1.43s / 1.79s | 0.1250 |
-| `rlm_official` | 77.8% `[63.9, 91.7]` | 66.7% | 100% | 83.3% | 75.0% | 66.7% | 4,792 | \$0.111 (\$0.111 + \$0.000) | 0.0% | 5.27s / 18.10s | **0.0078\*** |
-| `flat_hybrid_rag` | 36.1% `[22.2, 52.8]` | 33.3% | 100% | 33.3% | 25.0% | 0.0% | **777** | **\$0.008** (\$0.008 + \$0.000) | 4.6% | 1.40s / 2.22s | **<0.0001\*** |
+| **Chatree (Full)** | **80.0%** `[66.7, 93.3]` | 80% | **100%** | **100%** | 80% | 60% | **60%** | 6,295 | \$1.12 (\$0.23 + \$0.88) | 5.1 / 7.7s | ref |
+| Full Linear | 70.0% `[53.3, 86.7]` | **100%** | **100%** | 20% | **100%** | 60% | 40% | 108,772 | \$0.88 (\$0.88 + \$0.00) | 2.4 / 4.8s | .5078 |
+| Mem0 (`2.2.1`) | 70.0% `[53.3, 86.7]` | 80% | **100%** | **100%** | 40% | 60% | 40% | 1,125 | \$1.55 (\$0.01 + \$1.55) | **1.5 / 3.6s** | .3750 |
+| MIT RLM (`0.1.3`) | 70.0% `[53.3, 86.7]` | 80% | **100%** | 40% | 80% | **80%** | 40% | 21,373 | \$0.38 (\$0.38 + \$0.00) | 11.2 / 32.0s | .5810 |
+| Chatree (no dated facts) | 63.3% `[46.7, 80.0]` | 80% | 60% | 60% | 80% | 60% | 40% | 6,927 | \$0.79 (\$0.16 + \$0.63) | 6.2 / 8.1s | .1797 |
+| Flat Hybrid RAG | 40.0% `[23.3, 56.7]` | 80% | 20% | 0% | 80% | 20% | 40% | **717** | **\$0.004** (\$0.004 + \$0.00) | 3.5 / 7.1s | **.0018\*** |
 
-### 4.4 Tracks 1 & 2: 5-Family Stress Suite, Ablations, and $K$-Scaling Crossover
+On **LoCoMo**, Chatree finishes #1 (`77.1%`) at 5.5× smaller peak context than linear chat and beats Mem0 by `+14 pts` on multi-hop (`60%` vs. `0.1%` cache), while piggybacked dated facts add `+12.6 pts` ($p=0.0001^*$). On **LongMemEval-S** (~115k tokens/item), Chatree finishes #1 (`80.0%`) — beating Mem0 by `+40 pts` on `knowledge-update` and `+20 pts` on `multi-session` while costing **28% less total USD** (`\$1.12` vs. `\$1.55`), because Mem0's write-time extraction bill (`\$1.546`) is **176×** its query cost (`\$0.009`).
 
-![Track 2 Crossover and Ablations](figures/fig4_crossover_and_ablations.png)
-*Figure 4: (a) Track 2 cumulative input-token crossover at $K=8$ distractor branches (`29.6k` vs. `39.7k` total tokens; `957` vs. `4,266` peak tokens) while sustaining 100% strict pass; (b) Track 2 single-mechanism ablations proving shadow inspection is critical (`0.0%` without shadow turns, $p=0.0312^*$) and showing stale contradiction errors when staleness tracking or transitivity is disabled.*
+### 5.2 Why Architecture Matters vs. Mem0 (Track 8: Zero-Token Traces & Live Micro-Probes)
 
-- **Track 1 (5-Family Suite):** `tree_ipc_full` scored **8/8 (100.0%) strict pass** with **0% leakage** and **0% stale contradiction errors** across Distractor Scaling ($K=4$), Proposal vs. Decision, Multihop Revision ($A \to B \to C$), Unscripted Agentic Policy, and Crossover Scaling—while `flat_rag`, `tree_summary_only`, and `tree_ipc_no_staleness` all failed `multihop-revision-staleness` with 100% stale contradiction errors.
-- **Track 2 ($K$-Scaling Crossover):** Across $K \in \{2, 4, 8\}$, `tree_ipc_full` maintained **100.0% strict pass** and flat peak root context (`707 -> 767 -> 957` tokens), crossing below `linear` on cumulative input tokens (`29,589` vs. `39,680`) and p50 latency (`1.19s` vs. `1.42s`) at $K=8$, whereas `sliding_window` collapsed to `0.0%` pass / `100.0%` leakage at $K=8$.
+Full traces and stored-state audits: [`exp8_simulation_proof.md`](../results/deepseek_eval/exp8_simulation_proof.md) and [`exp8_micro_diagnostics.md`](../results/deepseek_eval/exp8_micro_diagnostics.md).
 
-### 4.5 Tracks 5 & 6: Infinite-Context Compaction and Natural-Prompt Live Jump-Around
+| Diagnostic Check | Chatree | Mem0 (`2.2.1`) | What It Proves |
+|---|---:|---:|---|
+| **8A (`\$0.00`):** 16-Turn Prefix Cacheability (LCP) | **82.5%** | 0.7% | Tail-only metadata cuts billed input tokens by **−69.4%** at 0.1× cache discount |
+| **8A (`\$0.00`):** Measured Write-Prompt Size | **0/turn; 7.5k finish** | 33,653 chars/add | Live import of `mem0ai==2.2.1` (~8,413 tok/call); **2.4×–4.4×** cheaper at $N=200$ sessions |
+| **8A (`\$0.00`):** Identical-Lossiness Probes 1–3 | **8/8 (100%)** | 0/8 (0%) | Pure architectural delta when both get identical lossy distillation |
+| **8B Live:** Probe 1 — Verbatim Recovery | **4/4** (`81.9%` cache) | 4/4 (`0.0%` cache) | On a tiny 12-turn session, Mem0 exploded 12 turns into 13 verbose Qdrant memories via its 33.6k-char prompt |
+| **8B Live:** Probe 2 — Transitive Stale (`A -> B -> C`) | **2/2** (`2/2` flags) | 1/2 (`0/2` flags) | Chatree automatically flags both `B` (1h) and `C` (2h) stale on revision of `A` |
+| **8B Live:** Probe 3 — Silent Archive Quarantine | **2/2** (`0` leaks) | 1/2 (**1 leak**) | Without a cancellation essay, unmodified Mem0 leaked archived `rs_ledger_0` & `wiredTigerCacheSizeGB=24` as active production settings |
+| **8B Live Combined Rollup (`~\$0.015`)** | **8/8 (100%)** | **6/8 (75%)** | `78.8s` total wall time across both live systems |
+
+### 5.3 Non-Destructive Compaction & Live Multi-Turn Use (Tracks 6 & 5)
 
 ![Track 6 Compaction and Track 5 Jump-Around](figures/fig5_compaction_and_live.png)
-*Figure 5: (a) Track 6 9-generation compaction benchmark showing 100% vs. 0% non-anchored Turn-1 verbatim recall; (b) Track 5 18-turn live jump-around chatbot under system-agnostic natural prompts.*
+*Figure 5: (a) 9-generation compaction benchmark; (b) 18-turn live natural-prompt multi-topic chat.*
 
-| System (Track 6 Compaction) | Compactions | Anchored Recall | Non-Anchored Verbatim Recall | Overall | Peak Tok | Final Tok | Gen-1 Preserved |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| **`chatree_non_destructive`** | **9** | **100.0%** | **100.0%** | **100.0%** | 1,727 | **1,723** | **4 / 4** |
-| `destructive_rolling` | 6 | 100.0% | **0.0%** | 50.0% | 1,483 | 1,985 | 0 / 4 |
-| `sliding_window` | 0 | 0.0% | **0.0%** | 0.0% | 1,144 | 1,108 | 0 / 4 |
+| System (9-Generation Compaction) | Compactions | Anchored Recall | Un-Anchored Turn-1 Recall | Overall | Peak Tok | Gen-1 Preserved |
+|---|---:|---:|---:|---:|---:|---:|
+| **Chatree (Non-Destructive)** | 9 | **100%** | **100%** | **100%** | 1,727 | **4 / 4** |
+| Destructive Rolling | 6 | **100%** | **0%** | 50% | 1,483 | 0 / 4 |
+| Sliding Window | 0 | 0% | **0%** | 0% | 1,144 | 0 / 4 |
 
-On **Track 5 (`natural-jump-around-18t`)**, with zero tool jargon in user prompts, `chatree_live` achieved **100.0% fact recall**, **1.00 LLM-judge score**, **0.0% dead-end leakage**, **82.7% KV-cache hit**, and **77.8% navigation accuracy** (4 branches, 5 jumps, 11 shadow queries) at `7,291` peak tokens (vs. `8,525` for `linear`), while `sliding_window` scored `94.4%` recall (`0.92` judge, `9.1%` cache) and `flat_rag` failed (`0.0%`).
+On the **18-turn live jump-around chat** (natural prompts, zero tool jargon), Chatree achieves **100% recall**, **1.00 judge score**, **0% dead-end leakage**, **82.7% KV-cache hits**, and lower peak context than linear chat (`7,291` vs. `8,525` tokens), while sliding window drops to `94.4%` (`9.1%` cache) and flat RAG fails (`0%`). On this short 18-turn thread, linear chat still uses fewer cumulative tokens (`76.5k` vs. `360k`; `\$0.006` vs. `\$0.034`).
 
-### 4.6 Track 8: Zero-Token Structural Simulation & Live Micro-Diagnostic Proof vs. Mem0
+### 5.4 Controlled Stress Tests, Ablations, and Token Crossover (Tracks 1, 2 & 7)
 
-To isolate structural guarantees over write-time distilled flat memory (`mem0ai==2.2.1`) independently of prompt luck and without burning large benchmark budgets, Track 8 pairs a **zero-token real-framework execution trace (Track 8A, `\$0.00`)** with an **ultra-lean live head-to-head micro-diagnostic (Track 8B, `~\$0.015` on `deepseek/deepseek-chat`)** ([`exp8_simulation_proof.md`](../results/deepseek_eval/exp8_simulation_proof.md), [`exp8_micro_diagnostics.md`](../results/deepseek_eval/exp8_micro_diagnostics.md)):
+![Track 2 Crossover and Ablations](figures/fig4_crossover_and_ablations.png)
+*Figure 4: (a) Cumulative input tokens cross below linear chat at $K=8$ distractor branches while sustaining 100% accuracy; (b) single-feature ablations show read-only branch lookups are essential ($p=0.0312^*$).*
 
-| Proof Dimension | Chatree | `mem0ai==2.2.1` | Mechanism / Empirical Finding |
-|---|---:|---:|---|
-| **8A-Sim 1:** 16-Turn Byte-0 Prefix LCP (`\$0.00`) | **82.5%** | 0.7% | Tail-ephemeral `<dialogue_tree_context>` vs. prefix memory injection (**−69.4%** billed input tok at `0.1×` cache) |
-| **8A-Sim 2:** Write-Path Prompt Overhead (`\$0.00`) | **0 calls/turn; 7.5k-char finish** | **33,653-char** prompt/add | Live inspection of `mem0ai==2.2.1` `ADDITIVE_EXTRACTION_PROMPT` (~8,413 tok/call); **2.4×–4.4×** cheaper total USD at $N=200$ |
-| **8A-Sim 3:** Identical-Lossiness Probes 1–3 (`\$0.00`, localhost proxy) | **8/8 (100%)** | 0/8 (0%) | Probe 1 verbatim (`4/4` vs. `0/4`); Probe 2 `A -> B (1h) -> C (2h)` staleness (`2/2` vs. `0/2`); Probe 3 silent archive (`2/2` vs. `0/2`) |
-| **8B-Live:** Probe 1 — Verbatim Recovery (`deepseek-chat`) | **4/4 (100%)** | 4/4 (100%) | Live KV cache **81.9%** vs. `0.0%`; at tiny 12-turn scale Mem0 exploded 12 turns into 13 verbose Qdrant memories via its 33.6k-char prompt |
-| **8B-Live:** Probe 2 — Transitive Staleness `A -> B -> C` | **2/2 (100%)** | 1/2 (50%) | Proactive write-time stale flags **`2/2` (`B` 1h, `C` 2h)** vs. **`0/2`**; live KV cache **78.7%** vs. `0.0%` |
-| **8B-Live:** Probe 3 — Silent Dead-End Quarantine | **2/2 (100%, 0 leaks)** | 1/2 (50%, **1 leak**) | With no cancellation essay typed, unmodified `mem0ai==2.2.1` **leaked archived `rs_ledger_0` & `wiredTigerCacheSizeGB=24` as active production config**; Chatree `0%` leakage (`2.0s` vs. `4.8s` ingest, **81.7%** vs. `0.0%` cache) |
-| **8B-Live Combined Rollup (Probes 1–3)** | **8/8 (100.0%, 0 leaks)** | **6/8 (75.0%, 1 leak)** | `78.8s` total wall time across both live systems |
+- **Non-Monotonic Engineering Workspaces (Track 7, $n=36$, 80 sessions):** Chatree scores **100% (36/36)** (`68.6%` cache), beating MIT RLM (`77.8%`, $p=0.0078^*$), Flat RAG (`36.1%`, $p<10^{-4}$), and Summary Folding (`88.9%`). Full Linear and Mem0 also score `100%` at this small 3.7k-token scale when explicit cancellations are typed.
+- **5-Family Stress Suite (Track 1):** Chatree scores **8/8 (100%)** with `0%` leakage and `0%` stale contradictions; Flat RAG, Summary Folding, and Chatree-without-staleness all fail the multi-hop revision test.
+- **Crossover & Ablations (Track 2):** Across $K \in \{2, 4, 8\}$ distractors, Chatree holds `100%` accuracy and crosses below Full Linear on cumulative input tokens at $K=8$ (**29.6k vs. 39.7k**; peak `957` vs. `4,266`; median latency `1.19s` vs. `1.42s`). Removing read-only branch lookups collapses strict pass rate to **0.0%** ($p=0.0312^*$).
 
 ---
 
-## 5. Limitations & Threats to Validity
+## 6. Limitations and Practical Trade-Offs
 
-1. **Interactive orchestrator vs. `TreeQueryEngine`:** External benchmarks and `tree.ask(..., deep=True)` share the exact `TreeQueryEngine` pipeline, while interactive turns choose tools autonomously inside `TurnOrchestrator`; unscripted full-LoCoMo tool policies remain future work.
-2. **Single-model & self-judging bias:** Live runs across Tracks 1–8 used `deepseek/deepseek-chat` for generation (and LLM judging on Tracks 1–7, whereas Track 8A is deterministic zero-token and Track 8B uses verifiable token/leakage rubrics) on a single seed; the runner provides a dedicated cross-family judge provider (`--judge-model`, `--judge-provider`, `--judge-api-base`) and universal checkpoint re-judging (`--rejudge-ckpt --rejudge-dataset {locomo,longmemeval,non_monotonic}`) for multi-family Cohen's $\kappa$ validation and full-split execution.
-3. **Context-overflow regime (`LongMemEval-M`):** Live LongMemEval runs used the ~115k-token `S` split; running the 2.6 GB `M` split (~1.5M tokens/query) via `--lme-split m` remains future work.
-4. **Partial `rlm_official` LoCoMo checkpoint:** `rlm_official` completed $n=117/245$ LoCoMo QAs; its paired McNemar test is restricted strictly to the exact 117-QA intersection.
-5. **Hosted KV-cache TTL & SQLite scale:** Hosted prefix caches expire in ~5–10 minutes (non-destructive compaction preserves *verbatim prefixes* indefinitely rather than hosted VRAM), single-process SQLite suits local/workspace scale rather than multi-tenant 100k+ chunk clusters, and `GitWorktreeSandbox` provides git-level rather than OS/container isolation.
+1. **Short linear chats:** Under ~10k tokens on a single topic, plain chat is faster and cheaper. Branching pays off once conversations span many tangents, overflow context windows, or accumulate dozens of sessions.
+2. **Single-model runs and sample size:** All live experiments use `deepseek-chat` on one seed (with LLM judging on Tracks 1–7, zero-token deterministic checks on Track 8A, and verifiable token/leakage checks on Track 8B). LongMemEval-S is a 30-item stratified sample and MIT RLM completed 117/245 LoCoMo questions; cross-family judging and full-split runs remain future work.
+3. **Interactive vs. structured queries:** External benchmarks invoke Chatree's structured query pipeline directly, while live sessions rely on the model deciding when to branch or query siblings.
+4. **Overflow beyond 128k tokens:** LongMemEval-S (~115k tokens) still fits inside DeepSeek's 128k window; testing the 1.5M-token LongMemEval-M split is supported by our runner and left for future work.
+5. **Hosted cache TTL and SQLite scale:** Hosted prefix caches expire after ~5–10 minutes (saving costs mainly within active sessions or on self-hosted engines), and single-process SQLite fits local workspaces rather than multi-tenant clusters.
 
 ---
 
-## 6. Reproducibility
+## 7. Reproducibility
 
 ```bash
 # 1. Zero-key test suite (111 tests)
 uv run pytest -v
 
-# 2. Zero-token structural simulation & real-framework execution trace ($0.00)
+# 2. Zero-token structural trace vs. real mem0ai ($0.00)
 uv run python scripts/run_publishable_eval.py --simulate-proof --tracks 0 --out-dir results/deepseek_eval
 
-# 3. Regenerate all 5 publication figures directly from results/deepseek_eval/
+# 3. Regenerate all 5 figures from results/deepseek_eval/
 uv run --with matplotlib python scripts/generate_paper_figures.py
 
-# 4. Compile camera-ready LaTeX PDF (Overleaf / TeX Live / MiKTeX)
-cd paper && pdflatex chatree_paper.tex && bibtex chatree_paper && pdflatex chatree_paper.tex && pdflatex chatree_paper.tex
+# 4. Compile LaTeX PDF (Tectonic or pdflatex + bibtex)
+cd paper && tectonic chatree_paper.tex
 ```

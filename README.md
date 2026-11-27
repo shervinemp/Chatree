@@ -402,7 +402,7 @@ If you use Chatree or its evaluation harness in academic work, please cite:
 
 ```bibtex
 @software{chatree2026,
-  title  = {Chatree: Hierarchical Actor-Model Dialogue Trees for Bounded-Context, Verifiable LLM Conversations},
+  title  = {Chatree: Organizing Long LLM Conversations as Branching Trees},
   author = {Shervin},
   year   = {2026},
   version = {0.2.0},
