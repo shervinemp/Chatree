@@ -4,7 +4,7 @@ import inspect
 import json
 from typing import Any, AsyncIterator, Callable
 
-from chatree.config import GuardrailPolicy
+from chatree.config import GuardrailPolicy, resolve_model_context_window
 from chatree.engine.context import ContextAssembler, _message_to_openai
 from chatree.engine.guardrails import TraceContext
 from chatree.engine.ipc import IPCRouter
@@ -164,12 +164,15 @@ class TurnOrchestrator:
             or node.last_msg_seq < self.guardrails.auto_compact_min_messages
         ):
             return tree, node, events
+        active_model = self.router.resolve_model(tree, node, "chat")
+        resolved_window = resolve_model_context_window(
+            active_model,
+            overrides=self.guardrails.model_context_windows,
+            configured_max=self.guardrails.max_branch_context_tokens,
+        )
         eff_threshold = min(
             self.guardrails.auto_compact_threshold_tokens,
-            int(
-                self.guardrails.max_branch_context_tokens
-                * self.guardrails.auto_compact_trigger_ratio
-            ),
+            int(resolved_window * self.guardrails.auto_compact_trigger_ratio),
         )
         live_tokens = await self.context.estimate_node_context_tokens(node)
         if live_tokens < eff_threshold:
@@ -500,6 +503,11 @@ class TurnOrchestrator:
                     },
                     *round_msgs[1:],
                 ]
+            # Enforce whole-request context-window budget (prefix + envelope + newest user msg +
+            # trailing tool outputs + tool schemas + reply reserve) before EVERY provider call.
+            round_msgs = self.context.fit_messages_to_budget(
+                round_msgs, model=model, tools=round_tools
+            )
 
             response: LLMResponse | None = None
             try:

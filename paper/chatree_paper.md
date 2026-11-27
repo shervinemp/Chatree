@@ -81,7 +81,7 @@ Reading from or importing up to 4 sibling branches at spawn records directed edg
 Provider KV caches match strictly from byte 0 onward. Chatree keeps prefixes stable via three rules: (1) freeze historical messages and initial branch brief labels so background auto-titling never mutates past prompt bytes; (2) attach changing tree status, stale warnings, and hints temporarily to the **end** of the latest user turn and never save them into history; and (3) send the same tool-schema list on read-only lookups as on active turns, enforcing read-only permissions in code.
 
 ### 2.5 Implementation Notes
-Chatree is written in Python 3.12 over SQLite (WAL + FTS5) with a zero-dependency OpenAI-compatible client plus optional LiteLLM routing, a CLI, a stdio MCP server, and an optional FastAPI + React UI. Cross-branch calls enforce cycle detection, hop caps, and a token budget ledger weighting cached reads at 0.1×. Local retrieval uses `bge-small-en-v1.5` (exact $O(N)$ per-tree NumPy scan, <1 ms at 5k chunks) and `ms-marco-MiniLM-L-6-v2` with automatic GPU-to-CPU fallback. The repo includes 117 zero-key automated tests.
+Chatree is written in Python 3.12 over SQLite (WAL + FTS5) with a zero-dependency OpenAI-compatible client plus optional LiteLLM routing, a CLI, a stdio MCP server, and an optional FastAPI + React UI. Cross-branch calls enforce cycle detection, hop caps, and a token budget ledger weighting cached reads at 0.1×. Local retrieval uses `bge-small-en-v1.5` (exact $O(N)$ per-tree NumPy scan, <1 ms at 5k chunks) and `ms-marco-MiniLM-L-6-v2` with automatic GPU-to-CPU fallback. The repo includes 127 zero-key automated tests.
 
 ---
 
@@ -186,8 +186,8 @@ On the **18-turn live jump-around chat** (natural prompts, zero tool jargon), Ch
 *Figure 4: (a) Cumulative input tokens cross below linear chat at $K=8$ distractor branches while sustaining 100% accuracy; (b) single-feature ablations show read-only branch lookups are essential ($p=0.0312^*$).*
 
 - **Non-Monotonic Engineering Workspaces (Track 7, $n=36$, 80 sessions, `7437589`):** Chatree scores **100% (36/36)** (`68.6%` cache), beating MIT RLM (`77.8%`, $p=0.0078^*$), Flat RAG (`36.1%`, $p<10^{-4}$), and Summary Folding (`88.9%`). Full Linear and Mem0 also score `100%` at this small 3.7k-token scale when explicit cancellations are typed.
-- **5-Family Stress Suite (Track 1):** Chatree scores **8/8 (100%)** with `0%` leakage and `0%` stale contradictions; Flat RAG, Summary Folding, and Chatree-without-staleness all fail the multi-hop revision test.
-- **Crossover & Ablations (Track 2):** Across $K \in \{2, 4, 8\}$ distractors, Chatree holds `100%` accuracy and crosses below Full Linear on cumulative input tokens at $K=8$ (**29.6k vs. 39.7k**; peak `957` vs. `4,266`; median latency `1.19s` vs. `1.42s`). Removing read-only branch lookups collapses strict pass rate to **0.0%** ($p=0.0312^*$).
+- **5-Family Stress Suite (Track 1):** Chatree scores **8/8 (100%)** with `0%` leakage and `0%` stale contradictions; Flat RAG, Summary Folding, and Chatree-without-staleness all fail the multi-hop revision test. *(Caveat: archived Track 1/2 runs graded raw summaries for `tree_summary_only`/`no_shadow_turns_folding` without an answer-synthesis pass and stripped tools on `no_staleness` post-revision turns; both harness bugs are now fixed in `eval/runner.py` and `eval/ablations.py` pending fresh live reruns.)*
+- **Crossover & Ablations (Track 2):** Across $K \in \{2, 4, 8\}$ distractors, Chatree holds `100%` accuracy and crosses below Full Linear on cumulative input tokens at $K=8$ (**29.6k vs. 39.7k**; peak `957` vs. `4,266`; median latency `1.19s` vs. `1.42s`). Archived single-feature ablations are subject to the Track 1/2 harness caveat above until re-run.
 
 ---
 
@@ -196,15 +196,16 @@ On the **18-turn live jump-around chat** (natural prompts, zero tool jargon), Ch
 1. **Short linear chats:** Under ~10k tokens on a single topic, plain chat is faster and cheaper. Branching pays off once conversations span many tangents, overflow context windows, or accumulate dozens of sessions.
 2. **Single-model runs & statistical power:** All live experiments use `deepseek-chat` on one seed (with same-family LLM judging on Tracks 1–7, zero-token deterministic checks on Track 8A, and verifiable token/leakage checks on Track 8B). LongMemEval-S is a 30-item stratified sample (`5/category`), MIT RLM completed `117/245` LoCoMo questions, and point gains over Linear/Mem0/RLM on LoCoMo and LongMemEval-S are not statistically significant at $p<0.05$. Cross-family judging and full-split runs remain future work.
 3. **Pre-v0.2.0 Mem0 metering & `top_k`:** Archived LoCoMo and LongMemEval-S tables used a character heuristic for Mem0 ingest cost and `mem0ai==2.2.1`'s default `top_k=20` fallback before v0.2.0 added exact client-level LLM usage metering and `top_k` forwarding.
-4. **Depth-1 benchmarks vs. interactive branching:** External benchmarks ingest chronological logs as depth-1 session stars and call Chatree's structured query pipeline directly, while live sessions rely on the model deciding when to branch or query siblings.
-5. **Overflow beyond 128k tokens, cache TTL, and SQLite scale:** LongMemEval-S (~115k tokens) still fits inside DeepSeek's 128k window (1.5M-token LongMemEval-M is supported by our runner and left for future work). Hosted prefix caches expire after ~5–10 minutes, and single-process SQLite with $O(N)$ per-tree vector scans fits local workspaces rather than large multi-tenant clusters.
+4. **Archived Track 1/2/5 scorer & ablation harness caveats:** Before the current revision, (a) `is_token_asserted_as_active()` in `eval/scoring.py` only inspected the immediately preceding line for exclusion headings and could misclassify multi-item excluded bullet lists or table rows in Track 5 default-prompt leakage comparisons (now fixed, with `full_answer` retained in saved results), (b) Track 1/2 `tree_summary_only` / `no_shadow_turns_folding` graded raw summaries directly without answer synthesis, and (c) Track 1/2 `no_staleness` ablations disabled tools on post-revision turns. All three harness issues are fixed in code; live reruns of Tracks 1, 2, and 5 are pending.
+5. **Depth-1 benchmarks vs. interactive branching:** External benchmarks ingest chronological logs as depth-1 session stars and call Chatree's structured query pipeline directly, while live sessions rely on the model deciding when to branch or query siblings.
+6. **Overflow beyond 128k tokens, cache TTL, and SQLite scale:** LongMemEval-S (~115k tokens) still fits inside DeepSeek's 128k window (1.5M-token LongMemEval-M is supported by our runner and left for future work). Hosted prefix caches expire after ~5–10 minutes, and single-process SQLite with $O(N)$ per-tree vector scans fits local workspaces rather than large multi-tenant clusters.
 
 ---
 
 ## 7. Reproducibility
 
 ```bash
-# 1. Zero-key test suite (117 tests)
+# 1. Zero-key test suite (127 tests)
 uv run pytest -v
 
 # 2. Zero-token structural trace & materiality benchmark vs. real mem0ai ($0.00)

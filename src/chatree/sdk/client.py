@@ -107,6 +107,7 @@ class Chatree:
             self.repo,
             system_prompt=system_prompt,
             ablations=self.config.ablations,
+            guardrails=self.config.guardrails,
             max_context_tokens=self.config.guardrails.max_branch_context_tokens,
         )
         self.reflog = ReflogService(self.repo, hooks=self.hooks)

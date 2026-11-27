@@ -239,7 +239,8 @@ CORE_TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "name": TOOL_SEARCH_TREE,
             "description": (
                 "Hybrid BM25+vector search across branch chunks, summaries, atomic facts, and subtree rollups "
-                f"to discover relevant branch IDs and snippets before calling {TOOL_REQUEST}."
+                f"to discover relevant branch IDs and snippets before calling {TOOL_REQUEST}. "
+                "Pass query='*' with optional offset to list branches newest-first with pagination."
             ),
             "parameters": {
                 "type": "object",
@@ -250,7 +251,13 @@ CORE_TOOL_DEFINITIONS: list[dict[str, Any]] = [
                         "enum": ["all", "ancestors", "subtree", "siblings"],
                         "default": "all",
                     },
-                    "top_k": {"type": "integer", "default": 5, "minimum": 1, "maximum": 20},
+                    "top_k": {"type": "integer", "default": 5, "minimum": 1, "maximum": 50},
+                    "offset": {
+                        "type": "integer",
+                        "default": 0,
+                        "minimum": 0,
+                        "description": "Pagination offset when listing branches via query='*'.",
+                    },
                 },
                 "required": ["query"],
             },

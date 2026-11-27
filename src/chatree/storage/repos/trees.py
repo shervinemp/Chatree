@@ -314,11 +314,19 @@ class TreesNodesMessagesMixin:
         )
         return [_row_to_node(r) for r in await cur.fetchall()]
 
-    async def count_active_children(self, parent_id: str) -> int:
-        cur = await self.conn.execute(
-            "SELECT COUNT(*) AS cnt FROM nodes WHERE parent_id = ? AND status = 'ACTIVE'",
-            (parent_id,),
-        )
+    async def count_active_children(
+        self, parent_id: str, *, node_kind: NodeKind | None = None
+    ) -> int:
+        if node_kind is None:
+            cur = await self.conn.execute(
+                "SELECT COUNT(*) AS cnt FROM nodes WHERE parent_id = ? AND status = 'ACTIVE'",
+                (parent_id,),
+            )
+        else:
+            cur = await self.conn.execute(
+                "SELECT COUNT(*) AS cnt FROM nodes WHERE parent_id = ? AND status = 'ACTIVE' AND node_kind = ?",
+                (parent_id, node_kind),
+            )
         return int((await cur.fetchone())["cnt"])
 
     async def get_ancestors(self, node: NodeModel) -> list[NodeModel]:
@@ -564,6 +572,13 @@ class TreesNodesMessagesMixin:
             )
         return [_row_to_message(r) for r in await cur.fetchall()]
 
+    async def list_messages_from_seq(self, node_id: str, min_seq: int) -> list[MessageModel]:
+        cur = await self.conn.execute(
+            "SELECT * FROM messages WHERE node_id = ? AND seq >= ? ORDER BY seq ASC",
+            (node_id, min_seq),
+        )
+        return [_row_to_message(r) for r in await cur.fetchall()]
+
     async def replace_node_messages_for_extraction(
         self,
         node_id: str,
@@ -587,6 +602,14 @@ class TreesNodesMessagesMixin:
             await self.conn.execute("DELETE FROM messages WHERE node_id = ?", (node_id,))
             await self.conn.execute(
                 "DELETE FROM shadow_cache WHERE target_node_id = ?", (node_id,)
+            )
+            await self.conn.execute(
+                "DELETE FROM embeddings_fts WHERE node_id = ? AND granularity = 'chunk'",
+                (node_id,),
+            )
+            await self.conn.execute(
+                "DELETE FROM embeddings WHERE node_id = ? AND granularity = 'chunk'",
+                (node_id,),
             )
 
             max_seq = prev_last_seq
@@ -634,6 +657,8 @@ class TreesNodesMessagesMixin:
                 "UPDATE nodes SET last_msg_seq = ?, is_dirty = 1, updated_at = ? WHERE id = ?",
                 (max_seq, utc_now(), node_id),
             )
+        if hasattr(self, "invalidate_vector_cache"):
+            self.invalidate_vector_cache(tree_id)
 
     async def get_last_safe_fork_seq(self, node_id: str) -> int:
         msgs = await self.list_messages(node_id)

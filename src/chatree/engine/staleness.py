@@ -577,6 +577,9 @@ class StalenessService:
         extra_kw: dict[str, Any] = {}
         if self.ablations.enable_atomic_facts and "max_tokens" in complete_params:
             extra_kw["max_tokens"] = 900
+        messages = self.context.fit_messages_to_budget(
+            messages, model=model, tools=summary_tools
+        )
         resp = None
         if summary_tools and supports_tool_choice:
             try:
@@ -600,6 +603,9 @@ class StalenessService:
                         "Reply in plain text only; no tools are available."
                     ),
                 }
+            tool_free_msgs = self.context.fit_messages_to_budget(
+                tool_free_msgs, model=model, tools=None
+            )
             resp = await self.llm.complete(
                 model=model, messages=tool_free_msgs, tools=None, temperature=0.1, **extra_kw
             )
@@ -660,10 +666,12 @@ class StalenessService:
         100% untouched), and return `(updated_source_node, handoff_text, tokens_in, tokens_out, latency_ms)`.
         """
         prefix = await self.context.build_static_prefix(node)
+        max_chars = getattr(self.guardrails, "compaction_handoff_max_chars", 3_200)
         prior_anchors = (
-            "\nThis branch already continues an earlier compacted session — MERGE and preserve "
-            "all still-active locked decisions, identifiers, and ancestor IDs from the prior brief "
-            "while updating anything revised in this segment."
+            "\nThis branch already continues an earlier compacted session — preserve ONLY "
+            "still-active locked decisions, identifiers, and ancestor IDs from the prior brief; "
+            "RETIRE obsolete or superseded details rather than accumulating history indefinitely "
+            "(cite ancestor IDs so older verbatim details stay queryable on demand)."
             if node.summary_brief and "[Compacted from ancestor" in node.summary_brief
             else ""
         )
@@ -672,7 +680,8 @@ class StalenessService:
             "[Chatree Compactor] Produce a dense, structured continuation handoff for a fresh "
             f"child session continuing branch '{node.title}' (`{node.id}`, goal: '{node.goal or 'general'}')."
             f"{prior_anchors}{reason_line}\n"
-            "Use these exact 5 compact sections (reply in plain text only, do not call tools):\n"
+            f"Keep the ENTIRE handoff concise (target <= {max_chars} characters total) using these exact 5 sections "
+            "(reply in plain text only, do not call tools):\n"
             "1. OBJECTIVE: Current task & scope.\n"
             "2. LOCKED DECISIONS & VERBATIM ANCHORS: Exact identifiers, config constants, file paths, schemas, numbers, and settled choices (preserve verbatim — never paraphrase identifiers).\n"
             "3. VERIFIED FACTS & ARTIFACTS: Key findings, artifact refs (`slug@v#`), and relevant ancestor branch IDs.\n"
@@ -697,7 +706,14 @@ class StalenessService:
             )
             else None
         )
-        supports_tool_choice = "tool_choice" in inspect.signature(self.llm.complete).parameters
+        complete_params = inspect.signature(self.llm.complete).parameters
+        supports_tool_choice = "tool_choice" in complete_params
+        comp_extra_kw: dict[str, Any] = {}
+        if "max_tokens" in complete_params:
+            comp_extra_kw["max_tokens"] = min(1_024, max(256, max_chars // 3))
+        messages = self.context.fit_messages_to_budget(
+            messages, model=model, tools=summary_tools
+        )
         resp = None
         if summary_tools and supports_tool_choice:
             try:
@@ -707,6 +723,7 @@ class StalenessService:
                     tools=summary_tools,
                     temperature=0.1,
                     tool_choice="none",  # type: ignore[call-arg]
+                    **comp_extra_kw,
                 )
             except Exception:
                 resp = None
@@ -720,8 +737,15 @@ class StalenessService:
                         "handoff for a new session. Preserve exact identifiers verbatim; reply in plain text only."
                     ),
                 }
+            tool_free_msgs = self.context.fit_messages_to_budget(
+                tool_free_msgs, model=model, tools=None
+            )
             resp = await self.llm.complete(
-                model=model, messages=tool_free_msgs, tools=None, temperature=0.1
+                model=model,
+                messages=tool_free_msgs,
+                tools=None,
+                temperature=0.1,
+                **comp_extra_kw,
             )
 
         if trace_ctx is not None:
@@ -735,6 +759,19 @@ class StalenessService:
             node.id, resp.tokens_in, resp.tokens_out, resp.cache_read_tokens
         )
         handoff_text = resp.content.strip() or f"Structured handoff from branch '{node.title}'."
+        if len(handoff_text) > max_chars:
+            marker = (
+                f"\n...[trimmed to compaction_handoff_max_chars={max_chars}; "
+                f"query ancestor {node.id} for older verbatim details]...\n"
+            )
+            avail = max(120, max_chars - len(marker))
+            head_keep = int(avail * 0.72)
+            tail_keep = max(0, avail - head_keep)
+            handoff_text = (
+                handoff_text[:head_keep].rstrip()
+                + marker
+                + (handoff_text[-tail_keep:].lstrip() if tail_keep > 0 else "")
+            )[:max_chars]
         updated = await self.commit_summary_with_materiality(
             node, handoff_text, status="COMPLETED"
         )

@@ -93,6 +93,7 @@ class QueryEvalResult(BaseModel):
     judge_rationale: str | None = None
     latency_ms: float = 0.0
     answer_preview: str = ""
+    full_answer: str = ""
 
 
 _EXCLUSION_OR_RETIREMENT_RE = re.compile(
@@ -106,12 +107,66 @@ _EXCLUSION_OR_RETIREMENT_RE = re.compile(
     re.IGNORECASE,
 )
 
+_BULLET_LINE_RE = re.compile(r"^\s*(?:[-*+•]|\d+[.)])\s+")
+_HEADING_OR_LABEL_RE = re.compile(
+    r"^\s*(?:#{1,6}\s+|\*\*|__|(?:excluded|retired|rejected|scrapped|abandoned|deprecated|superseded|obsolete|not\s+adopted|dropped|prior|old)\b)",
+    re.IGNORECASE,
+)
+
+
+def _line_is_under_exclusion_heading(lines: list[str], line_idx: int) -> bool:
+    """
+    Walk upward from `line_idx` across bullet/numbered list items, table rows, or indented
+    continuations to detect an enclosing markdown heading or list introduction that marks
+    the entire block as excluded/retired/rejected (e.g., `### Excluded / Retired:` followed
+    by 5 bullets, or `The following options were retired:\n- X\n- Y`).
+    """
+    cur_line = lines[line_idx]
+    cur_stripped = cur_line.strip()
+    in_list_or_table = bool(
+        _BULLET_LINE_RE.match(cur_line)
+        or (cur_stripped.startswith("|") and "|" in cur_stripped[1:])
+        or (cur_line.startswith(("  ", "\t")) and cur_stripped)
+    )
+    blank_gap = 0
+    for prev_idx in range(line_idx - 1, max(-1, line_idx - 25), -1):
+        raw = lines[prev_idx]
+        s = raw.strip()
+        if not s:
+            blank_gap += 1
+            if blank_gap >= 2:
+                break
+            continue
+        # Markdown table separator row (`| --- | --- |`) — keep walking up to header/heading
+        if s.startswith("|") and set(s.replace("|", "").replace("-", "").replace(":", "").strip()) == set():
+            continue
+        # Heading line (`# ...` or `**...**` ending a section title)
+        if s.startswith("#") or (
+            s.startswith("**") and (s.endswith("**") or s.endswith("**:") or ":**" in s)
+        ):
+            return bool(_EXCLUSION_OR_RETIREMENT_RE.search(s))
+        # List introducer right above a list (e.g., "Retired / excluded proposals:" or "We rejected:")
+        if in_list_or_table and (s.endswith(":") or _HEADING_OR_LABEL_RE.match(raw)):
+            if not _BULLET_LINE_RE.match(raw) and not s.startswith("|"):
+                return bool(_EXCLUSION_OR_RETIREMENT_RE.search(s))
+        # Continuing through sibling bullets or table rows belonging to the same list/table
+        if _BULLET_LINE_RE.match(raw) or (s.startswith("|") and "|" in s[1:]):
+            blank_gap = 0
+            continue
+        # Non-heading prose line: if directly above with no blank line and it's a heading/label
+        if blank_gap == 0 and _HEADING_OR_LABEL_RE.match(raw) and _EXCLUSION_OR_RETIREMENT_RE.search(s):
+            return True
+        # Reached ordinary non-list prose — stop walking unless still inside an explicit section
+        if not in_list_or_table:
+            break
+    return False
+
 
 def is_token_asserted_as_active(answer_text: str, keyword: str) -> bool:
     """
     Return True iff `keyword` appears in `answer_text` as an active claim (i.e. NOT solely
-    inside an explicit retirement/exclusion/negation clause like
-    'JWT_TTL_15M is retired and superseded by JWT_TTL_5M_ROTATING').
+    inside an explicit retirement/exclusion/negation clause, table row marked retired/excluded,
+    or multi-item bullet list under an exclusion heading such as `### Excluded / Retired:`).
     """
     if not keyword:
         return False
@@ -120,16 +175,29 @@ def is_token_asserted_as_active(answer_text: str, keyword: str) -> bool:
     if not matches:
         return False
 
+    lines = answer_text.splitlines()
+    # Map character offset -> 0-based line index
+    line_starts: list[int] = []
+    pos = 0
+    for ln in answer_text.splitlines(keepends=True):
+        line_starts.append(pos)
+        pos += len(ln)
+
     for m in matches:
         start, end = m.start(), m.end()
-        # Inspect enclosing line / sentence clause around this occurrence
         line_start = answer_text.rfind("\n", 0, start) + 1
         line_end = answer_text.find("\n", end)
         if line_end == -1:
             line_end = len(answer_text)
         line_text = answer_text[line_start:line_end]
 
-        # Narrow to local sentence/clause if the line is multi-sentence
+        # 1. Markdown table row: check the entire row (status column often marks Retired/Excluded)
+        stripped_line = line_text.strip()
+        if stripped_line.startswith("|") and stripped_line.count("|") >= 2:
+            if _EXCLUSION_OR_RETIREMENT_RE.search(stripped_line):
+                continue
+
+        # 2. Local sentence/clause on the matched line
         rel_start = start - line_start
         rel_end = end - line_start
         sent_lo = max(
@@ -147,13 +215,14 @@ def is_token_asserted_as_active(answer_text: str, keyword: str) -> bool:
         if _EXCLUSION_OR_RETIREMENT_RE.search(clause):
             continue
 
-        # Also check immediate preceding markdown section heading (e.g. "### Excluded / Retired:")
-        prev_block = answer_text[max(0, line_start - 160) : line_start].strip()
-        prev_line = prev_block.splitlines()[-1] if prev_block else ""
-        if (
-            prev_line.lstrip().startswith(("#", "**", "Excluded", "Retired", "Rejected", "Scrapped"))
-            and _EXCLUSION_OR_RETIREMENT_RE.search(prev_line)
-        ):
+        # 3. Enclosing exclusion/retirement heading or list lead-in (works for bullet 1..N and tables)
+        line_idx = 0
+        for i, ls in enumerate(line_starts):
+            if ls <= start:
+                line_idx = i
+            else:
+                break
+        if lines and _line_is_under_exclusion_heading(lines, line_idx):
             continue
 
         # Found at least one active, non-negated assertion of this keyword
@@ -219,6 +288,7 @@ class ExactFactScorer:
             stale_keywords_found=stale_found,
             latency_ms=round(latency_ms, 2),
             answer_preview=answer_text[:240],
+            full_answer=answer_text,
         )
 
 

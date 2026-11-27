@@ -384,6 +384,7 @@ class IPCRouter(
                 query=str(arguments.get("query") or ""),
                 scope=arguments.get("scope", "all"),
                 top_k=int(arguments.get("top_k") or 5),
+                offset=int(arguments.get("offset") or 0),
                 trace_ctx=trace_ctx,
             )
 

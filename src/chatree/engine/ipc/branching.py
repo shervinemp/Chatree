@@ -59,8 +59,15 @@ class IpcBranchingMixin:
         )
         t0 = time.perf_counter()
 
-        # Spawn hysteresis & mixed-initiative policy (prevents weak-model branch thrashing)
-        if initiated_by_model and not autonomous:
+        resolved_kind: NodeKind = (
+            node_kind
+            if node_kind in ("chat", "subagent")
+            else ("subagent" if autonomous else "chat")
+        )
+
+        # Spawn policy & fan-out guardrails apply to ALL model-initiated spawns, including
+        # `autonomous=True`, so a model cannot bypass `manual`/`suggest` policies or child caps.
+        if initiated_by_model:
             if self.guardrails.spawn_policy == "manual":
                 ev = await self.repo.create_ipc_event(
                     tree_id=tree.id,
@@ -69,12 +76,35 @@ class IpcBranchingMixin:
                     from_node_id=parent.id,
                     to_node_id=None,
                     event_type="spawn",
-                    payload={"goal": goal, "context_mode": context_mode},
-                    response={"error": "SPAWN_POLICY_MANUAL", "detail": "Model-initiated spawning is disabled (spawn_policy='manual')."},
+                    payload={"goal": goal, "context_mode": context_mode, "autonomous": autonomous},
+                    response={
+                        "error": "SPAWN_POLICY_MANUAL",
+                        "detail": "Model-initiated spawning is disabled (spawn_policy='manual').",
+                    },
                     status="rejected_policy",
                 )
                 return IpcExecutionResult(
-                    tool_output={"error": "SPAWN_POLICY_MANUAL", "detail": "Model-initiated spawning is disabled."},
+                    tool_output={
+                        "error": "SPAWN_POLICY_MANUAL",
+                        "detail": "Model-initiated spawning is disabled.",
+                    },
+                    ipc_event=ev,
+                )
+            if autonomous and not getattr(self.guardrails, "allow_autonomous_spawns", True):
+                detail = "Model-initiated autonomous sub-agent spawning is disabled (allow_autonomous_spawns=False)."
+                ev = await self.repo.create_ipc_event(
+                    tree_id=tree.id,
+                    trace_id=ctx.trace_id,
+                    hop_depth=ctx.hop_depth,
+                    from_node_id=parent.id,
+                    to_node_id=None,
+                    event_type="spawn",
+                    payload={"goal": goal, "context_mode": context_mode, "autonomous": True},
+                    response={"error": "AUTONOMOUS_SPAWN_DISABLED", "detail": detail},
+                    status="rejected_policy",
+                )
+                return IpcExecutionResult(
+                    tool_output={"error": "AUTONOMOUS_SPAWN_DISABLED", "detail": detail},
                     ipc_event=ev,
                 )
             if self.guardrails.spawn_policy == "suggest":
@@ -84,6 +114,7 @@ class IpcBranchingMixin:
                     "goal": goal,
                     "context_mode": context_mode,
                     "summary_brief": summary_brief,
+                    "autonomous": autonomous,
                 }
                 if self.hooks is not None:
                     await self.hooks.emit("branch_suggested", {"tree_id": tree.id, **suggestion})
@@ -103,27 +134,53 @@ class IpcBranchingMixin:
                     ipc_event=ev,
                     branch_suggested=suggestion,
                 )
-            active_children = await self.repo.count_active_children(parent.id)
-            if active_children >= self.guardrails.max_active_children:
-                detail = (
-                    f"Parent '{parent.id}' already has {active_children} active children "
-                    f"(max_active_children={self.guardrails.max_active_children})."
+            if self.guardrails.max_active_children is not None:
+                active_children = await self.repo.count_active_children(parent.id)
+                if active_children >= self.guardrails.max_active_children:
+                    detail = (
+                        f"Parent '{parent.id}' already has {active_children} active children "
+                        f"(max_active_children={self.guardrails.max_active_children})."
+                    )
+                    ev = await self.repo.create_ipc_event(
+                        tree_id=tree.id,
+                        trace_id=ctx.trace_id,
+                        hop_depth=ctx.hop_depth,
+                        from_node_id=parent.id,
+                        to_node_id=None,
+                        event_type="spawn",
+                        payload={"goal": goal, "autonomous": autonomous},
+                        response={"error": "MAX_ACTIVE_CHILDREN_EXCEEDED", "detail": detail},
+                        status="rejected_policy",
+                    )
+                    return IpcExecutionResult(
+                        tool_output={"error": "MAX_ACTIVE_CHILDREN_EXCEEDED", "detail": detail},
+                        ipc_event=ev,
+                    )
+            if resolved_kind == "subagent":
+                max_sub = getattr(self.guardrails, "max_active_subagents", 12)
+                active_subagents = await self.repo.count_active_children(
+                    parent.id, node_kind="subagent"
                 )
-                ev = await self.repo.create_ipc_event(
-                    tree_id=tree.id,
-                    trace_id=ctx.trace_id,
-                    hop_depth=ctx.hop_depth,
-                    from_node_id=parent.id,
-                    to_node_id=None,
-                    event_type="spawn",
-                    payload={"goal": goal},
-                    response={"error": "MAX_ACTIVE_CHILDREN_EXCEEDED", "detail": detail},
-                    status="rejected_policy",
-                )
-                return IpcExecutionResult(
-                    tool_output={"error": "MAX_ACTIVE_CHILDREN_EXCEEDED", "detail": detail},
-                    ipc_event=ev,
-                )
+                if active_subagents >= max_sub:
+                    detail = (
+                        f"Parent '{parent.id}' already has {active_subagents} active subagent children "
+                        f"(max_active_subagents={max_sub})."
+                    )
+                    ev = await self.repo.create_ipc_event(
+                        tree_id=tree.id,
+                        trace_id=ctx.trace_id,
+                        hop_depth=ctx.hop_depth,
+                        from_node_id=parent.id,
+                        to_node_id=None,
+                        event_type="spawn",
+                        payload={"goal": goal, "autonomous": autonomous},
+                        response={"error": "MAX_ACTIVE_SUBAGENTS_EXCEEDED", "detail": detail},
+                        status="rejected_policy",
+                    )
+                    return IpcExecutionResult(
+                        tool_output={"error": "MAX_ACTIVE_SUBAGENTS_EXCEEDED", "detail": detail},
+                        ipc_event=ev,
+                    )
 
         if autonomous:
             decision = ctx.check_ipc_call(
@@ -153,11 +210,6 @@ class IpcBranchingMixin:
             tool_permission
             if tool_permission in ("read_only", "read_write")
             else self.guardrails.default_child_permission
-        )
-        resolved_kind: NodeKind = (
-            node_kind
-            if node_kind in ("chat", "subagent")
-            else ("subagent" if autonomous else "chat")
         )
         explicit_title = (title or "").strip()
         short_title = (

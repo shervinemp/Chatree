@@ -29,6 +29,7 @@ class SearchVectorsMixin:
     _vector_cache: dict[str, dict[int, tuple[list[EmbeddingRecord], Any]]]
     _vector_cache_hits: int
     _vector_cache_misses: int
+    last_chunk_write_count: int = 0
 
     def invalidate_vector_cache(self, tree_id: str | None = None) -> None:
         """Invalidate cached pre-normalized NumPy vector matrices for `tree_id` (or all trees)."""
@@ -104,7 +105,7 @@ class SearchVectorsMixin:
     async def list_node_chunk_embeddings(
         self, node_id: str
     ) -> list[tuple[int, int | None, int | None, str, bytes]]:
-        """Return existing chunk embeddings for incremental tail re-indexing."""
+        """Return existing chunk embeddings for full comparison / fallback re-indexing."""
         cur = await self.conn.execute(
             """
             SELECT chunk_index, seq_start, seq_end, content, vector_blob
@@ -124,6 +125,177 @@ class SearchVectorsMixin:
             )
             for r in await cur.fetchall()
         ]
+
+    async def get_node_chunk_tail_meta(
+        self, node_id: str, limit: int = 2
+    ) -> tuple[int, str | None, list[tuple[int, int | None, int | None, str]]]:
+        """
+        O(1) metadata probe for incremental tail chunk indexing (reads ZERO vector blobs):
+        returns `(total_chunk_count, chunk_0_content, last_k_chunks_ascending)`.
+        """
+        cnt_cur = await self.conn.execute(
+            "SELECT COUNT(*) AS cnt FROM embeddings WHERE node_id = ? AND granularity = 'chunk'",
+            (node_id,),
+        )
+        total_cnt = int((await cnt_cur.fetchone())["cnt"])
+        if total_cnt == 0:
+            return 0, None, []
+        first_cur = await self.conn.execute(
+            """
+            SELECT content
+            FROM embeddings
+            WHERE node_id = ? AND granularity = 'chunk' AND chunk_index = 0
+            LIMIT 1
+            """,
+            (node_id,),
+        )
+        first_row = await first_cur.fetchone()
+        first_content = str(first_row["content"]) if first_row else None
+
+        tail_cur = await self.conn.execute(
+            """
+            SELECT chunk_index, seq_start, seq_end, content
+            FROM embeddings
+            WHERE node_id = ? AND granularity = 'chunk'
+            ORDER BY chunk_index DESC
+            LIMIT ?
+            """,
+            (node_id, max(1, limit)),
+        )
+        tail_rows = [
+            (
+                int(r["chunk_index"]),
+                r["seq_start"],
+                r["seq_end"],
+                str(r["content"]),
+            )
+            for r in await tail_cur.fetchall()
+        ]
+        tail_rows.reverse()
+        return total_cnt, first_content, tail_rows
+
+    async def upsert_node_chunk_deltas(
+        self,
+        tree_id: str,
+        node_id: str,
+        path: str,
+        start_chunk_index: int,
+        items: Sequence[tuple[int, int | None, int | None, str, list[float], int]],
+    ) -> int:
+        """
+        O(1) incremental chunk delta update: deletes and re-inserts ONLY rows with
+        `chunk_index >= start_chunk_index` in `embeddings` + `embeddings_fts`, and
+        patches the in-memory `_vector_cache[tree_id]` in place without rebuilding
+        earlier chunks or wiping other nodes' cached vectors.
+        """
+        now = utc_now()
+        inserted_by_dim: dict[int, tuple[list[EmbeddingRecord], list[bytes]]] = {}
+        old_id_set: set[str] = set()
+
+        async with self.db.write_transaction():
+            cur_old = await self.conn.execute(
+                """
+                SELECT id FROM embeddings
+                WHERE node_id = ? AND granularity = 'chunk' AND chunk_index >= ?
+                """,
+                (node_id, start_chunk_index),
+            )
+            old_ids = [str(r["id"]) for r in await cur_old.fetchall()]
+            old_id_set = set(old_ids)
+            if old_ids:
+                ph = ",".join("?" for _ in old_ids)
+                await self.conn.execute(
+                    f"DELETE FROM embeddings_fts WHERE embedding_id IN ({ph})",
+                    old_ids,
+                )
+                await self.conn.execute(
+                    f"DELETE FROM embeddings WHERE id IN ({ph})",
+                    old_ids,
+                )
+            for chunk_idx, seq_start, seq_end, content, vector, summary_ver in items:
+                emb_id = new_id("emb")
+                blob = pack_vector(vector)
+                dim = len(vector)
+                await self.conn.execute(
+                    """
+                    INSERT INTO embeddings (
+                        id, tree_id, node_id, path, granularity, chunk_index,
+                        seq_start, seq_end, content, vector_blob, vector_dim,
+                        summary_version, updated_at
+                    ) VALUES (?, ?, ?, ?, 'chunk', ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        emb_id,
+                        tree_id,
+                        node_id,
+                        path,
+                        chunk_idx,
+                        seq_start,
+                        seq_end,
+                        content,
+                        blob,
+                        dim,
+                        summary_ver,
+                        now,
+                    ),
+                )
+                await self.conn.execute(
+                    """
+                    INSERT INTO embeddings_fts (embedding_id, tree_id, node_id, granularity, content)
+                    VALUES (?, ?, ?, 'chunk', ?)
+                    """,
+                    (emb_id, tree_id, node_id, content),
+                )
+                if dim > 0 and len(blob) == dim * 4:
+                    rec = EmbeddingRecord(
+                        id=emb_id,
+                        tree_id=tree_id,
+                        node_id=node_id,
+                        path=path,
+                        granularity="chunk",
+                        chunk_index=chunk_idx,
+                        seq_start=seq_start,
+                        seq_end=seq_end,
+                        content=content,
+                        summary_version=summary_ver,
+                        updated_at=now,
+                    )
+                    slot = inserted_by_dim.setdefault(dim, ([], []))
+                    slot[0].append(rec)
+                    slot[1].append(blob)
+
+        # Patch per-tree vector cache in-place so existing chunks remain hot!
+        cached_tree = self._vector_cache.get(tree_id)
+        if cached_tree is not None:
+            all_dims = set(cached_tree.keys()) | set(inserted_by_dim.keys())
+            for dim in list(all_dims):
+                prev_recs, prev_mat = cached_tree.get(dim, ([], None))
+                keep_idx = [i for i, r in enumerate(prev_recs) if r.id not in old_id_set]
+                new_recs, new_blobs = inserted_by_dim.get(dim, ([], []))
+                merged_recs = [prev_recs[i] for i in keep_idx] + new_recs
+                if not merged_recs:
+                    cached_tree.pop(dim, None)
+                    continue
+                if _np is not None:
+                    parts: list[Any] = []
+                    if keep_idx and prev_mat is not None:
+                        parts.append(
+                            prev_mat if len(keep_idx) == len(prev_recs) else prev_mat[keep_idx]
+                        )
+                    if new_blobs:
+                        add_mat = _np.frombuffer(b"".join(new_blobs), dtype=_np.float32).reshape(
+                            len(new_blobs), dim
+                        )
+                        norms = _np.linalg.norm(add_mat, axis=1, keepdims=True)
+                        parts.append(add_mat / _np.maximum(norms, 1e-12))
+                    merged_mat = parts[0] if len(parts) == 1 else _np.vstack(parts)
+                    cached_tree[dim] = (merged_recs, merged_mat)
+                else:
+                    kept_blobs = [prev_mat[i] for i in keep_idx] if prev_mat is not None else []
+                    cached_tree[dim] = (merged_recs, kept_blobs + new_blobs)
+
+        self.last_chunk_write_count = len(items)
+        return len(items)
 
     async def replace_node_embeddings(
         self,
@@ -182,6 +354,8 @@ class SearchVectorsMixin:
                     (emb_id, tree_id, node_id, granularity, content),
                 )
         self.invalidate_vector_cache(tree_id)
+        if granularity == "chunk":
+            self.last_chunk_write_count = len(items)
         return len(items)
 
     async def list_embeddings_with_vectors(

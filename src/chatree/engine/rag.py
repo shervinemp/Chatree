@@ -157,6 +157,63 @@ class TreeRAGService:
         node = await self.repo.get_node(node_id)
         if node is None:
             return 0
+        header = await self._build_branch_header(node)
+
+        # True O(1) incremental append-only fast path: probe ONLY chunk count + chunk 0 + last chunk
+        # (zero vector blobs loaded from SQLite!) and re-chunk/write ONLY the tail window.
+        if hasattr(self.repo, "get_node_chunk_tail_meta") and hasattr(
+            self.repo, "upsert_node_chunk_deltas"
+        ) and hasattr(self.repo, "list_messages_from_seq"):
+            total_existing, first_content, tail_rows = await self.repo.get_node_chunk_tail_meta(
+                node.id, limit=2
+            )
+            if (
+                total_existing > 0
+                and first_content is not None
+                and first_content.startswith(f"{header}\n")
+                and tail_rows
+            ):
+                last_idx, last_s_start, last_s_end, last_content = tail_rows[-1]
+                if last_s_start is not None and last_s_end is not None and node.last_msg_seq >= last_s_end:
+                    tail_messages = await self.repo.list_messages_from_seq(node.id, last_s_start)
+                    tail_chunks = _chunk_messages(
+                        tail_messages,
+                        target_tokens=self.cfg.chunk_target_tokens,
+                        overlap_tokens=self.cfg.chunk_overlap_tokens,
+                    )
+                    if tail_chunks:
+                        tail_contextualized = [f"{header}\n{c[3]}" for c in tail_chunks]
+                        if (
+                            len(tail_chunks) == 1
+                            and tail_chunks[0][1] == last_s_start
+                            and tail_chunks[0][2] == last_s_end
+                            and tail_contextualized[0] == last_content
+                        ):
+                            return total_existing
+                        new_vecs = await self.embedder.embed(tail_contextualized)
+                        delta_payload = [
+                            (
+                                last_idx + rel_idx,
+                                s_start,
+                                s_end,
+                                ctx_text,
+                                vec,
+                                node.summary_version,
+                            )
+                            for rel_idx, ((_c_idx, s_start, s_end, _raw), ctx_text, vec) in enumerate(
+                                zip(tail_chunks, tail_contextualized, new_vecs)
+                            )
+                        ]
+                        await self.repo.upsert_node_chunk_deltas(
+                            tree_id=node.tree_id,
+                            node_id=node.id,
+                            path=node.path,
+                            start_chunk_index=last_idx,
+                            items=delta_payload,
+                        )
+                        return last_idx + len(delta_payload)
+
+        # Full rebuild fallback (initial index, title/path rename, or retroactive extraction)
         messages = await self.repo.list_messages(node_id)
         chunks = _chunk_messages(
             messages,
@@ -165,8 +222,6 @@ class TreeRAGService:
         )
         if not chunks:
             return 0
-        # Incremental tail chunk indexing: reuse unchanged chunk vectors from SQLite (O(1) per turn!)
-        header = await self._build_branch_header(node)
         contextualized = [f"{header}\n{c[3]}" for c in chunks]
         existing_rows = await self.repo.list_node_chunk_embeddings(node.id)
         existing_by_key: dict[tuple[int, int | None, int | None, str], bytes] = {

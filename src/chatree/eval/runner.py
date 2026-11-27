@@ -590,16 +590,45 @@ class BenchmarkRunner:
                         answer_text = rag_resp.content
                     elif mode == "tree_summary_only":
                         out = await tree.request(target_id, prompt=step.content, caller_id=root.id)
-                        answer_text = str(out.get("summary") or out.get("answer") or "")
+                        summary_txt = str(out.get("summary") or out.get("answer") or "")
+                        target_title = str(out.get("target_title") or target_name)
+                        sum_resp = await ct.llm.complete(
+                            model=self.model,
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": (
+                                        "Answer the question concisely and accurately using ONLY the "
+                                        "provided branch summary. Do not invent details that are not present."
+                                    ),
+                                },
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        f"[Branch Evidence]\n[Branch: {target_title} (summary)]\n"
+                                        f"{summary_txt}\n\nQuestion: {step.content}"
+                                    ),
+                                },
+                            ],
+                            tools=None,
+                            temperature=0.1,
+                        )
+                        await ct.repo.increment_node_usage(
+                            root.id,
+                            sum_resp.tokens_in,
+                            sum_resp.tokens_out,
+                            sum_resp.cache_read_tokens,
+                        )
+                        answer_text = sum_resp.content
                     elif mode == "tree_ipc_no_staleness":
-                        # Without staleness alerts, if parent already committed a handoff for this
-                        # branch, parent answers from its own context instead of re-querying!
+                        # Without staleness alerts, root keeps its tools intact; without a STALE
+                        # notice in its context envelope it naturally answers from its own handoff.
                         target_stale = any(
                             d.source_node_id == target_id for d in root_model.stale_dependencies
                         )
                         if target_stale or step.is_post_revision:
                             res = await tree.chat(
-                                step.content, node_id=root.id, include_core_tools=False
+                                step.content, node_id=root.id, include_core_tools=True
                             )
                             answer_text = res.content
                         else:

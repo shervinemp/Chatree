@@ -323,17 +323,44 @@ class AblationMatrixRunner:
 
                     if not ablations.enable_shadow_turns:
                         out = await tree.request(target_id, prompt=step.content, caller_id=root.id)
-                        ans = str(out.get("summary") or out.get("answer") or "")
+                        summary_txt = str(out.get("summary") or out.get("answer") or "")
+                        target_title = str(out.get("target_title") or target_name)
+                        sum_resp = await ct.llm.complete(
+                            model=self.model,
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": (
+                                        "Answer the question concisely and accurately using ONLY the "
+                                        "provided branch summary. Do not invent details that are not present."
+                                    ),
+                                },
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        f"[Branch Evidence]\n[Branch: {target_title} (summary)]\n"
+                                        f"{summary_txt}\n\nQuestion: {step.content}"
+                                    ),
+                                },
+                            ],
+                            tools=None,
+                            temperature=0.1,
+                        )
+                        await ct.repo.increment_node_usage(
+                            root.id, sum_resp.tokens_in, sum_resp.tokens_out, sum_resp.cache_read_tokens
+                        )
+                        ans = sum_resp.content
                     elif not ablations.enable_staleness_notices and step.is_post_revision:
-                        res = await tree.chat(step.content, node_id=root.id, include_core_tools=False)
+                        # Keep tools enabled so this ablation removes ONLY staleness notices
+                        res = await tree.chat(step.content, node_id=root.id, include_core_tools=True)
                         ans = res.content
                     elif (
                         not ablations.enable_transitive_staleness
                         and step.is_post_revision
                         and not any(d.hops == 1 for d in relevant_stale)
                     ):
-                        # Without transitive staleness, 2-hop upstream root receives no notice -> answers from stale handoff
-                        res = await tree.chat(step.content, node_id=root.id, include_core_tools=False)
+                        # Without transitive staleness, 2-hop upstream root receives no notice while keeping tools
+                        res = await tree.chat(step.content, node_id=root.id, include_core_tools=True)
                         ans = res.content
                     elif oracle_routing:
                         out = await tree.request(target_id, prompt=step.content, caller_id=root.id)

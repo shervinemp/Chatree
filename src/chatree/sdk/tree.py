@@ -101,6 +101,60 @@ class DialogueTree:
     async def nodes(self) -> list[NodeModel]:
         return await self._ct.repo.list_nodes(self.id)
 
+    async def list_branches(
+        self,
+        *,
+        offset: int = 0,
+        limit: int = 20,
+        scope: SearchScope = "all",
+        node_id: str | None = None,
+        include_archived: bool = False,
+    ) -> dict[str, Any]:
+        """Return a paged, newest-updated-first directory of branches in this tree."""
+        all_nodes = await self.nodes()
+        cur_node = None
+        if scope != "all":
+            t = await self.model()
+            cid = node_id or t.head_node_id
+            cur_node = next((n for n in all_nodes if n.id == cid), None) if cid else None
+        eligible_ids = self._ct.repo.filter_node_ids_by_scope(all_nodes, scope, cur_node)
+        filtered = [
+            n
+            for n in all_nodes
+            if n.id in eligible_ids and (include_archived or n.status != "ARCHIVED")
+        ]
+        filtered.sort(
+            key=lambda n: (0 if n.node_kind == "chat" else 1, n.updated_at),
+            reverse=False,
+        )
+        # Sort chat before subagent, and newest updated_at first within each kind
+        filtered.sort(key=lambda n: n.updated_at, reverse=True)
+        filtered.sort(key=lambda n: 0 if n.node_kind == "chat" else 1)
+        safe_offset = max(0, offset)
+        safe_limit = max(1, min(limit, 100))
+        page = filtered[safe_offset : safe_offset + safe_limit]
+        return {
+            "total_branches": len(filtered),
+            "offset": safe_offset,
+            "limit": safe_limit,
+            "has_more": (safe_offset + len(page)) < len(filtered),
+            "branches": [
+                {
+                    "node_id": n.id,
+                    "title": n.title,
+                    "node_kind": n.node_kind,
+                    "status": n.status,
+                    "parent_id": n.parent_id,
+                    "depth": n.depth,
+                    "summary_version": n.summary_version,
+                    "is_dirty": n.is_dirty,
+                    "updated_at": n.updated_at,
+                    "summary": (n.summary or n.goal or "")[:200],
+                }
+                for n in page
+            ],
+        }
+
     async def active_chat_nodes(self) -> list[NodeModel]:
         """Return non-archived interactive chat branches (`node_kind == 'chat'`, `status == 'ACTIVE'`)."""
         return [

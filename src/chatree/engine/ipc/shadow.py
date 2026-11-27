@@ -300,7 +300,11 @@ class IpcShadowMixin:
                 return IpcExecutionResult(tool_output=out, ipc_event=ev)
 
         shadow_messages = await self.context.assemble_for_shadow_query(
-            target_node=target, caller_node=caller, prompt=effective_prompt
+            target_node=target,
+            caller_node=caller,
+            prompt=effective_prompt,
+            rag=self.rag,
+            model=shadow_model,
         )
         # Preserve identical canonical `tools` array when `preserve_kv_cache_tool_schemas=True`
         # so DeepSeek / OpenAI / Anthropic do NOT invalidate KV cache at byte 0; read-only
@@ -315,6 +319,9 @@ class IpcShadowMixin:
             )
             if next_trace.hop_depth <= next_trace.max_hop_depth
             else None
+        )
+        shadow_messages = self.context.fit_messages_to_budget(
+            shadow_messages, model=shadow_model, tools=shadow_tools
         )
 
         total_in = 0
@@ -593,6 +600,7 @@ class IpcShadowMixin:
         query: str,
         scope: SearchScope = "all",
         top_k: int = 5,
+        offset: int = 0,
         trace_ctx: TraceContext | None = None,
     ) -> IpcExecutionResult:
         ctx = trace_ctx or TraceContext.start(
@@ -601,12 +609,85 @@ class IpcShadowMixin:
         t0 = time.perf_counter()
         if scope not in ("all", "ancestors", "subtree", "siblings"):
             scope = "all"
+
+        # Wildcard / directory browse mode (`query='*'` or blank): returns paged,
+        # newest-updated-first branches so the model can reach every topic across 200+ branches.
+        if query.strip() in ("", "*"):
+            all_nodes = await self.repo.list_nodes(tree.id)
+            eligible_ids = self.repo.filter_node_ids_by_scope(all_nodes, scope, caller)
+            filtered = [
+                n
+                for n in all_nodes
+                if n.id in eligible_ids and n.status != "ARCHIVED"
+            ]
+            filtered.sort(key=lambda n: n.updated_at, reverse=True)
+            filtered.sort(key=lambda n: 0 if n.node_kind == "chat" else 1)
+            safe_offset = max(0, offset)
+            safe_limit = max(1, min(top_k, 50))
+            page = filtered[safe_offset : safe_offset + safe_limit]
+            branches = [
+                {
+                    "node_id": n.id,
+                    "title": n.title,
+                    "node_kind": n.node_kind,
+                    "status": n.status,
+                    "parent_id": n.parent_id,
+                    "depth": n.depth,
+                    "summary_version": n.summary_version,
+                    "is_dirty": n.is_dirty,
+                    "updated_at": n.updated_at,
+                    "summary": (n.summary or n.goal or "")[:200],
+                }
+                for n in page
+            ]
+            hits_compat = [
+                {
+                    "node_id": n.id,
+                    "node_title": n.title,
+                    "node_status": n.status,
+                    "node_kind": n.node_kind,
+                    "path": n.path,
+                    "summary_version": n.summary_version,
+                    "summary": n.summary,
+                    "snippet": (n.summary or n.goal or n.title)[:240],
+                    "score": 1.0,
+                    "granularity": "summary" if n.summary else "node",
+                }
+                for n in page
+            ]
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            out: dict[str, Any] = {
+                "query": query or "*",
+                "scope": scope,
+                "mode": "list",
+                "total_branches": len(filtered),
+                "offset": safe_offset,
+                "limit": safe_limit,
+                "has_more": (safe_offset + len(page)) < len(filtered),
+                "count": len(page),
+                "branches": branches,
+                "hits": hits_compat,
+            }
+            ev = await self.repo.create_ipc_event(
+                tree_id=tree.id,
+                trace_id=ctx.trace_id,
+                hop_depth=ctx.hop_depth,
+                from_node_id=caller.id,
+                to_node_id=None,
+                event_type="search",
+                payload={"query": query or "*", "scope": scope, "top_k": safe_limit, "offset": safe_offset},
+                response={"count": len(page), "total_branches": len(filtered), "node_ids": [n.id for n in page]},
+                status="ok",
+                latency_ms=latency_ms,
+            )
+            return IpcExecutionResult(tool_output=out, ipc_event=ev)
+
         hits = await self.rag.search(
             tree_id=tree.id,
             query=query,
             scope=scope,
             current_node=caller,
-            top_k=max(1, min(top_k, 20)),
+            top_k=max(1, min(top_k, 50)),
         )
         latency_ms = int((time.perf_counter() - t0) * 1000)
         out = {
