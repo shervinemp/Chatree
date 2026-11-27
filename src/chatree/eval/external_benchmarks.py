@@ -18,10 +18,12 @@ from chatree.eval.adapters import MemorySystemAdapter
 from chatree.eval.scoring import CostModel
 from chatree.eval.stats import (
     BootstrapCI,
+    CohensKappaResult,
     McNemarResult,
     PairedBootstrapResult,
     bleu1,
     bootstrap_ci,
+    cohens_kappa,
     format_latex_table,
     mcnemar_test,
     paired_bootstrap_test,
@@ -428,6 +430,8 @@ class ExternalQAResult(BaseModel):
     latency_ms: float = 0.0
     ingest_tokens_in: int = 0
     ingest_tokens_out: int = 0
+    ingest_cache_read_tokens: int = 0
+    ingest_usage_metered: bool = False
     ingest_latency_ms: float = 0.0
 
 
@@ -448,6 +452,8 @@ class SystemExternalResult(BaseModel):
     estimated_cost_usd: float = 0.0
     ingest_tokens_in: int = 0
     ingest_tokens_out: int = 0
+    ingest_cache_read_tokens: int = 0
+    ingest_usage_metered: bool = False
     ingest_cost_usd: float = 0.0
     ingest_latency_ms: float = 0.0
     latency_p50_ms: float = 0.0
@@ -862,9 +868,11 @@ class ExternalBenchmarkRunner:
         peak_tok = max((r.peak_context_tokens for r in item_results), default=0)
         ing_t_in = sum(r.ingest_tokens_in for r in item_results)
         ing_t_out = sum(r.ingest_tokens_out for r in item_results)
+        ing_t_cache = sum(r.ingest_cache_read_tokens for r in item_results)
+        ing_metered = any(r.ingest_usage_metered for r in item_results)
         ing_ms_tot = round(sum(r.ingest_latency_ms for r in item_results), 2)
         ing_usd = self.cost_model.estimate_usd(
-            self.model, tokens_in=ing_t_in, tokens_out=ing_t_out, cache_read_tokens=0
+            self.model, tokens_in=ing_t_in, tokens_out=ing_t_out, cache_read_tokens=ing_t_cache
         )
         return SystemExternalResult(
             system_name=system_name,
@@ -885,6 +893,8 @@ class ExternalBenchmarkRunner:
             ),
             ingest_tokens_in=ing_t_in,
             ingest_tokens_out=ing_t_out,
+            ingest_cache_read_tokens=ing_t_cache,
+            ingest_usage_metered=ing_metered,
             ingest_cost_usd=ing_usd,
             ingest_latency_ms=ing_ms_tot,
             latency_p50_ms=percentile(lat_vals, 0.50),
@@ -994,8 +1004,18 @@ class ExternalBenchmarkRunner:
                                     if callable(arch_fn):
                                         await arch_fn(sess.session_id, reason=sess.archive_reason)
                         ingest_ms = round((time.perf_counter() - t_ing0) * 1000.0, 2)
-                        get_ingest_fn = getattr(worker, "get_ingest_usage", None)
-                        ing_in, ing_out = get_ingest_fn() if callable(get_ingest_fn) else (0, 0)
+                        get_meter_fn = getattr(worker, "get_ingest_metering_info", None)
+                        if callable(get_meter_fn):
+                            meter_info = get_meter_fn()
+                            ing_in = int(meter_info.get("tokens_in") or 0)
+                            ing_out = int(meter_info.get("tokens_out") or 0)
+                            ing_cache = int(meter_info.get("cache_read_tokens") or 0)
+                            ing_metered = bool(meter_info.get("metered", False))
+                        else:
+                            get_ingest_fn = getattr(worker, "get_ingest_usage", None)
+                            ing_in, ing_out = get_ingest_fn() if callable(get_ingest_fn) else (0, 0)
+                            ing_cache = 0
+                            ing_metered = False
 
                         for q_idx, qa in enumerate(missing_qas):
                             ans = await worker.answer_query(qa.question, date_time=qa.question_date)
@@ -1028,6 +1048,8 @@ class ExternalBenchmarkRunner:
                                 # Record per-conversation ingest usage on first QA only to avoid double-counting
                                 ingest_tokens_in=ing_in if q_idx == 0 else 0,
                                 ingest_tokens_out=ing_out if q_idx == 0 else 0,
+                                ingest_cache_read_tokens=ing_cache if q_idx == 0 else 0,
+                                ingest_usage_metered=ing_metered if q_idx == 0 else False,
                                 ingest_latency_ms=ingest_ms if q_idx == 0 else 0.0,
                             )
                             results_by_qid[qa.question_id] = qres
@@ -1151,3 +1173,68 @@ class ExternalBenchmarkRunner:
             reference_system=ref_name,
             results=system_results,
         )
+
+
+class JudgeAgreementReport(BaseModel):
+    """Inter-judge agreement report (overall & per-system Cohen's kappa) across two checkpoints."""
+
+    label_a: str
+    label_b: str
+    overall: CohensKappaResult
+    per_system: dict[str, CohensKappaResult] = Field(default_factory=dict)
+
+    def to_markdown(self) -> str:
+        lines = [
+            f"### Inter-Judge Agreement Audit (`{self.label_a}` vs. `{self.label_b}`)",
+            "",
+            "| Scope | Paired `n` | Observed Agree | Cohen's $\\kappa$ | Band | Disagreements (`A+B-` / `A-B+`) |",
+            "|---|---:|---:|---:|---|---:|",
+            (
+                f"| **Overall** | {self.overall.n} | {self.overall.observed_agreement * 100:.1f}% "
+                f"| **{self.overall.kappa:.4f}** | `{self.overall.interpretation}` "
+                f"| {self.overall.disagreements} ({self.overall.a_only_positive} / {self.overall.b_only_positive}) |"
+            ),
+        ]
+        for sys_name, res in sorted(self.per_system.items()):
+            lines.append(
+                f"| `{sys_name}` | {res.n} | {res.observed_agreement * 100:.1f}% "
+                f"| {res.kappa:.4f} | `{res.interpretation}` "
+                f"| {res.disagreements} ({res.a_only_positive} / {res.b_only_positive}) |"
+            )
+        return "\n".join(lines) + "\n"
+
+
+def compare_checkpoint_judges(
+    ckpt_a: str | Path,
+    ckpt_b: str | Path,
+    *,
+    label_a: str = "judge_a",
+    label_b: str = "judge_b",
+) -> JudgeAgreementReport:
+    """
+    Compute exact binary Cohen's kappa inter-judge agreement between two saved JSONL evaluation
+    checkpoints strictly over shared `(system_name, conversation_id, question_id)` items ($0.00).
+    """
+    loaded_a = ExternalBenchmarkRunner._load_checkpoint(Path(ckpt_a))
+    loaded_b = ExternalBenchmarkRunner._load_checkpoint(Path(ckpt_b))
+    shared_keys = sorted(set(loaded_a.keys()) & set(loaded_b.keys()))
+
+    overall_a = [loaded_a[k].correct for k in shared_keys]
+    overall_b = [loaded_b[k].correct for k in shared_keys]
+    by_sys_a: dict[str, list[bool]] = {}
+    by_sys_b: dict[str, list[bool]] = {}
+    for k in shared_keys:
+        sys_name = k[0]
+        by_sys_a.setdefault(sys_name, []).append(loaded_a[k].correct)
+        by_sys_b.setdefault(sys_name, []).append(loaded_b[k].correct)
+
+    per_system = {
+        sys_name: cohens_kappa(by_sys_a[sys_name], by_sys_b[sys_name])
+        for sys_name in sorted(by_sys_a.keys())
+    }
+    return JudgeAgreementReport(
+        label_a=label_a,
+        label_b=label_b,
+        overall=cohens_kappa(overall_a, overall_b),
+        per_system=per_system,
+    )

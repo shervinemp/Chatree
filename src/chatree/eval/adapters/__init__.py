@@ -4,7 +4,7 @@ from chatree.eval.adapters.baselines import (
     FullContextLinearAdapter,
     TreeSummaryOnlyAdapter,
 )
-from chatree.eval.adapters.chatree import ChatreeSystemAdapter
+from chatree.eval.adapters.chatree import ChatreeInteractiveAdapter, ChatreeSystemAdapter
 from chatree.eval.adapters.sota import (
     _RLM_LOCAL_REPL_LOCK,
     GraphitiOfficialAdapter,
@@ -15,6 +15,7 @@ from chatree.eval.adapters.sota import (
 
 __all__ = [
     "AdapterAnswer",
+    "ChatreeInteractiveAdapter",
     "ChatreeSystemAdapter",
     "FlatHybridRAGAdapter",
     "FullContextLinearAdapter",

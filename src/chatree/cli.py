@@ -67,6 +67,40 @@ def _build_parser() -> argparse.ArgumentParser:
     p_spawn.add_argument("--mode", choices=["fork", "slice", "clean"], default="fork")
     p_spawn.add_argument("--parent", default=None)
     p_spawn.add_argument("--permission", choices=["read_only", "read_write"], default=None)
+    p_spawn.add_argument(
+        "--import",
+        dest="imports",
+        action="append",
+        default=None,
+        help="Branch ID to import as a frozen snapshot with automatic staleness tracking (repeatable)",
+    )
+
+    p_stale = sub.add_parser("stale", help="List branches with pending stale upstream dependencies")
+    p_stale.add_argument("tree_id")
+
+    p_cmp = sub.add_parser("compare", help="Compare sibling child branches under a parent node")
+    p_cmp.add_argument("tree_id")
+    p_cmp.add_argument("parent_id")
+    p_cmp.add_argument("--siblings", nargs="*", default=None, help="Optional subset of sibling node IDs")
+
+    p_prom = sub.add_parser("promote", help="Promote winning child branch onto its parent")
+    p_prom.add_argument("tree_id")
+    p_prom.add_argument("child_id")
+    p_prom.add_argument("--keep-siblings", action="store_true", help="Do not archive competing siblings")
+
+    p_fedit = sub.add_parser("fork-edit", help="Immutably fork a branch before turn seq N")
+    p_fedit.add_argument("tree_id")
+    p_fedit.add_argument("node_id")
+    p_fedit.add_argument("--at-seq", type=int, required=True, help="1-based message sequence index")
+    p_fedit.add_argument("--title", default=None)
+
+    p_ext = sub.add_parser("extract", help="Retroactively extract turns start..end into a child branch")
+    p_ext.add_argument("tree_id")
+    p_ext.add_argument("parent_id")
+    p_ext.add_argument("--start", type=int, required=True, help="Start message seq (inclusive)")
+    p_ext.add_argument("--end", type=int, required=True, help="End message seq (inclusive)")
+    p_ext.add_argument("--title", required=True)
+    p_ext.add_argument("--goal", default="")
 
     p_search = sub.add_parser("search", help="Run 3-tier hybrid search across a tree")
     p_search.add_argument("tree_id")
@@ -442,9 +476,72 @@ async def run_cli_async(argv: Sequence[str] | None = None) -> int:
                 title=args.title,
                 mode=args.mode,
                 permission=args.permission,
+                imports=args.imports,
             )
             cm = await child.model()
             print(json.dumps(cm.model_dump(), indent=2))
+            return 0
+
+        if args.command == "stale":
+            nodes = await tree.nodes()
+            stale_branches = [
+                {
+                    "node_id": n.id,
+                    "title": n.title,
+                    "status": n.status,
+                    "stale_dependencies": [d.model_dump() for d in n.stale_dependencies],
+                }
+                for n in nodes
+                if n.status != "ARCHIVED" and n.stale_dependencies
+            ]
+            print(
+                json.dumps(
+                    {
+                        "tree_id": tree.id,
+                        "stale_branch_count": len(stale_branches),
+                        "stale_branches": stale_branches,
+                    },
+                    indent=2,
+                )
+            )
+            return 0
+
+        if args.command == "compare":
+            comp = await tree.compare_siblings(args.parent_id, sibling_ids=args.siblings)
+            print(json.dumps(comp.model_dump(), indent=2))
+            return 0
+
+        if args.command == "promote":
+            parent = await tree.promote_child(
+                args.child_id, archive_siblings=not args.keep_siblings
+            )
+            pm = await parent.model()
+            print(json.dumps(pm.model_dump(), indent=2))
+            return 0
+
+        if args.command == "fork-edit":
+            forked = await tree.fork_on_edit(args.node_id, args.at_seq, title=args.title)
+            fm = await forked.model()
+            print(json.dumps(fm.model_dump(), indent=2))
+            return 0
+
+        if args.command == "extract":
+            parent_h, child_h = await tree.extract_to_child(
+                args.parent_id,
+                args.start,
+                args.end,
+                title=args.title,
+                goal=args.goal,
+            )
+            print(
+                json.dumps(
+                    {
+                        "parent": (await parent_h.model()).model_dump(),
+                        "child": (await child_h.model()).model_dump(),
+                    },
+                    indent=2,
+                )
+            )
             return 0
 
         if args.command == "search":

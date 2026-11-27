@@ -8,6 +8,7 @@ from chatree.eval.ablations import (
 )
 from chatree.eval.adapters import (
     AdapterAnswer,
+    ChatreeInteractiveAdapter,
     ChatreeSystemAdapter,
     FlatHybridRAGAdapter,
     FullContextLinearAdapter,
@@ -35,9 +36,11 @@ from chatree.eval.external_benchmarks import (
     ExternalQAResult,
     ExternalSession,
     ExternalTurn,
+    JudgeAgreementReport,
     LoCoMoDataset,
     LongMemEvalDataset,
     SystemExternalResult,
+    compare_checkpoint_judges,
     write_run_manifest,
 )
 from chatree.eval.jump_around import (
@@ -110,10 +113,12 @@ from chatree.eval.scoring import (
 )
 from chatree.eval.stats import (
     BootstrapCI,
+    CohensKappaResult,
     McNemarResult,
     PairedBootstrapResult,
     bleu1,
     bootstrap_ci,
+    cohens_kappa,
     exact_match,
     format_latex_table,
     mcnemar_test,
@@ -133,7 +138,9 @@ __all__ = [
     "BenchmarkReport",
     "BenchmarkRunner",
     "BootstrapCI",
+    "ChatreeInteractiveAdapter",
     "ChatreeSystemAdapter",
+    "CohensKappaResult",
     "CompactionBenchmarkReport",
     "CompactionBenchmarkRunner",
     "CompactionScenario",
@@ -155,6 +162,7 @@ __all__ = [
     "FlatHybridRAGAdapter",
     "FullContextLinearAdapter",
     "GraphitiOfficialAdapter",
+    "JudgeAgreementReport",
     "JumpAroundBenchmarkRunner",
     "JumpAroundReport",
     "JumpAroundScenario",
@@ -204,6 +212,8 @@ __all__ = [
     "build_probe1_verbatim_recovery",
     "build_probe2_transitive_staleness",
     "build_probe3_silent_quarantine",
+    "cohens_kappa",
+    "compare_checkpoint_judges",
     "crossover_scaling_scenario",
     "default_compaction_scenario",
     "default_jump_around_scenario",

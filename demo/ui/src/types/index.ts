@@ -241,6 +241,25 @@ export interface ArchiveBranchResponse {
   switched_head_to: string | null
 }
 
+export interface SiblingDiffEntry {
+  node_id: string
+  title: string
+  status: NodeStatus
+  summary_version: number
+  summary: string
+  artifact_refs: string[]
+  tokens_total: number
+  message_count: number
+}
+
+export interface BranchComparison {
+  parent_id: string
+  parent_title: string
+  siblings: SiblingDiffEntry[]
+  shared_terms: string[]
+  distinctive_terms_by_node: Record<string, string[]>
+}
+
 export interface AskTreeResponse {
   result: {
     query?: string

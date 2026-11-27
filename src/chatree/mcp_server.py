@@ -153,6 +153,59 @@ MCP_TOOLS: list[dict[str, Any]] = [
             "required": ["tree_id"],
         },
     },
+    {
+        "name": "dialogue_tree_create_branch",
+        "description": "Spawn a new isolated child branch (fork, slice, or clean) with optional sibling imports for causal staleness tracking.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tree_id": {"type": "string"},
+                "goal": {"type": "string"},
+                "parent_id": {"type": "string"},
+                "title": {"type": "string"},
+                "mode": {"type": "string", "enum": ["fork", "slice", "clean"], "default": "clean"},
+                "imports": {"type": "array", "items": {"type": "string"}},
+                "switch_head": {"type": "boolean", "default": False},
+            },
+            "required": ["tree_id", "goal"],
+        },
+    },
+    {
+        "name": "dialogue_tree_check_staleness",
+        "description": "Zero-LLM check returning all branches in a tree that have stale upstream dependencies (direct or transitive) along with hop distances and change deltas.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"tree_id": {"type": "string"}},
+            "required": ["tree_id"],
+        },
+    },
+    {
+        "name": "dialogue_tree_compare_siblings",
+        "description": "Compare competing child branches under a parent node side-by-side (summaries, artifacts, shared vs. distinctive terms).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tree_id": {"type": "string"},
+                "parent_id": {"type": "string"},
+                "sibling_ids": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["tree_id", "parent_id"],
+        },
+    },
+    {
+        "name": "dialogue_tree_promote_branch",
+        "description": "Promote a winning child branch onto its parent as the canonical conclusion and optionally archive losing siblings.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tree_id": {"type": "string"},
+                "child_id": {"type": "string"},
+                "archive_siblings": {"type": "boolean", "default": True},
+                "switch_head_to_parent": {"type": "boolean", "default": True},
+            },
+            "required": ["tree_id", "child_id"],
+        },
+    },
 ]
 
 
@@ -295,6 +348,54 @@ class ChatreeMCPServer:
                 exclude_archived=not bool(args.get("include_archived", False)),
             )
             return [f.model_dump() for f in facts]
+
+        if name == "dialogue_tree_create_branch":
+            tree = await self.client.get_tree(str(args["tree_id"]))
+            child = await tree.spawn(
+                str(args["goal"]),
+                parent_id=args.get("parent_id"),
+                title=args.get("title"),
+                mode=args.get("mode", "clean"),
+                imports=args.get("imports") or None,
+                switch_head=bool(args.get("switch_head", False)),
+            )
+            return (await child.model()).model_dump()
+
+        if name == "dialogue_tree_check_staleness":
+            tree = await self.client.get_tree(str(args["tree_id"]))
+            nodes = await tree.nodes()
+            stale_branches = [
+                {
+                    "node_id": n.id,
+                    "title": n.title,
+                    "status": n.status,
+                    "stale_dependencies": [d.model_dump() for d in n.stale_dependencies],
+                }
+                for n in nodes
+                if n.status != "ARCHIVED" and n.stale_dependencies
+            ]
+            return {
+                "tree_id": tree.id,
+                "stale_branch_count": len(stale_branches),
+                "stale_branches": stale_branches,
+            }
+
+        if name == "dialogue_tree_compare_siblings":
+            tree = await self.client.get_tree(str(args["tree_id"]))
+            comp = await tree.compare_siblings(
+                str(args["parent_id"]),
+                sibling_ids=args.get("sibling_ids") or None,
+            )
+            return comp.model_dump()
+
+        if name == "dialogue_tree_promote_branch":
+            tree = await self.client.get_tree(str(args["tree_id"]))
+            parent = await tree.promote_child(
+                str(args["child_id"]),
+                archive_siblings=bool(args.get("archive_siblings", True)),
+                switch_head_to_parent=bool(args.get("switch_head_to_parent", True)),
+            )
+            return (await parent.model()).model_dump()
 
         raise ValueError(f"Unknown MCP tool: {name}")
 

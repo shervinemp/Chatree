@@ -151,7 +151,7 @@ Hosted LLM providers and serving engines like SGLang \citep{zheng2024sglang} cac
 \end{enumerate}
 
 \subsection{Implementation Notes}
-Chatree is implemented in Python~3.12 over SQLite (WAL mode + FTS5) with a zero-dependency OpenAI-compatible HTTP/SSE client alongside optional LiteLLM routing, a CLI, a stdio MCP server, and an optional FastAPI + React explorer. Cross-branch calls are guarded by cycle detection, a hop-depth cap, and a token budget ledger that weights cached input tokens at 0.1$\times$. Local retrieval uses \texttt{BAAI/bge-small-en-v1.5} embeddings (exact $O(N)$ per-tree NumPy matrix scan, $<1$\,ms at 5k chunks) and an optional \texttt{ms-marco-MiniLM-L-6-v2} cross-encoder with automatic GPU-to-CPU fallback. The codebase is covered by 113 automated tests requiring no API keys.
+Chatree is implemented in Python~3.12 over SQLite (WAL mode + FTS5) with a zero-dependency OpenAI-compatible HTTP/SSE client alongside optional LiteLLM routing, a CLI, a stdio MCP server, and an optional FastAPI + React explorer. Cross-branch calls are guarded by cycle detection, a hop-depth cap, and a token budget ledger that weights cached input tokens at 0.1$\times$. Local retrieval uses \texttt{BAAI/bge-small-en-v1.5} embeddings (exact $O(N)$ per-tree NumPy matrix scan, $<1$\,ms at 5k chunks) and an optional \texttt{ms-marco-MiniLM-L-6-v2} cross-encoder with automatic GPU-to-CPU fallback. The codebase is covered by 117 automated tests requiring no API keys.
 
 % ============================================================================
 % 3. RELATED WORK
@@ -471,7 +471,7 @@ Chatree is not free and not the right tool for every chat:
 Managing long LLM conversations does not require choosing between a bloated linear transcript and a lossy bag of extracted facts. Organizing history as a tree of isolated branches—with cheap summaries and dated facts for search, read-only lookups over verbatim history for exact details, dependency tracking for upstream changes, silent archiving for dead ends, and tail-only metadata for prefix caching—gives models bounded active branch context without throwing away provenance. Across LoCoMo, LongMemEval-S, multi-generation compaction, and targeted diagnostics against Mem0 and MIT RLM, this structure maintains strong recall on long, evolving workflows while keeping peak context size, dead-end leakage, and stale-assumption errors under control.
 
 \paragraph{Code and Artifacts.}
-Code, 113 zero-key tests, checkpoints, simulations, and figure scripts: \texttt{https://github.com/shervinemp/Chatree}.
+Code, 117 zero-key tests, checkpoints, simulations, and figure scripts: \texttt{https://github.com/shervinemp/Chatree}.
 
 \clearpage
 \bibliographystyle{plainnat}

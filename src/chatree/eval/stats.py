@@ -95,6 +95,17 @@ class McNemarResult(BaseModel):
     significant_05: bool
 
 
+class CohensKappaResult(BaseModel):
+    n: int
+    observed_agreement: float
+    expected_agreement: float
+    kappa: float
+    disagreements: int
+    a_only_positive: int
+    b_only_positive: int
+    interpretation: str
+
+
 def percentile(values: Sequence[float], pct: float) -> float:
     """Linear-interpolated percentile helper shared across evaluation runners."""
     if not values:
@@ -238,6 +249,65 @@ def mcnemar_test(a_correct: Sequence[bool], b_correct: Sequence[bool]) -> McNema
         p_value=round(p_val, 5),
         method="chi2_continuity",
         significant_05=p_val < 0.05,
+    )
+
+
+def cohens_kappa(rater_a: Sequence[bool], rater_b: Sequence[bool]) -> CohensKappaResult:
+    """
+    Compute exact binary Cohen's kappa inter-rater agreement between two judges over identical items.
+    Uses Landis & Koch (1977) qualitative interpretation bands.
+    """
+    if len(rater_a) != len(rater_b):
+        raise ValueError(f"Paired lengths must match ({len(rater_a)} vs {len(rater_b)}).")
+    n = len(rater_a)
+    if n == 0:
+        return CohensKappaResult(
+            n=0,
+            observed_agreement=0.0,
+            expected_agreement=0.0,
+            kappa=0.0,
+            disagreements=0,
+            a_only_positive=0,
+            b_only_positive=0,
+            interpretation="empty",
+        )
+    n11 = sum(1 for a, b in zip(rater_a, rater_b) if a and b)
+    n00 = sum(1 for a, b in zip(rater_a, rater_b) if (not a) and (not b))
+    n10 = sum(1 for a, b in zip(rater_a, rater_b) if a and (not b))
+    n01 = sum(1 for a, b in zip(rater_a, rater_b) if (not a) and b)
+
+    po = (n11 + n00) / n
+    pa1 = (n11 + n10) / n
+    pb1 = (n11 + n01) / n
+    pe = pa1 * pb1 + (1.0 - pa1) * (1.0 - pb1)
+
+    if abs(1.0 - pe) <= 1e-12:
+        kappa = 1.0 if po >= 1.0 - 1e-12 else 0.0
+    else:
+        kappa = (po - pe) / (1.0 - pe)
+
+    if kappa >= 0.81:
+        band = "almost_perfect"
+    elif kappa >= 0.61:
+        band = "substantial"
+    elif kappa >= 0.41:
+        band = "moderate"
+    elif kappa >= 0.21:
+        band = "fair"
+    elif kappa >= 0.0:
+        band = "slight"
+    else:
+        band = "poor"
+
+    return CohensKappaResult(
+        n=n,
+        observed_agreement=round(po, 4),
+        expected_agreement=round(pe, 4),
+        kappa=round(kappa, 4),
+        disagreements=n10 + n01,
+        a_only_positive=n10,
+        b_only_positive=n01,
+        interpretation=band,
     )
 
 

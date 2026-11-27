@@ -32,6 +32,7 @@ from typing import Sequence
 from chatree import (
     AblationMatrixRunner,
     BenchmarkRunner,
+    ChatreeInteractiveAdapter,
     ChatreeSystemAdapter,
     CompactionBenchmarkRunner,
     ExternalBenchmarkReport,
@@ -54,6 +55,7 @@ from chatree import (
     build_full_eval_suite,
     build_llm_provider,
     build_non_monotonic_engineering_benchmark,
+    compare_checkpoint_judges,
     default_jump_around_scenario,
     natural_jump_around_scenario,
     run_live_micro_diagnostics,
@@ -168,6 +170,7 @@ def build_external_adapters(
     reranker,
     api_base: str | None = None,
     include_paper_baselines: bool = False,
+    include_interactive: bool = False,
     include_graphiti: bool = False,
     include_letta: bool = False,
 ) -> tuple[list, str]:
@@ -203,6 +206,20 @@ def build_external_adapters(
             max_context_tokens=120_000,
         ),
     ]
+    if include_interactive:
+        adapters.append(
+            ChatreeInteractiveAdapter(
+                name="chatree_interactive_agent",
+                model=model,
+                shadow_model=shadow_model,
+                summary_model=summary_model,
+                llm=llm,
+                embedder=embedder,
+                reranker=reranker,
+                generate_session_summaries=include_paper_baselines,
+                use_provided_summaries=False,
+            )
+        )
     if include_paper_baselines:
         adapters.extend(
             [
@@ -375,6 +392,7 @@ async def run_external_tracks(
     lme_per_cat: int = 5,
     lme_split: str = "s",
     include_paper_baselines: bool = False,
+    include_interactive: bool = False,
     skip_mem0_lme: bool = False,
     include_graphiti: bool = False,
     include_letta: bool = False,
@@ -397,6 +415,7 @@ async def run_external_tracks(
         reranker=reranker,
         api_base=api_base,
         include_paper_baselines=include_paper_baselines,
+        include_interactive=include_interactive,
         include_graphiti=include_graphiti,
         include_letta=include_letta,
     )
@@ -584,7 +603,15 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
     )
     parser.add_argument("--rejudge-ref", default="chatree_two_tier_v3", help="Reference system name for McNemar tests during re-judging")
     parser.add_argument("--rejudge-locomo-ckpt", default="", help="Backwards-compatible alias for --rejudge-ckpt --rejudge-dataset locomo")
+    parser.add_argument(
+        "--compare-judges",
+        nargs=2,
+        metavar=("CKPT_A", "CKPT_B"),
+        default=None,
+        help="Compute zero-token Cohen's kappa inter-judge agreement between two saved JSONL checkpoints ($0.00)",
+    )
     parser.add_argument("--paper-baselines", action="store_true", help="Include Context-Folding, official Mem0, and official MIT RLM")
+    parser.add_argument("--include-interactive", action="store_true", help="Include ChatreeInteractiveAdapter (autonomous TurnOrchestrator tool-use ablation)")
     parser.add_argument("--skip-mem0-lme", action="store_true", help="Exclude mem0_official from Track 4 LongMemEval")
     parser.add_argument("--include-graphiti", action="store_true", help="Include official Graphiti adapter (requires graphiti-core + Neo4j)")
     parser.add_argument("--include-letta", action="store_true", help="Include official Letta adapter (requires letta)")
@@ -596,6 +623,22 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
     out_dir = Path(args.out_dir or f"results/eval_{_slugify_model(model)}").resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     tracks = {t.strip() for t in args.tracks.split(",") if t.strip()}
+
+    if args.compare_judges:
+        ckpt_a, ckpt_b = args.compare_judges
+        ag = compare_checkpoint_judges(
+            ckpt_a,
+            ckpt_b,
+            label_a=Path(ckpt_a).stem,
+            label_b=Path(ckpt_b).stem,
+        )
+        ag_md = ag.to_markdown()
+        print(ag_md, flush=True)
+        (out_dir / "judge_agreement_kappa.md").write_text(ag_md, encoding="utf-8")
+        (out_dir / "judge_agreement_kappa.json").write_text(
+            ag.model_dump_json(indent=2), encoding="utf-8"
+        )
+        return
 
     if args.simulate_proof:
         sim_rep = await run_zero_token_simulation_proof(model=model, prefer_real_mem0_proxy=True)
@@ -663,21 +706,33 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
             )
             return
 
+        out_ckpt = out_dir / f"{stem}.ckpt.jsonl"
         re_rep = await re_runner.rejudge_checkpoint(
             convs,
             Path(rejudge_path),
-            output_checkpoint_path=out_dir / f"{stem}.ckpt.jsonl",
+            output_checkpoint_path=out_ckpt,
             reference_system=args.rejudge_ref,
         )
         re_rep.save_csv(out_dir / f"{stem}.csv")
-        full_md = _format_per_category_markdown(re_rep, f"{rejudge_ds} Per-Category Accuracy (judge={judge_model})")
+        agreement = compare_checkpoint_judges(
+            rejudge_path, out_ckpt, label_a=Path(rejudge_path).stem, label_b=judge_model
+        )
+        full_md = (
+            _format_per_category_markdown(re_rep, f"{rejudge_ds} Per-Category Accuracy (judge={judge_model})")
+            + "\n"
+            + agreement.to_markdown()
+        )
         (out_dir / f"{stem}.md").write_text(full_md, encoding="utf-8")
         (out_dir / f"{stem}.tex").write_text(re_rep.to_latex_table(), encoding="utf-8")
         re_rep.save_manifest(
             out_dir / f"{stem}_manifest.json",
             judge_model=judge_model,
             embed_model=args.embed_model,
-            extra={"rejudged_from": str(rejudge_path), "dataset": rejudge_ds},
+            extra={
+                "rejudged_from": str(rejudge_path),
+                "dataset": rejudge_ds,
+                "inter_judge_kappa": agreement.overall.model_dump(),
+            },
         )
         print(full_md, flush=True)
         return
@@ -733,6 +788,7 @@ async def run_main(argv: Sequence[str] | None = None, *, default_out_dir: str | 
                 lme_per_cat=args.lme_per_cat,
                 lme_split=args.lme_split,
                 include_paper_baselines=args.paper_baselines,
+                include_interactive=args.include_interactive,
                 skip_mem0_lme=args.skip_mem0_lme,
                 include_graphiti=args.include_graphiti,
                 include_letta=args.include_letta,

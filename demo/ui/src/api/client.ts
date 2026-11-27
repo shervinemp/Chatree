@@ -2,6 +2,7 @@ import type {
   ArchiveBranchResponse,
   ArtifactModel,
   AskTreeResponse,
+  BranchComparison,
   BranchFactModel,
   ChildContextMode,
   CompactBranchResponse,
@@ -126,6 +127,7 @@ export const api = {
       tool_permission?: ToolPermission | null
       switch_head?: boolean
       session_id?: string
+      import_branch_ids?: string[]
     }
   ) =>
     jsonFetch<{
@@ -136,6 +138,33 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  forkOnEdit: (
+    nodeId: string,
+    payload: { at_seq: number; title?: string | null; switch_head?: boolean }
+  ) =>
+    jsonFetch<NodeModel>(`/api/nodes/${nodeId}/fork-edit`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  extractToChild: (
+    nodeId: string,
+    payload: { seq_start: number; seq_end: number; title: string; goal?: string; summary?: string | null }
+  ) =>
+    jsonFetch<{ parent: NodeModel; child: NodeModel }>(`/api/nodes/${nodeId}/extract`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  compareSiblings: (parentId: string) =>
+    jsonFetch<BranchComparison>(`/api/nodes/${parentId}/compare`),
+
+  promoteChild: (childId: string, archiveSiblings = true) =>
+    jsonFetch<NodeModel>(
+      `/api/nodes/${childId}/promote?archive_siblings=${archiveSiblings ? 'true' : 'false'}`,
+      { method: 'POST' }
+    ),
 
   finishNode: (
     nodeId: string,

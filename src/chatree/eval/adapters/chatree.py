@@ -60,6 +60,8 @@ class ChatreeSystemAdapter:
         self._node_titles: dict[str, str] = {}
         self._ingest_tokens_in = 0
         self._ingest_tokens_out = 0
+        self._ingest_cache_read_tokens = 0
+        self._ingest_llm_calls = 0
         self._root_id: str = ""
 
     def clone(self) -> ChatreeSystemAdapter:
@@ -84,6 +86,15 @@ class ChatreeSystemAdapter:
 
     def get_ingest_usage(self) -> tuple[int, int]:
         return self._ingest_tokens_in, self._ingest_tokens_out
+
+    def get_ingest_metering_info(self) -> dict[str, Any]:
+        return {
+            "tokens_in": self._ingest_tokens_in,
+            "tokens_out": self._ingest_tokens_out,
+            "cache_read_tokens": self._ingest_cache_read_tokens,
+            "llm_calls": self._ingest_llm_calls,
+            "metered": True,
+        }
 
     async def archive_session(self, session_id: str, *, reason: str = "") -> None:
         """Quarantine a scrapped/dead-end session using Chatree's native `archive_branch` primitive."""
@@ -128,6 +139,8 @@ class ChatreeSystemAdapter:
         self._node_titles = {}
         self._ingest_tokens_in = 0
         self._ingest_tokens_out = 0
+        self._ingest_cache_read_tokens = 0
+        self._ingest_llm_calls = 0
 
     async def start_session(
         self,
@@ -183,8 +196,9 @@ class ChatreeSystemAdapter:
             tree_model = await self._ct.repo.get_tree(self._tree.id)
             node_model = await self._ct.repo.get_node(nid)
             if tree_model is not None and node_model is not None:
+                cache_before = node_model.cache_read_tokens
                 sess_date = self._node_dates.get(nid, "")
-                updated, _regen, tin, tout, _lat = await self._ct.staleness.ensure_fresh_summary(
+                updated, regen, tin, tout, _lat = await self._ct.staleness.ensure_fresh_summary(
                     tree_model,
                     node_model,
                     force=True,
@@ -193,6 +207,9 @@ class ChatreeSystemAdapter:
                 )
                 self._ingest_tokens_in += tin
                 self._ingest_tokens_out += tout
+                self._ingest_cache_read_tokens += max(0, updated.cache_read_tokens - cache_before)
+                if regen:
+                    self._ingest_llm_calls += 1
                 self._node_titles[nid] = updated.title
                 self._node_summaries[nid] = updated.summary or session_id
             else:
@@ -310,3 +327,103 @@ class ChatreeSystemAdapter:
             self._ct = None
             self._tree = None
             self._session_nodes.clear()
+
+
+class ChatreeInteractiveAdapter(ChatreeSystemAdapter):
+    """
+    Autonomous live-agent adapter for external benchmarks (LoCoMo, LongMemEval, Track 7).
+    Ingests conversation sessions identically to `ChatreeSystemAdapter`, then answers each
+    query by running a genuine interactive `TurnOrchestrator` turn (`tree.chat`) inside an
+    isolated clean query branch (archived immediately afterward so consecutive benchmark QAs
+    never cross-contaminate). Enables direct apples-to-apples ablation of autonomous LLM tool
+    use (`dialogue_tree_*`) vs. structured `TreeQueryEngine.deep_ask()`.
+    """
+
+    def __init__(
+        self,
+        *,
+        name: str = "chatree_interactive_agent",
+        max_hop_depth: int = 3,
+        token_budget: int = 48_000,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(name=name, **kwargs)
+        self.max_hop_depth = max_hop_depth
+        self.token_budget = token_budget
+
+    def clone(self) -> ChatreeInteractiveAdapter:
+        return ChatreeInteractiveAdapter(
+            name=self._name,
+            model=self.model,
+            shadow_model=self.shadow_model,
+            summary_model=self.summary_model,
+            llm=self.llm,
+            embedder=self.embedder,
+            reranker=self.reranker,
+            ablations=self.ablations.model_copy(),
+            max_ask_targets=self.max_ask_targets,
+            generate_session_summaries=self.generate_session_summaries,
+            use_provided_summaries=self.use_provided_summaries,
+            include_branch_summary_map=self.include_branch_summary_map,
+            concise_synthesis=self.concise_synthesis,
+            enable_recursive_hop=self.enable_recursive_hop,
+            ingest_concurrency=self.ingest_concurrency,
+            max_hop_depth=self.max_hop_depth,
+            token_budget=self.token_budget,
+        )
+
+    async def answer_query(self, question: str, *, date_time: str = "") -> AdapterAnswer:
+        assert self._tree is not None and self._ct is not None
+        t0 = time.perf_counter()
+        prompt_q = f"[Current date: {date_time}] {question}" if date_time else question
+
+        metrics_before = await self._tree.metrics()
+        # Spawn a clean ephemeral query node so multiple QAs over one tree never pollute each other
+        q_node = await self._tree.spawn(
+            goal="Answer user query using dialogue_tree_* tools over the session branches.",
+            parent_id=self._root_id,
+            title="Eval Query",
+            mode="clean",
+            switch_head=False,
+        )
+        try:
+            turn = await self._tree.chat(
+                prompt_q,
+                node_id=q_node.id,
+                max_hop_depth=self.max_hop_depth,
+                token_budget=self.token_budget,
+                include_core_tools=True,
+            )
+            q_model = await q_node.model()
+            peak_ctx = await self._ct.context.estimate_node_context_tokens(q_model)
+            queried_ids = sorted(
+                {ev.to_node_id for ev in turn.ipc_events if ev.to_node_id and ev.to_node_id != q_node.id}
+            )
+            for tid in queried_ids:
+                nd = await self._ct.repo.get_node(tid)
+                if nd is not None:
+                    bt = await self._ct.context.estimate_node_context_tokens(nd)
+                    if bt > peak_ctx:
+                        peak_ctx = bt
+            tools_used = [ev.event_type for ev in turn.ipc_events]
+        finally:
+            await self._tree.archive(q_node.id, reason="ephemeral_eval_query", switch_to_parent=False)
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        metrics_after = await self._tree.metrics()
+        return AdapterAnswer(
+            answer=turn.content,
+            tokens_in=max(0, metrics_after.total_tokens_in - metrics_before.total_tokens_in),
+            tokens_out=max(0, metrics_after.total_tokens_out - metrics_before.total_tokens_out),
+            cache_read_tokens=max(
+                0, metrics_after.total_cache_read_tokens - metrics_before.total_cache_read_tokens
+            ),
+            peak_context_tokens=peak_ctx,
+            latency_ms=round(elapsed_ms, 2),
+            metadata={
+                "mode": "interactive_orchestrator",
+                "targets_queried": queried_ids,
+                "ipc_calls": len(tools_used),
+                "ipc_event_types": tools_used,
+            },
+        )
