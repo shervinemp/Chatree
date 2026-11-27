@@ -1,5 +1,5 @@
 scenario,system,turns_total,queries_passed,queries_total,strict_pass_rate,mean_recall,dead_end_leakage_rate,stale_revision_error_rate,avg_judge_score,navigation_accuracy,branches_created,reflog_jumps,shadow_turns,shadow_cache_hits,bg_summaries_completed,peak_context_tokens,total_tokens_in,total_tokens_out,total_cache_read_tokens,cache_hit_ratio,estimated_cost_usd,turn_latency_p50_ms,turn_latency_p95_ms
-natural-jump-around-18t,chatree_live,18,2,3,0.6667,1.0,0.0,0.3333,1.0,0.7778,4,5,11,0,1,7291,360289,19281,297984,0.8271,0.033887,7031.49,14040.66
-natural-jump-around-18t,linear,18,3,3,1.0,1.0,0.0,0.0,1.0,,0,0,0,0,0,8525,76540,7888,73088,0.9549,0.006326,3645.66,5730.27
-natural-jump-around-18t,sliding_window,18,2,3,0.6667,0.9444,0.0,0.0,0.9167,,0,0,0,0,0,2210,32454,7614,2944,0.0907,0.011543,3799.16,6058.34
-natural-jump-around-18t,flat_rag,18,0,3,0.0,0.0,0.0,0.0,0.0,,0,0,0,0,0,648,8229,1704,1024,0.1244,0.002762,1341.04,1847.53
+natural-jump-around-18t,chatree_live,18,3,3,1.0,1.0,0.0,0.0,1.0,0.7778,4,4,12,0,3,7100,384713,20512,313600,0.8152,0.037307,7437.84,10171.75
+natural-jump-around-18t,linear,18,3,3,1.0,1.0,0.0,0.0,1.0,,0,0,0,0,0,6257,56726,5593,53248,0.9387,0.004814,2482.66,3865.95
+natural-jump-around-18t,sliding_window,18,2,3,0.6667,0.8889,0.0,0.0,0.8667,,0,0,0,0,0,2133,30334,7120,2432,0.0802,0.010871,3036.18,4337.16
+natural-jump-around-18t,flat_rag,18,0,3,0.0,0.6111,0.0,0.3333,0.4167,,0,0,0,0,0,660,8576,1661,1408,0.1642,0.002744,1266.37,2035.09

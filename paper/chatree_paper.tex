@@ -382,8 +382,8 @@ Sliding Window & 0 & 0\% & 0\% & 0\% & 1,144 & 0/4 \\
 }
 \end{table}
 
-\paragraph{Live 18-Turn Jump-Around Chat (Track~5).}
-Using natural user prompts with zero mention of trees or tools, live Chatree autonomously spawns 4 branches, makes 5 jumps and 11 read-only lookups, and achieves \textbf{100\% recall}, \textbf{1.00 judge score}, \textbf{0\% dead-end leakage}, \textbf{82.7\% KV-cache hits}, and lower peak context than linear chat (7,291 vs.\ 8,525 tokens). Sliding window drops to 94.4\% recall (9.1\% cache) and flat RAG fails (0\%). Importantly, on this short 18-turn thread, Chatree spends more total input tokens than linear chat (360k vs.\ 76.5k; \$0.034 vs.\ \$0.006), illustrating that tree orchestration pays off beyond a branching/length crossover rather than in brief linear chats.
+\paragraph{Live 18-Turn Jump-Around Chat (Track~5, commit \texttt{5ea2e78}).}
+Using natural user prompts with zero mention of trees or tools (scored under the list/table-aware exclusion scorer), live Chatree autonomously spawns 4 branches, makes 4 jumps and 12 read-only lookups, and achieves \textbf{3/3 (100\%) strict pass}, \textbf{100\% recall}, \textbf{1.00 judge score}, \textbf{0\% dead-end leakage}, \textbf{0\% stale error}, and \textbf{81.5\% KV-cache hits} (peak 7,100 tokens), tying linear chat (3/3, peak 6,257), while sliding window drops to 2/3 (88.9\% recall, 8.0\% cache) and flat RAG fails (0/3, 0.42 judge, 33.3\% stale error). On the default-prompt track, Chatree scores 100\% recall and 0\% leakage (2/3 strict pass, 81.8\% cache), while linear and MIT RLM also achieve 3/3 with 0\% leakage. Importantly, on this short 18-turn thread, Chatree spends more cumulative input tokens than linear chat (385k vs.\ 56.7k; \$0.037 vs.\ \$0.005), illustrating that tree orchestration pays off beyond a branching/length crossover rather than in brief linear chats.
 
 \subsection{Controlled Stress Tests, Ablations, and Token Crossover}
 
@@ -412,16 +412,16 @@ Flat Hybrid RAG & 36.1\% & 33.3\% & 25.0\% & 0.0\% & \textbf{\$0.008} & \textbf{
 }
 \end{table}
 
-\paragraph{5-Family Stress Suite, Ablations, and $K$-Scaling Crossover (Tracks~1 \&~2).}
-On Track~1 (Table~\ref{tab:track1}), Chatree passes \textbf{8/8 (100\%)} with 0\% leakage and 0\% stale contradictions, whereas Flat RAG, Summary Folding, and Chatree-without-staleness all fail the multi-hop revision test. Figure~\ref{fig:crossover} shows Track~2's scaling curve and ablations:
+\paragraph{5-Family Stress Suite, Ablations, and $K$-Scaling Crossover (Tracks~1 \&~2, commit \texttt{5ea2e78}).}
+On Track~1 (Table~\ref{tab:track1}), Chatree passes \textbf{8/8 (100\%)} with 0\% leakage and 0\% stale contradictions, outperforming Full Linear (6/8, failing proposal-vs-decision and multi-hop revision), Flat RAG (5/7), Chatree-without-staleness (6/7, still failing multi-hop revision with 100\% stale error even with all 9 core tools enabled), and Summary Folding (1/7, even with full LLM answer synthesis over retrieved summaries). Figure~\ref{fig:crossover} shows Track~2's scaling curve and fair single-feature ablations:
 \begin{itemize}
-  \item \textbf{Total-token crossover at $K=8$:} Across $K \in \{2,4,8\}$ distractor branches, Chatree holds 100\% pass and nearly flat peak context ($707 \to 767 \to 957$ tokens). At $K=8$, Chatree crosses below Full Linear in \emph{cumulative} input tokens (\textbf{29.6k vs.\ 39.7k}) and median latency (\textbf{1.19s vs.\ 1.42s}), while Sliding Window drops to 0\%.
-  \item \textbf{Ablations (pre-fix caveat):} In the archived Track~1/2 runs, disabling read-only branch lookups dropped strict pass rate to \textbf{0.0\%} ($p=0.0312^*$) and disabling staleness/transitivity introduced 14.3\% stale errors. Subsequent audit identified two harness flaws in those archived Track~1/2 rows: (i)~Summary Folding scored raw branch summaries directly without an LLM answer-synthesis pass (unlike LoCoMo, LongMemEval-S, and Track~7), and (ii)~the no-staleness ablations disabled core tools on post-revision turns. Both flaws are now fixed in \texttt{eval/runner.py} and \texttt{eval/ablations.py}; live reruns of Tracks~1--2 are pending.
+  \item \textbf{$K$-scaling convergence at $K=8$:} Across $K \in \{2,4,8\}$ distractor branches, Chatree holds 100\% strict pass while capping peak root context at \textbf{2.6$\times$ smaller} than Full Linear ($935 \to 1{,}066 \to 1{,}302$ vs.\ $1{,}402 \to 2{,}493 \to 3{,}418$ tokens). By $K=8$, cumulative input tokens converge (\textbf{29.9k vs.\ 29.6k}), while Full Linear drops to 0\% strict pass (100\% leakage) at $K=4$ and Flat RAG / Summary Folding score 0\% across all $K$.
+  \item \textbf{Fair single-feature ablations:} Disabling read-only branch lookups while synthesizing answers from retrieved summaries (\texttt{no\_shadow\_turns\_folding}) still drops strict pass rate from \textbf{100.0\% to 14.3\%} (McNemar $p=0.0312^*$). Disabling staleness notices (\texttt{no\_staleness}) or multi-hop transitivity (\texttt{no\_transitive\_staleness})—both keeping all core tools enabled—or dense vectors (\texttt{no\_hybrid\_rag\_fts\_only}) each drops accuracy to \textbf{85.7\%} (with 14.3\% stale contradictions on both staleness ablations).
 \end{itemize}
 
 \begin{table}[t]
 \centering
-\caption{Track~1 5-family stress suite strict pass rates and peak root tokens (\texttt{deepseek-chat}).}
+\caption{Track~1 5-family stress suite strict pass rates and peak root tokens (\texttt{deepseek-chat}, commit \texttt{5ea2e78}; Summary Folding uses LLM answer synthesis).}
 \label{tab:track1}
 \scriptsize
 \setlength{\tabcolsep}{3.0pt}
@@ -430,13 +430,13 @@ On Track~1 (Table~\ref{tab:track1}), Chatree passes \textbf{8/8 (100\%)} with 0\
 \toprule
 \textbf{Scenario Family} & \textbf{Linear} & \textbf{Flat RAG} & \textbf{Folding} & \textbf{Chatree} \\
 \midrule
-Distractor Scaling ($K=4$) & 2/2 {\tiny(2.5k)} & 0/2 {\tiny(0.8k)} & 0/2 {\tiny(0.9k)} & \textbf{2/2} {\tiny(0.9k)} \\
-Proposal vs.\ Decision     & 2/2 {\tiny(2.3k)} & 1/2 {\tiny(0.9k)} & 0/2 {\tiny(0.9k)} & \textbf{2/2} {\tiny(1.2k)} \\
-Multihop Revision ($A{\to}B{\to}C$) & 1/1 {\tiny(3.0k)} & 0/1 {\tiny(1.1k)} & 0/1 {\tiny(1.1k)} & \textbf{1/1} {\tiny(1.1k)} \\
-Unscripted Agentic Policy  & 1/1 {\tiny(1.6k)} & --- & --- & \textbf{1/1} {\tiny(4.2k)} \\
-Crossover ($B=4, T=3$)     & 2/2 {\tiny(6.6k)} & 2/2 {\tiny(1.2k)} & 0/2 {\tiny(1.2k)} & \textbf{2/2} {\tiny(1.2k)} \\
+Distractor Scaling ($K=4$) & 2/2 {\tiny(2.6k)} & 0/2 {\tiny(1.1k)} & 0/2 {\tiny(1.0k)} & \textbf{2/2} {\tiny(1.1k)} \\
+Proposal vs.\ Decision     & 1/2 {\tiny(2.8k)} & 2/2 {\tiny(1.1k)} & 0/2 {\tiny(1.2k)} & \textbf{2/2} {\tiny(1.1k)} \\
+Multihop Revision ($A{\to}B{\to}C$) & 0/1 {\tiny(3.1k)} & 1/1 {\tiny(1.4k)} & 1/1 {\tiny(1.4k)} & \textbf{1/1} {\tiny(1.3k)} \\
+Unscripted Agentic Policy  & 1/1 {\tiny(2.0k)} & --- & --- & \textbf{1/1} {\tiny(4.6k)} \\
+Crossover ($B=4, T=3$)     & 2/2 {\tiny(7.2k)} & 2/2 {\tiny(1.4k)} & 0/2 {\tiny(1.5k)} & \textbf{2/2} {\tiny(1.4k)} \\
 \midrule
-\textbf{Total Strict Pass} & \textbf{8/8 (100\%)} & 3/7 (43\%) & 0/7 (0\%) & \textbf{8/8 (100\%)} \\
+\textbf{Total Strict Pass} & 6/8 (75\%) & 5/7 (71\%) & 1/7 (14\%) & \textbf{8/8 (100\%)} \\
 \bottomrule
 \end{tabular}%
 }
@@ -445,7 +445,7 @@ Crossover ($B=4, T=3$)     & 2/2 {\tiny(6.6k)} & 2/2 {\tiny(1.2k)} & 0/2 {\tiny(
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figures/fig4_crossover_and_ablations.pdf}
-  \caption{Track~2 scaling and ablations: (a)~Chatree crosses below linear chat on total input tokens at $K=8$ distractor branches while sustaining 100\% accuracy; (b)~single-feature ablations confirm read-only branch lookups are essential ($p=0.0312^*$).}
+  \caption{Track~2 scaling and fair single-feature ablations (commit \texttt{5ea2e78}): (a)~Chatree converges with linear chat on cumulative input tokens by $K=8$ at 2.6$\times$ smaller peak context while sustaining 100\% strict pass; (b)~mechanism ablations confirm read-only branch lookups are essential ($p=0.0312^*$).}
   \label{fig:crossover}
 \end{figure*}
 
@@ -459,7 +459,6 @@ Chatree is not free and not the right tool for every chat:
   \item \textbf{Short linear threads:} Under roughly 10k tokens and a single topic, plain linear chat is faster and cheaper (as seen on our 18-turn jump-around benchmark). Tree orchestration pays off once conversations branch heavily, exceed context limits, or accumulate dozens of sessions.
   \item \textbf{Single-model evaluation and statistical power:} All live runs use \texttt{deepseek-chat} on a single seed, including same-family LLM judging on Tracks~1--7 (Track~8A is zero-token deterministic and Track~8B uses verifiable token/leakage checks). Our LongMemEval-S sample is $n=30$ (5/category), MIT RLM completed 117/245 LoCoMo questions before an API pause (paired McNemar uses the exact 117-QA intersection), and point gains over Linear/Mem0/RLM on LoCoMo and LongMemEval-S are not statistically significant at $p<0.05$. Cross-family judging and full-split runs remain future work.
   \item \textbf{Pre-v0.2.0 Mem0 metering and \texttt{top\_k}:} As disclosed in Section~4, archived LoCoMo and LongMemEval-S runs used a character heuristic for Mem0 ingest cost and \texttt{mem0ai==2.2.1}'s default \texttt{top\_k=20} fallback prior to v0.2.0's client-level usage meter and \texttt{top\_k} forwarding fix. Re-running full external benchmarks with exact provider-metered Mem0 write tokens is left for future evaluation.
-  \item \textbf{Archived Track~1/2/5 scorer and ablation caveats:} Prior to the current revision, (i)~\texttt{is\_token\_asserted\_as\_active()} only checked the immediately preceding line for exclusion headings and could misclassify multi-item excluded lists or table rows in archived Track~5 default-prompt leakage comparisons (now fixed, with full answers preserved in \texttt{QueryEvalResult.full\_answer}), (ii)~Track~1/2 Summary Folding scored raw summaries without an answer-synthesis pass, and (iii)~Track~1/2 no-staleness ablations disabled tools on post-revision turns. All three harness issues are fixed in code; fresh live reruns of Tracks~1, 2, and~5 are pending.
   \item \textbf{Depth-1 benchmarks vs.\ interactive branching:} External benchmarks ingest chronological logs as depth-1 session stars and invoke Chatree's structured query pipeline directly, whereas interactive live chats rely on the model deciding when to branch, archive, or query siblings.
   \item \textbf{Overflow beyond 128k tokens, cache TTL, and SQLite scale:} LongMemEval-S ($\sim$115k tokens) still fits inside DeepSeek's 128k window (testing the 1.5M-token LongMemEval-M split is supported by our runner and left for future work). Hosted prompt caches expire after $\sim$5--10 minutes, and single-process SQLite with $O(N)$ per-tree vector scans fits local workspaces well but would require an ANN/Postgres backend for large multi-tenant deployments.
 \end{enumerate}

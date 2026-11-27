@@ -463,9 +463,9 @@ def make_fig4_crossover_and_ablations() -> None:
     # Panel (a): Total input tokens & Peak root tokens vs K (2, 4, 8)
     ks = [2, 4, 8]
     for mode, label, ls, marker in [
-        ("linear", "Full Linear (total tok)", "-", "s"),
+        ("linear", "Full Linear (total tok · 0% at K=4)", "-", "s"),
         ("tree_ipc_full", "Chatree (Full, total tok · 100% pass)", "-", "o"),
-        ("sliding_window", "Sliding Window (total tok · 0% at K=8)", "--", "^"),
+        ("sliding_window", "Sliding Window (total tok · 0% at K=2)", "--", "^"),
     ]:
         ys = []
         for k in ks:
@@ -474,27 +474,35 @@ def make_fig4_crossover_and_ablations() -> None:
         ax1.plot(ks, ys, label=label, color=COLORS[mode], linestyle=ls, marker=marker, linewidth=2.0, markersize=6.5, zorder=4)
         for k, y in zip(ks, ys):
             if mode == "sliding_window":
-                dy = -2.8 if k < 8 else 1.8
+                dy = 1.6 if k == 4 else -2.3
             elif mode == "linear":
-                dy = 1.6 if k < 8 else -2.7
+                dy = 1.5 if k == 2 else -2.4
             else:
-                dy = 1.6 if k < 8 else -2.8
+                dy = 1.5 if k < 8 else 1.8
             ax1.text(k, y + dy, f"{y:.1f}k", ha="center", fontsize=7.4, color=COLORS[mode], fontweight="bold")
+
+    k8_chatree = next(r for r in cross_rows if int(r["K"]) == 8 and r["Mode"] == "tree_ipc_full")
+    k8_linear = next(r for r in cross_rows if int(r["K"]) == 8 and r["Mode"] == "linear")
+    k8_c_tot = int(k8_chatree["Total Tok"]) / 1000.0
+    k8_l_tot = int(k8_linear["Total Tok"]) / 1000.0
+    k8_c_pk = int(k8_chatree["Peak Root Tok"])
+    k8_l_pk = int(k8_linear["Peak Root Tok"])
+    pk_ratio = k8_l_pk / max(1, k8_c_pk)
 
     ax1.axvline(x=8, color="#2563eb", linestyle=":", alpha=0.45, linewidth=1.2)
     ax1.annotate(
-        "Empirical Crossover (K=8)\nChatree 29.6k < Linear 39.7k\n(Peak: 957 vs. 4,266 tok)",
-        xy=(8, 29.589),
-        xytext=(3.95, 29.5),
-        fontsize=7.3,
+        f"Total-Token Convergence (K=8)\nChatree {k8_c_tot:.1f}k ≈ Linear {k8_l_tot:.1f}k\n(Peak: {k8_c_pk:,} vs. {k8_l_pk:,} tok · {pk_ratio:.1f}× smaller)",
+        xy=(8, k8_c_tot),
+        xytext=(2.15, 26.8),
+        fontsize=7.1,
         fontweight="bold",
         color="#1d4ed8",
-        bbox=dict(boxstyle="round,pad=0.32", facecolor="#eff6ff", edgecolor="#93c5fd"),
+        bbox=dict(boxstyle="round,pad=0.30", facecolor="#eff6ff", edgecolor="#93c5fd"),
         arrowprops=dict(arrowstyle="->", color="#2563eb", lw=1.1),
     )
     ax1.set_xticks(ks)
     ax1.set_xticklabels([f"K = {k}" for k in ks])
-    ax1.set_ylim(0, 46)
+    ax1.set_ylim(0, 40)
     ax1.set_xlabel("Number of Distractor Branches (K)")
     ax1.set_ylabel("Total Input Tokens (thousands)")
     ax1.set_title("(a) Track 2 Scaling & Total-Token Crossover Curve")

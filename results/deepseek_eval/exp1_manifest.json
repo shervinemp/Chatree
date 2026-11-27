@@ -1,7 +1,7 @@
 {
-  "timestamp_utc": "2026-11-25T06:37:11.672874+00:00",
+  "timestamp_utc": "2026-11-27T23:37:38.698202+00:00",
   "chatree_version": "0.2.0",
-  "git_sha": "68e980b",
+  "git_sha": "5ea2e78",
   "benchmark": "chatree_5family_suite",
   "model": "deepseek/deepseek-chat",
   "judge_model": "deepseek/deepseek-chat",
@@ -15,7 +15,7 @@
     "tree_ipc_no_staleness",
     "tree_ipc_full"
   ],
-  "total_tokens_in": 407110,
-  "total_tokens_out": 70945,
-  "total_estimated_cost_usd": 0.088986
+  "total_tokens_in": 442245,
+  "total_tokens_out": 73000,
+  "total_estimated_cost_usd": 0.09288
 }
